@@ -1,4 +1,6 @@
 using FF.API.Middleware;
+using FF.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
 
@@ -13,6 +15,11 @@ try
     Log.Information("Starting FF Analytics API");
 
     var builder = WebApplication.CreateBuilder(args);
+
+    builder.Services.AddDbContext<FFDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        b => b.MigrationsAssembly("FF.Infrastructure")));
 
     // Serilog
     builder.Host.UseSerilog((context, services, config) => config
