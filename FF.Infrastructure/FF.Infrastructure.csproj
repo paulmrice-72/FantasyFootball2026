@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FF.SharedKernel\FF.SharedKernel.csproj" />
+    <ProjectReference Include="..\FF.Domain\FF.Domain.csproj" />
+    <ProjectReference Include="..\FF.Application\FF.Application.csproj" />
+  </ItemGroup>
+</Project>

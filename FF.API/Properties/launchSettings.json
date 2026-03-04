@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "FF.API": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:64233;http://localhost:64234"
+    }
+  }
+}
