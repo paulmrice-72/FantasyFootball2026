@@ -1,10 +1,14 @@
 using FF.API.Middleware;
 using FF.Infrastructure.Persistence;
+using FF.Infrastructure.Persistence.SQL.Seed;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 
+Serilog.Debugging.SelfLog.Enable(msg => Console.WriteLine($"SERILOG: {msg}"));
+
+// ── BOOTSTRAP LOGGER ─────────────────────────────────────
+// Captures startup errors before full Serilog is configured
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
     .Enrich.FromLogContext()
@@ -17,12 +21,7 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
 
-    builder.Services.AddDbContext<FFDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        b => b.MigrationsAssembly("FF.Infrastructure")));
-
-    // Serilog
+    // ── SERILOG ───────────────────────────────────────────
     builder.Host.UseSerilog((context, services, config) => config
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
@@ -31,14 +30,10 @@ try
         .Enrich.WithThreadId()
         .Enrich.WithCorrelationId()
         .WriteTo.Console()
-        .WriteTo.Seq(context.Configuration["Seq:ServerUrl"] ?? "http://localhost:5341"));
+        .WriteTo.Seq(context.Configuration["Seq:ServerUrl"]
+            ?? "http://192.168.6.17:5341"));
 
-    builder.Services.AddControllers();
-    builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen();
-
-    // ── DATABASE ──────────────────────────────────────────────
-    // Add this BEFORE var app = builder.Build();
+    // ── DATABASE ──────────────────────────────────────────
     builder.Services.AddDbContext<FFDbContext>(options =>
         options.UseSqlServer(
             builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -51,14 +46,46 @@ try
                     errorNumbersToAdd: null);
             }));
 
-    // ── HEALTH CHECKS ─────────────────────────────────────────
+    // ── HEALTH CHECKS ─────────────────────────────────────
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<FFDbContext>("sql-server");
 
+    // ── API SERVICES ──────────────────────────────────────
+    builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+
+    // ── CORS (for Blazor WASM) ────────────────────────────
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("BlazorWasm", policy =>
+            policy.WithOrigins("https://localhost:64233", "http://localhost:64234")
+                  .AllowAnyMethod()
+                  .AllowAnyHeader());
+    });
+
     var app = builder.Build();
 
-    app.MapHealthChecks("/health");
+    // ── DATABASE MIGRATE & SEED ───────────────────────────
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<FFDbContext>();
+        try
+        {
+            await context.Database.MigrateAsync();
+            await DataSeeder.SeedAsync(context);
+            Log.Information("Database migration and seeding completed successfully");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "An error occurred during database migration or seeding");
+            throw;
+        }
+    }
 
+    // ── MIDDLEWARE PIPELINE ───────────────────────────────
+    // Order matters — do not rearrange without understanding the implications
+    app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseSerilogRequestLogging(options =>
     {
         options.MessageTemplate =
@@ -72,9 +99,10 @@ try
     }
 
     app.UseHttpsRedirection();
-    app.UseMiddleware<ExceptionHandlingMiddleware>();
+    app.UseCors("BlazorWasm");
     app.UseAuthorization();
     app.MapControllers();
+    app.MapHealthChecks("/health");
 
     app.Run();
 }
