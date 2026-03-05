@@ -1,9 +1,10 @@
 using FF.API.Middleware;
-using FF.Infrastructure.Persistence;
+using FF.Infrastructure.Persistence.SQL;
 using FF.Infrastructure.Persistence.SQL.Seed;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
+using FF.Infrastructure.Persistence.Mongo;
 
 Serilog.Debugging.SelfLog.Enable(msg => Console.WriteLine($"SERILOG: {msg}"));
 
@@ -46,9 +47,14 @@ try
                     errorNumbersToAdd: null);
             }));
 
+
+    // ── MONGODB ───────────────────────────────────────────────
+    builder.Services.AddSingleton<MongoDbContext>();
+
     // ── HEALTH CHECKS ─────────────────────────────────────
     builder.Services.AddHealthChecks()
-        .AddDbContextCheck<FFDbContext>("sql-server");
+        .AddDbContextCheck<FFDbContext>("sql-server")
+        .AddCheck<MongoHealthCheck>("mongodb");
 
     // ── API SERVICES ──────────────────────────────────────
     builder.Services.AddControllers();
@@ -92,6 +98,24 @@ try
             "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000}ms";
     });
 
+    app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        ResponseWriter = async (context, report) =>
+        {
+            context.Response.ContentType = "application/json";
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                status = report.Status.ToString(),
+                checks = report.Entries.Select(e => new
+                {
+                    name = e.Key,
+                    status = e.Value.Status.ToString(),
+                    description = e.Value.Description
+                })
+            });
+            await context.Response.WriteAsync(result);
+        }
+    });
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
@@ -102,7 +126,6 @@ try
     app.UseCors("BlazorWasm");
     app.UseAuthorization();
     app.MapControllers();
-    app.MapHealthChecks("/health");
 
     app.Run();
 }

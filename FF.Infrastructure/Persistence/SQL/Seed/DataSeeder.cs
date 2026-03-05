@@ -1,5 +1,4 @@
-﻿using FF.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace FF.Infrastructure.Persistence.SQL.Seed;
 

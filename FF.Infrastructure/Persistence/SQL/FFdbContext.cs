@@ -1,7 +1,7 @@
 ﻿using FF.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace FF.Infrastructure.Persistence;
+namespace FF.Infrastructure.Persistence.SQL;
 
 public class FFDbContext : DbContext
 {
