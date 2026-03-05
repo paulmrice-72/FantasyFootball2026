@@ -1,6 +1,5 @@
 ﻿using FF.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using System.Numerics;
 
 namespace FF.Infrastructure.Persistence;
 
@@ -14,6 +13,7 @@ public class FFDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Auto-discovers all IEntityTypeConfiguration<T> classes in this assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FFDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

@@ -3,6 +3,7 @@ using FF.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
@@ -36,7 +37,27 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
 
+    // ── DATABASE ──────────────────────────────────────────────
+    // Add this BEFORE var app = builder.Build();
+    builder.Services.AddDbContext<FFDbContext>(options =>
+        options.UseSqlServer(
+            builder.Configuration.GetConnectionString("DefaultConnection"),
+            sqlOptions =>
+            {
+                sqlOptions.MigrationsAssembly("FF.Infrastructure");
+                sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorNumbersToAdd: null);
+            }));
+
+    // ── HEALTH CHECKS ─────────────────────────────────────────
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<FFDbContext>("sql-server");
+
     var app = builder.Build();
+
+    app.MapHealthChecks("/health");
 
     app.UseSerilogRequestLogging(options =>
     {
