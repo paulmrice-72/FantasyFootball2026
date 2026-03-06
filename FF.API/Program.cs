@@ -1,9 +1,7 @@
 using FF.API.Middleware;
-using FF.Application.Interfaces.Persistence;
-using FF.Infrastructure.Persistence.Mongo;
+using FF.Application;
+using FF.Infrastructure;
 using FF.Infrastructure.Persistence.SQL;
-using FF.Infrastructure.Persistence.SQL.Repositories;
-using FF.Infrastructure.Persistence.SQL.Seed;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
@@ -23,6 +21,8 @@ try
     Log.Information("Starting FF Analytics API");
 
     var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddApplication();
+    builder.Services.AddInfrastructure(builder.Configuration);
 
     // ── SERILOG ───────────────────────────────────────────
     builder.Host.UseSerilog((context, services, config) => config
@@ -35,33 +35,6 @@ try
         .WriteTo.Console()
         .WriteTo.Seq(context.Configuration["Seq:ServerUrl"]
             ?? "http://192.168.6.17:5341"));
-
-    // ── DATABASE ──────────────────────────────────────────
-    builder.Services.AddDbContext<FFDbContext>(options =>
-        options.UseSqlServer(
-            builder.Configuration.GetConnectionString("DefaultConnection"),
-            sqlOptions =>
-            {
-                sqlOptions.MigrationsAssembly("FF.Infrastructure");
-                sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
-                    errorNumbersToAdd: null);
-            }));
-
-    // Repository Pattern
-    builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-    builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
-    builder.Services.AddScoped<ILeagueRepository, LeagueRepository>();
-    builder.Services.AddScoped<IRosterRepository, RosterRepository>();
-
-    // ── MONGODB ───────────────────────────────────────────────
-    builder.Services.AddSingleton<MongoDbContext>();
-
-    // ── HEALTH CHECKS ─────────────────────────────────────
-    builder.Services.AddHealthChecks()
-        .AddDbContextCheck<FFDbContext>("sql-server")
-        .AddCheck<MongoHealthCheck>("mongodb");
 
     // ── API SERVICES ──────────────────────────────────────
     builder.Services.AddControllers();
@@ -79,23 +52,8 @@ try
 
     var app = builder.Build();
 
-    // ── DATABASE MIGRATE & SEED ───────────────────────────
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<FFDbContext>();
-        try
-        {
-            await context.Database.MigrateAsync();
-            await DataSeeder.SeedAsync(context);
-            Log.Information("Database migration and seeding completed successfully");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "An error occurred during database migration or seeding");
-            throw;
-        }
-    }
-
+    await DatabaseInitialiser.InitialiseAsync(app.Services);
+    
     // ── MIDDLEWARE PIPELINE ───────────────────────────────
     // Order matters — do not rearrange without understanding the implications
     app.UseMiddleware<ExceptionHandlingMiddleware>();
