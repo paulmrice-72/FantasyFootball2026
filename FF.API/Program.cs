@@ -1,10 +1,12 @@
 using FF.API.Middleware;
+using FF.Application.Interfaces.Persistence;
+using FF.Infrastructure.Persistence.Mongo;
 using FF.Infrastructure.Persistence.SQL;
+using FF.Infrastructure.Persistence.SQL.Repositories;
 using FF.Infrastructure.Persistence.SQL.Seed;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
-using FF.Infrastructure.Persistence.Mongo;
 
 Serilog.Debugging.SelfLog.Enable(msg => Console.WriteLine($"SERILOG: {msg}"));
 
@@ -47,6 +49,11 @@ try
                     errorNumbersToAdd: null);
             }));
 
+    // Repository Pattern
+    builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+    builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
+    builder.Services.AddScoped<ILeagueRepository, LeagueRepository>();
+    builder.Services.AddScoped<IRosterRepository, RosterRepository>();
 
     // ── MONGODB ───────────────────────────────────────────────
     builder.Services.AddSingleton<MongoDbContext>();
