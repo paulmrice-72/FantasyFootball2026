@@ -1,8 +1,9 @@
 using FF.API.Middleware;
 using FF.Application;
 using FF.Infrastructure;
+using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.SQL;
-using Microsoft.EntityFrameworkCore;
+using Hangfire;
 using Serilog;
 using Serilog.Events;
 
@@ -91,6 +92,22 @@ try
     app.UseCors("BlazorWasm");
     app.UseAuthorization();
     app.MapControllers();
+
+    // Hangfire Dashboard --- Development only
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = [new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter()]
+        });
+    }
+
+    // Register recurring jobs
+    using var scope = app.Services.CreateScope();
+    RecurringJob.AddOrUpdate<SystemHealthCheckJob>(
+        "system-health-check",
+        job => job.Execute(),
+        "*/15 * * * *"); // Every 15 minutes
 
     app.Run();
 }

@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FF.Infrastructure.Persistence.SQL.Repositories;
 
-public class LeagueRepository : BaseRepository<League>, ILeagueRepository
+public class LeagueRepository(FFDbContext context) : BaseRepository<League>(context), ILeagueRepository
 {
-    public LeagueRepository(FFDbContext context) : base(context) { }
-
     public async Task<League?> GetBySleeperIdAsync(string sleeperLeagueId, int season, CancellationToken cancellationToken = default)
         => await DbSet.AsNoTracking()
             .FirstOrDefaultAsync(l => l.SleeperLeagueId == sleeperLeagueId && l.Season == season, cancellationToken);
