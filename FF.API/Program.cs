@@ -1,10 +1,15 @@
 using FF.API.Middleware;
+using FF.Application;
+using FF.Application.Common.Settings;
+using FF.Infrastructure;
+using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.SQL;
-using FF.Infrastructure.Persistence.SQL.Seed;
-using Microsoft.EntityFrameworkCore;
+using Hangfire;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Events;
-using FF.Infrastructure.Persistence.Mongo;
+using System.Text;
 
 Serilog.Debugging.SelfLog.Enable(msg => Console.WriteLine($"SERILOG: {msg}"));
 
@@ -21,6 +26,31 @@ try
     Log.Information("Starting FF Analytics API");
 
     var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddApplication();
+    builder.Services.AddInfrastructure(builder.Configuration);
+
+    // JWT Authentication
+    var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings.Secret)),
+            ClockSkew = TimeSpan.Zero // No grace period on token expiry
+        };
+    });
 
     // ── SERILOG ───────────────────────────────────────────
     builder.Host.UseSerilog((context, services, config) => config
@@ -33,28 +63,6 @@ try
         .WriteTo.Console()
         .WriteTo.Seq(context.Configuration["Seq:ServerUrl"]
             ?? "http://192.168.6.17:5341"));
-
-    // ── DATABASE ──────────────────────────────────────────
-    builder.Services.AddDbContext<FFDbContext>(options =>
-        options.UseSqlServer(
-            builder.Configuration.GetConnectionString("DefaultConnection"),
-            sqlOptions =>
-            {
-                sqlOptions.MigrationsAssembly("FF.Infrastructure");
-                sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 3,
-                    maxRetryDelay: TimeSpan.FromSeconds(5),
-                    errorNumbersToAdd: null);
-            }));
-
-
-    // ── MONGODB ───────────────────────────────────────────────
-    builder.Services.AddSingleton<MongoDbContext>();
-
-    // ── HEALTH CHECKS ─────────────────────────────────────
-    builder.Services.AddHealthChecks()
-        .AddDbContextCheck<FFDbContext>("sql-server")
-        .AddCheck<MongoHealthCheck>("mongodb");
 
     // ── API SERVICES ──────────────────────────────────────
     builder.Services.AddControllers();
@@ -72,23 +80,8 @@ try
 
     var app = builder.Build();
 
-    // ── DATABASE MIGRATE & SEED ───────────────────────────
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<FFDbContext>();
-        try
-        {
-            await context.Database.MigrateAsync();
-            await DataSeeder.SeedAsync(context);
-            Log.Information("Database migration and seeding completed successfully");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "An error occurred during database migration or seeding");
-            throw;
-        }
-    }
-
+    await DatabaseInitialiser.InitialiseAsync(app.Services);
+    
     // ── MIDDLEWARE PIPELINE ───────────────────────────────
     // Order matters — do not rearrange without understanding the implications
     app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -126,6 +119,22 @@ try
     app.UseCors("BlazorWasm");
     app.UseAuthorization();
     app.MapControllers();
+
+    // Hangfire Dashboard --- Development only
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = [new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter()]
+        });
+    }
+
+    // Register recurring jobs
+    using var scope = app.Services.CreateScope();
+    RecurringJob.AddOrUpdate<SystemHealthCheckJob>(
+        "system-health-check",
+        job => job.Execute(),
+        "*/15 * * * *"); // Every 15 minutes
 
     app.Run();
 }

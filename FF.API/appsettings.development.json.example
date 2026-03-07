@@ -1,0 +1,15 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=<host>,1433;Database=FFAnalytics;User Id=sa;Password=<password>;TrustServerCertificate=True"
+  },
+  "MongoDB": {
+    "Host": "<host>",
+    "Port": "27017",
+    "Database": "FFAnalytics",
+    "Username": "<username>",
+    "Password": "<password>"
+  },
+  "Seq": {
+    "ServerUrl": "http://<host>:5341"
+  }
+}

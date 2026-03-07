@@ -13,4 +13,7 @@ public sealed record Error(string Code, string Message)
 
     public static Error Conflict(string resource) =>
         new($"{resource}.Conflict", $"{resource} already exists.");
+
+    public static Error Unauthorized(string message) =>
+        new("Auth.Unauthorized", message);
 }

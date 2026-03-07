@@ -6,6 +6,12 @@
 		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
 	</PropertyGroup>
 	<ItemGroup>
+	  <Content Include="appsettings.development.json.example" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Hangfire.AspNetCore" Version="1.8.23" />
+		<PackageReference Include="MediatR" Version="14.1.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
 		  <PrivateAssets>all</PrivateAssets>
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -19,6 +25,7 @@
 		<PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
 		<PackageReference Include="Serilog.Enrichers.CorrelationId" Version="3.0.1" />
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.4" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.4.0" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\FF.SharedKernel\FF.SharedKernel.csproj" />
