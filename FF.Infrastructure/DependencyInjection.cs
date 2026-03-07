@@ -1,10 +1,13 @@
-﻿using FF.Application.Interfaces.Persistence;
+﻿using FF.Application.Interfaces.Jobs;
+using FF.Application.Interfaces.Persistence;
+using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.Mongo;
 using FF.Infrastructure.Persistence.SQL;
 using FF.Infrastructure.Persistence.SQL.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Hangfire;
 
 namespace FF.Infrastructure;
 
@@ -32,6 +35,17 @@ public static class DependencyInjection
         services.AddHealthChecks()
             .AddDbContextCheck<FFDbContext>("sql-server")
             .AddCheck<MongoHealthCheck>("mongodb");
+
+        // Hangfire
+        services.AddHangfire(config => config
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseSqlServerStorage(configuration.GetConnectionString("DefaultConnection")));
+
+        services.AddHangfireServer();
+        services.AddScoped<IBackgroundJobService, HangfireBackgroundJobService>();
+        services.AddScoped<SystemHealthCheckJob>();
 
         return services;
     }

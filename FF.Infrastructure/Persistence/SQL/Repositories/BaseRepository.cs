@@ -4,16 +4,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FF.Infrastructure.Persistence.SQL.Repositories;
 
-public abstract class BaseRepository<T> : IRepository<T> where T : Entity
+public abstract class BaseRepository<T>(FFDbContext context) : IRepository<T> where T : Entity
 {
-    protected readonly FFDbContext Context;
-    protected readonly DbSet<T> DbSet;
-
-    protected BaseRepository(FFDbContext context)
-    {
-        Context = context;
-        DbSet = context.Set<T>();
-    }
+    protected readonly FFDbContext Context = context;
+    protected readonly DbSet<T> DbSet = context.Set<T>();
 
     public async Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => await DbSet.FindAsync([id], cancellationToken);

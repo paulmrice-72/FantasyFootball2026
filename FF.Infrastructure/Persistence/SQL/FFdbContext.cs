@@ -3,10 +3,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FF.Infrastructure.Persistence.SQL;
 
-public class FFDbContext : DbContext
+public class FFDbContext(DbContextOptions<FFDbContext> options) : DbContext(options)
 {
-    public FFDbContext(DbContextOptions<FFDbContext> options) : base(options) { }
-
     public DbSet<Player> Players => Set<Player>();
     public DbSet<League> Leagues => Set<League>();
     public DbSet<Roster> Rosters => Set<Roster>();

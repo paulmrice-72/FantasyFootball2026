@@ -95,5 +95,9 @@ public class PlayerRepositoryTests : IDisposable
         result.Should().BeNull();
     }
 
-    public void Dispose() => _context.Dispose();
+    public void Dispose()
+    {
+        _context.Dispose();
+        System.GC.SuppressFinalize(this);
+    }
 }

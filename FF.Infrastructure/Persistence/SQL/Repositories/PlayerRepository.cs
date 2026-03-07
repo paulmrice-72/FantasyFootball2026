@@ -5,10 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FF.Infrastructure.Persistence.SQL.Repositories;
 
-public class PlayerRepository : BaseRepository<Player>, IPlayerRepository
+public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(context), IPlayerRepository
 {
-    public PlayerRepository(FFDbContext context) : base(context) { }
-
     public async Task<Player?> GetBySleeperIdAsync(string sleeperPlayerId, CancellationToken cancellationToken = default)
         => await DbSet.AsNoTracking()
             .FirstOrDefaultAsync(p => p.SleeperPlayerId == sleeperPlayerId, cancellationToken);
