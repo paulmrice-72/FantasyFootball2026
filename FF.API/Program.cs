@@ -149,6 +149,11 @@ try
             job => job.SyncAllLeaguesAsync(),
             "0 10 * * 2");
 
+        RecurringJob.AddOrUpdate<PlayerSyncJob>(
+            "player-sync-weekly",
+            job => job.SyncPlayersAsync(),
+            "0 6 * * 2"); // 6am every Tuesday
+
         await DatabaseInitialiser.InitialiseAsync(app.Services);
     }
 
