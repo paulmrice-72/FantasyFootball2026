@@ -1,15 +1,21 @@
 using FF.API.Middleware;
 using FF.Application;
 using FF.Application.Common.Settings;
+using FF.Application.Interfaces.Persistence;
+using FF.Application.Stats.Queries.GetHistoricalStatsStatus;
 using FF.Infrastructure;
 using FF.Infrastructure.Jobs;
+using FF.Infrastructure.Persistence.Mongo.Repositories;
 using FF.Infrastructure.Persistence.SQL;
+using FF.SharedKernel.Common;
 using Hangfire;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Events;
 using System.Text;
+
 
 Serilog.Debugging.SelfLog.Enable(msg => Console.WriteLine($"SERILOG: {msg}"));
 
@@ -154,9 +160,17 @@ try
             job => job.SyncPlayersAsync(),
             "0 6 * * 2"); // 6am every Tuesday
 
-        await DatabaseInitialiser.InitialiseAsync(app.Services);
-    }
+        RecurringJob.AddOrUpdate<HistoricalStatsSyncJob>(
+            "historical-stats-sync-weekly",
+            job => job.SyncCurrentSeasonAsync(),
+            "0 8 * * 2");
 
+        await DatabaseInitialiser.InitialiseAsync(app.Services);
+
+        var gameLogRepo = scope.ServiceProvider.GetRequiredService<IPlayerGameLogRepository>();
+        await gameLogRepo.EnsureIndexesAsync();
+    }
+  
     app.Run();
 }
 catch (Exception ex) when (ex is not HostAbortedException)

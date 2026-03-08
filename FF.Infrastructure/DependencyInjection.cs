@@ -1,12 +1,17 @@
-﻿using FF.Application.Common.Settings;
+﻿using FF.Application;
+using FF.Application.Common.Settings;
 using FF.Application.Interfaces.Auth;
 using FF.Application.Interfaces.Jobs;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
+using FF.Application.Stats.Commands;
+using FF.Infrastructure.ExternalApis.CsvImport;
+using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
 using FF.Infrastructure.ExternalApis.Sleeper;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.Mongo;
+using FF.Infrastructure.Persistence.Mongo.Repositories;
 using FF.Infrastructure.Persistence.SQL;
 using FF.Infrastructure.Persistence.SQL.Repositories;
 using FF.Infrastructure.Services;
@@ -24,6 +29,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        System.Diagnostics.Debug.WriteLine("AddInfrastructure starting...");
         // Database
         services.AddDbContext<FFDbContext>(options =>
             options.UseSqlServer(
@@ -37,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IPlayerRepository, PlayerRepository>();
         services.AddScoped<ILeagueRepository, LeagueRepository>();
         services.AddScoped<IRosterRepository, RosterRepository>();
+        services.AddScoped<IPlayerGameLogRepository, PlayerGameLogRepository>();
 
         // Health Checks
         services.AddHealthChecks()
@@ -56,8 +63,12 @@ public static class DependencyInjection
         services.AddScoped<ISleeperPlayerSyncService, SleeperPlayerSyncService>();
         services.AddScoped<SystemHealthCheckJob>();
         services.AddSleeperApiClient();
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(typeof(ApplicationAssemblyMarker).Assembly);
+            cfg.RegisterServicesFromAssembly(typeof(InfrastructureAssemblyMarker).Assembly);
+        });
 
- 
         // Identity
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         {
@@ -74,6 +85,12 @@ public static class DependencyInjection
 
         // Auth Service
         services.AddScoped<IAuthService, AuthService>();
+
+        // CSV Import
+        services.AddScoped<NflfastrCsvParser>();
+        services.AddScoped<PfrCsvParser>();
+        services.AddScoped<PfrValidationService>();
+        services.AddScoped<IHistoricalStatsImportService, HistoricalStatsImportService>();
 
         return services;
     }
