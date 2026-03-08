@@ -132,11 +132,11 @@ public class NflfastrCsvParserTests
         // Arrange — many stats columns are empty (e.g. a kicker has no passing stats)
         var csv = Header + "\n" +
             "00-0037077,E.McPherson,Evan McPherson,K,K,,CIN,2024,1,REG,NE," +
-            ",,,,,,,,,,,,,,,," +  // all passing stats empty
-            ",,,,,,,,," +         // all rushing stats empty
-            ",,,,,,,,,,," +       // all receiving stats empty
-            ",,,,," +             // efficiency metrics empty
-            "1,9.0,9.0";          // 1 special teams TD, 9 points
+            ",,,,,,,,,,,,,,,," +  // 16 passing stats empty
+            ",,,,,,,," +          // 8 rushing stats empty (was 9 - off by one)
+            ",,,,,,,,,,," +       // 11 receiving stats empty
+            ",,,," +             // 4 efficiency metrics empty
+            "1,9.0,9.0";          // special_teams_tds, fantasy_points, fantasy_points_ppr
 
         var path = await WriteTempCsvAsync(csv);
 
