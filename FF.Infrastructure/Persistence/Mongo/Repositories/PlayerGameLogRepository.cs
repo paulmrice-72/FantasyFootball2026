@@ -80,6 +80,16 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
     /// Uses ReplaceOne with IsUpsert=true for idempotent imports.
     /// Returns count of documents inserted vs replaced.
     /// </summary>
+    /// <summary>
+    /// Upserts a batch of game log documents.
+    /// Uses ReplaceOne with IsUpsert=true for idempotent imports.
+    /// Returns count of documents inserted vs replaced.
+    ///
+    /// IMPORTANT: On insert, MongoDB generates the _id automatically.
+    /// On replace, we must NOT send an _id in the replacement document
+    /// because the existing document's _id is immutable.
+    /// We clear doc.Id before replace so MongoDB ignores it.
+    /// </summary>
     public async Task<(int Inserted, int Replaced)> UpsertBatchAsync(
         IEnumerable<PlayerGameLogDocument> documents,
         CancellationToken cancellationToken = default)
@@ -89,22 +99,83 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
 
         var tasks = documents.Select(async doc =>
         {
-            // Ensure Id is always set — ReplaceOne upsert requires a non-null _id
-            // or MongoDB will attempt to insert with _id: null, causing a duplicate key
-            // error on the second document with a null Id.
-            if (string.IsNullOrEmpty(doc.Id))
-                doc.Id = MongoDB.Bson.ObjectId.GenerateNewId().ToString();
-
             var filter = Builders<PlayerGameLogDocument>.Filter.And(
                 Builders<PlayerGameLogDocument>.Filter.Eq(x => x.PlayerId, doc.PlayerId),
                 Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, doc.Season),
                 Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Week, doc.Week)
             );
 
-            var result = await _collection.ReplaceOneAsync(
+            // $set update — never touches _id, fully idempotent
+            var update = Builders<PlayerGameLogDocument>.Update
+                // Player Identity
+                .Set(x => x.PlayerName, doc.PlayerName)
+                .Set(x => x.DisplayName, doc.DisplayName)
+                .Set(x => x.Position, doc.Position)
+                .Set(x => x.NflTeam, doc.NflTeam)
+                .Set(x => x.OpponentTeam, doc.OpponentTeam)
+                .Set(x => x.HeadshotUrl, doc.HeadshotUrl)
+                .Set(x => x.SleeperPlayerId, doc.SleeperPlayerId)
+                // Game Context
+                .Set(x => x.SeasonType, doc.SeasonType)
+                // Passing
+                .Set(x => x.Completions, doc.Completions)
+                .Set(x => x.Attempts, doc.Attempts)
+                .Set(x => x.PassingYards, doc.PassingYards)
+                .Set(x => x.PassingTds, doc.PassingTds)
+                .Set(x => x.Interceptions, doc.Interceptions)
+                .Set(x => x.Sacks, doc.Sacks)
+                .Set(x => x.SackYards, doc.SackYards)
+                .Set(x => x.SackFumbles, doc.SackFumbles)
+                .Set(x => x.SackFumblesLost, doc.SackFumblesLost)
+                .Set(x => x.PassingAirYards, doc.PassingAirYards)
+                .Set(x => x.PassingYardsAfterCatch, doc.PassingYardsAfterCatch)
+                .Set(x => x.PassingFirstDowns, doc.PassingFirstDowns)
+                .Set(x => x.PassingEpa, doc.PassingEpa)
+                .Set(x => x.Passing2PtConversions, doc.Passing2PtConversions)
+                .Set(x => x.Pacr, doc.Pacr)
+                .Set(x => x.Dakota, doc.Dakota)
+                // Rushing
+                .Set(x => x.Carries, doc.Carries)
+                .Set(x => x.RushingYards, doc.RushingYards)
+                .Set(x => x.RushingTds, doc.RushingTds)
+                .Set(x => x.RushingFumbles, doc.RushingFumbles)
+                .Set(x => x.RushingFumblesLost, doc.RushingFumblesLost)
+                .Set(x => x.RushingFirstDowns, doc.RushingFirstDowns)
+                .Set(x => x.RushingEpa, doc.RushingEpa)
+                .Set(x => x.Rushing2PtConversions, doc.Rushing2PtConversions)
+                // Receiving
+                .Set(x => x.Receptions, doc.Receptions)
+                .Set(x => x.Targets, doc.Targets)
+                .Set(x => x.ReceivingYards, doc.ReceivingYards)
+                .Set(x => x.ReceivingTds, doc.ReceivingTds)
+                .Set(x => x.ReceivingFumbles, doc.ReceivingFumbles)
+                .Set(x => x.ReceivingFumblesLost, doc.ReceivingFumblesLost)
+                .Set(x => x.ReceivingAirYards, doc.ReceivingAirYards)
+                .Set(x => x.ReceivingYardsAfterCatch, doc.ReceivingYardsAfterCatch)
+                .Set(x => x.ReceivingFirstDowns, doc.ReceivingFirstDowns)
+                .Set(x => x.ReceivingEpa, doc.ReceivingEpa)
+                .Set(x => x.Receiving2PtConversions, doc.Receiving2PtConversions)
+                // Efficiency / Usage
+                .Set(x => x.Racr, doc.Racr)
+                .Set(x => x.TargetShare, doc.TargetShare)
+                .Set(x => x.AirYardsShare, doc.AirYardsShare)
+                .Set(x => x.Wopr, doc.Wopr)
+                // Special Teams
+                .Set(x => x.SpecialTeamsTds, doc.SpecialTeamsTds)
+                // Fantasy Points
+                .Set(x => x.FantasyPoints, doc.FantasyPoints)
+                .Set(x => x.FantasyPointsPpr, doc.FantasyPointsPpr)
+                // Data Quality
+                .Set(x => x.DataSource, doc.DataSource)
+                .Set(x => x.PfrValidated, doc.PfrValidated)
+                .Set(x => x.PfrFantasyPoints, doc.PfrFantasyPoints)
+                .Set(x => x.PfrVariance, doc.PfrVariance)
+                .Set(x => x.ImportedAt, doc.ImportedAt);
+
+            var result = await _collection.UpdateOneAsync(
                 filter,
-                doc,
-                new ReplaceOptions { IsUpsert = true },
+                update,
+                new UpdateOptions { IsUpsert = true },
                 cancellationToken);
 
             if (result.UpsertedId != null)

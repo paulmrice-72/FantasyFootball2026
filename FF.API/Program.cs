@@ -133,7 +133,9 @@ try
     app.UseAuthorization();
     app.MapControllers();
 
-    // Hangfire Dashboard --- Development only
+    app.MapControllers();
+
+    // ── HANGFIRE DASHBOARD ────────────────────────────────
     if (app.Environment.IsDevelopment())
     {
         app.UseHangfireDashboard("/hangfire", new DashboardOptions
@@ -142,35 +144,55 @@ try
         });
     }
 
-    // Register recurring jobs
-    using var scope = app.Services.CreateScope();
-    { 
-        RecurringJob.AddOrUpdate<SystemHealthCheckJob>(
-            "system-health-check",
-            job => job.Execute(),
-            "*/15 * * * *"); // Every 15 minutes
+    // ── STARTUP TASKS ─────────────────────────────────────
+    // DatabaseInitialiser runs migrations + seed on every startup (idempotent)
+    await DatabaseInitialiser.InitialiseAsync(app.Services);
 
-        RecurringJob.AddOrUpdate<LeagueSyncJob>(
-            "league-sync-weekly",
-            job => job.SyncAllLeaguesAsync(),
-            "0 10 * * 2");
-
-        RecurringJob.AddOrUpdate<PlayerSyncJob>(
-            "player-sync-weekly",
-            job => job.SyncPlayersAsync(),
-            "0 6 * * 2"); // 6am every Tuesday
-
-        RecurringJob.AddOrUpdate<HistoricalStatsSyncJob>(
-            "historical-stats-sync-weekly",
-            job => job.SyncCurrentSeasonAsync(),
-            "0 8 * * 2");
-
-        await DatabaseInitialiser.InitialiseAsync(app.Services);
-
-        var gameLogRepo = scope.ServiceProvider.GetRequiredService<IPlayerGameLogRepository>();
+    // MongoDB index creation — idempotent, safe to run on every startup
+    using (var scope = app.Services.CreateScope())
+    {
+        var gameLogRepo = scope.ServiceProvider
+            .GetRequiredService<IPlayerGameLogRepository>();
         await gameLogRepo.EnsureIndexesAsync();
     }
-  
+
+    // ── RECURRING JOBS ────────────────────────────────────
+    // Static Hangfire client --- no scope needed for registration
+    var utcOptions = new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc };
+
+    RecurringJob.AddOrUpdate<SystemHealthCheckJob>(
+        recurringJobId: "system-health-check",
+        methodCall: job => job.Execute(),
+        cronExpression: "*/15 * * * *",
+        options: utcOptions);
+
+    RecurringJob.AddOrUpdate<LeagueSyncJob>(
+        recurringJobId: "league-sync-weekly",
+        methodCall: job => job.SyncAllLeaguesAsync(),
+        cronExpression: "0 10 * * 2",
+        options: utcOptions);
+
+    RecurringJob.AddOrUpdate<PlayerSyncJob>(
+        recurringJobId: "player-sync-weekly",
+        methodCall: job => job.SyncPlayersAsync(),
+        cronExpression: "0 6 * * 2",
+        options: utcOptions);
+
+    RecurringJob.AddOrUpdate<HistoricalStatsSyncJob>(
+        recurringJobId: "weekly-stats-sync",
+        methodCall: x => x.SyncCurrentSeasonAsync(),
+        cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 8),
+        options: utcOptions);
+
+    //RecurringJob.AddOrUpdate<WaiverSyncJob>(
+    //recurringJobId: "waiver-sync",
+    //methodCall: job => job.SyncWaiversAsync(),
+    //cronExpression: "5 0 * * 3", // 12:05 AM UTC Wednesday = ~8:05 PM ET Tuesday
+    //options: new RecurringJobOptions
+    //{
+    //    TimeZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time")
+    //});
+
     app.Run();
 }
 catch (Exception ex) when (ex is not HostAbortedException)

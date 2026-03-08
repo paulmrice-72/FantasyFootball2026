@@ -29,6 +29,8 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.Configure<HistoricalDataSettings>(configuration.GetSection(HistoricalDataSettings.SectionName));
+
         System.Diagnostics.Debug.WriteLine("AddInfrastructure starting...");
         // Database
         services.AddDbContext<FFDbContext>(options =>
@@ -93,5 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IHistoricalStatsImportService, HistoricalStatsImportService>();
 
         return services;
+
+
     }
 }

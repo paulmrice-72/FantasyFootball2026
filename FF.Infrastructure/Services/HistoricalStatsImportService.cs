@@ -19,13 +19,14 @@
 //   Relative to the API project output directory.
 //   On LINUXSERVER deployment: configure as absolute path to mounted volume.
 
+using FF.Application.Common.Settings;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
 using FF.Application.Stats.Commands;
 using FF.Infrastructure.ExternalApis.CsvImport;
 using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
-using FF.Infrastructure.Persistence.Mongo.Repositories;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FF.Infrastructure.Services;
 
@@ -33,19 +34,21 @@ public class HistoricalStatsImportService(
     NflfastrCsvParser nflfastrParser,
     PfrValidationService pfrValidation,
     IPlayerGameLogRepository gameLogRepo,
+    IOptions<HistoricalDataSettings> options,
     ILogger<HistoricalStatsImportService> logger) : IHistoricalStatsImportService
 {
     private readonly NflfastrCsvParser _nflfastrParser = nflfastrParser;
     private readonly PfrValidationService _pfrValidation = pfrValidation;
     private readonly IPlayerGameLogRepository _gameLogRepo = gameLogRepo;
+    private readonly HistoricalDataSettings _settings = options.Value;
     private readonly ILogger<HistoricalStatsImportService> _logger = logger;
 
     private const int BatchSize = 500;
     private static readonly int[] SupportedSeasons = [2022, 2023, 2024];
 
     /// <summary>
-    /// Imports historical stats for specified seasons (or all supported seasons if null).
-    /// Validates against PFR if PFR files are present.
+    /// Full import — used by the API endpoint for initial/manual loads.
+    /// Imports specified seasons (or all supported seasons if null).
     /// </summary>
     public async Task<HistoricalImportResult> ImportAsync(
         string basePath,
@@ -63,7 +66,7 @@ public class HistoricalStatsImportService(
 
         foreach (var season in seasonsToImport)
         {
-            var seasonResult = await ImportSeasonAsync(
+            var seasonResult = await ImportSeasonInternalAsync(
                 basePath, season, runPfrValidation, cancellationToken);
 
             result.SeasonResults.Add(seasonResult);
@@ -72,7 +75,8 @@ public class HistoricalStatsImportService(
             result.TotalSkipped += seasonResult.Skipped;
 
             if (seasonResult.ValidationSummary?.FlaggedPlayers > 0)
-                result.ValidationWarnings.AddRange(seasonResult.ValidationSummary.FlaggedPlayerNames);
+                result.ValidationWarnings.AddRange(
+                    seasonResult.ValidationSummary.FlaggedPlayerNames);
         }
 
         result.Duration = DateTime.UtcNow - startedAt;
@@ -87,18 +91,43 @@ public class HistoricalStatsImportService(
         return result;
     }
 
-    private async Task<SeasonImportResult> ImportSeasonAsync(
+    /// <summary>
+    /// Single-season import — called by the Hangfire weekly sync job.
+    /// Pulls basePath from config internally so the job needs no parameters.
+    /// </summary>
+    public async Task<HistoricalImportResult> ImportSeasonAsync(
+        int season,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(
+            "ImportSeasonAsync called by Hangfire job for season {Season}", season);
+
+        return await ImportAsync(
+            basePath: _settings.BasePath,
+            seasons: [season],
+            runPfrValidation: true,
+            cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Internal per-season pipeline. Renamed from ImportSeasonAsync to avoid
+    /// signature clash with the public interface method of the same name.
+    /// </summary>
+    private async Task<SeasonImportResult> ImportSeasonInternalAsync(
         string basePath,
         int season,
         bool runPfrValidation,
         CancellationToken cancellationToken)
     {
         var result = new SeasonImportResult { Season = season };
-        var nflfastrPath = Path.Combine(basePath, "nflfastr", $"player_stats_{season}.csv");
+        var nflfastrPath = Path.Combine(
+            basePath, "nflfastr", $"player_stats_{season}.csv");
 
         if (!File.Exists(nflfastrPath))
         {
-            _logger.LogWarning("nflfastR file not found for season {Season}: {Path}", season, nflfastrPath);
+            _logger.LogWarning(
+                "nflfastR file not found for season {Season}: {Path}",
+                season, nflfastrPath);
             result.FileNotFound = true;
             return result;
         }
@@ -113,13 +142,17 @@ public class HistoricalStatsImportService(
             cancellationToken.ThrowIfCancellationRequested();
 
             var batch = documents.Skip(i).Take(BatchSize);
-            var (inserted, replaced) = await _gameLogRepo.UpsertBatchAsync(batch, cancellationToken);
+            var (inserted, replaced) = await _gameLogRepo.UpsertBatchAsync(
+                batch, cancellationToken);
+
             result.Inserted += inserted;
             result.Replaced += replaced;
 
             _logger.LogDebug(
                 "Season {Season} batch {Batch}/{Total}: {Inserted} inserted, {Replaced} replaced",
-                season, (i / BatchSize) + 1, (int)Math.Ceiling((double)documents.Count / BatchSize),
+                season,
+                (i / BatchSize) + 1,
+                (int)Math.Ceiling((double)documents.Count / BatchSize),
                 inserted, replaced);
         }
 
@@ -140,12 +173,14 @@ public class HistoricalStatsImportService(
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "PFR validation failed for season {Season} — continuing", season);
+                    _logger.LogWarning(ex,
+                        "PFR validation failed for season {Season} — continuing", season);
                 }
             }
             else
             {
-                _logger.LogInformation("PFR file not found for {Season} — skipping validation", season);
+                _logger.LogInformation(
+                    "PFR file not found for {Season} — skipping validation", season);
             }
         }
 
