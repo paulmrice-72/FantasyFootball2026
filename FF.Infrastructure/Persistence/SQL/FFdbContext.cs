@@ -11,7 +11,7 @@ public class FFDbContext(DbContextOptions<FFDbContext> options) : IdentityDbCont
     public DbSet<League> Leagues => Set<League>();
     public DbSet<Roster> Rosters => Set<Roster>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
-
+    public DbSet<Transaction> Transactions => Set<Transaction>();
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder); // Critical — must call base for Identity tables
