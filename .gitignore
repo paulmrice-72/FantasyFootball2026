@@ -17,6 +17,9 @@
   **/Data/Historical/
   Data/
 
+# Lock files causing issues
+packages.lock.json
+
 # ASP.NET Core environment-specific settings (contain secrets)
 appsettings.Development.json
 appsettings.Production.json
