@@ -9,7 +9,12 @@ on:
     branches:
       - develop
       - main
-
+      
+permissions:
+  contents: read
+  checks: write        # required for dorny/test-reporter to post results
+  pull-requests: write # required for sticky PR coverage comment
+  
 env:
   DOTNET_VERSION: '9.0.x'
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
