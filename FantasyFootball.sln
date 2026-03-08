@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.3.11520.95 d18.3
+VisualStudioVersion = 18.3.11520.95
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FF.SharedKernel", "FF.SharedKernel\FF.SharedKernel.csproj", "{D1A5C6E2-3B4F-4A92-9C2F-1A2B3C4D5E01}"
 EndProject
@@ -15,6 +15,13 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FF.WebBlazor", "FF.WebBlazor\FF.WebBlazor.csproj", "{D1A5C6E2-3B4F-4A92-9C2F-1A2B3C4D5E06}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FF.Tests", "FF.Tests\FF.Tests.csproj", "{31035E1D-CBBC-4C9D-A5A7-48612DD4823E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{6265FF09-C45E-4C7F-8C4F-902CDFBA2594}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{49F57D10-954E-470F-B287-D5E26C71470E}"
+	ProjectSection(SolutionItems) = preProject
+		build.yml = build.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -53,6 +60,9 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{49F57D10-954E-470F-B287-D5E26C71470E} = {6265FF09-C45E-4C7F-8C4F-902CDFBA2594}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {7E4AF275-A4F5-428A-961C-23CD52B417DA}

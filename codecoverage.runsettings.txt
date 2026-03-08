@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  codecoverage.runsettings
+  Place this file in the solution root alongside FF.sln
+  Referenced by build.yml via: dotnet test - -settings codecoverage.runsettings
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <!-- Output format: cobertura is required for ReportGenerator and GitHub PR comments -->
+          <Format>cobertura</Format>
+
+          <!-- Exclude test projects themselves from coverage metrics -->
+          <Exclude>
+            [FF.Tests*]*
+            [*Tests*]*
+            [*Test*]*
+          </Exclude>
+
+          <!-- Exclude generated/infrastructure boilerplate that doesn't need coverage -->
+          <ExcludeByAttribute>
+            GeneratedCodeAttribute,
+            CompilerGeneratedAttribute,
+            ExcludeFromCodeCoverageAttribute
+          </ExcludeByAttribute>
+
+          <!-- Exclude EF Core migrations - generated code, no value in covering -->
+          <ExcludeByFile>
+            **/Migrations/*.cs,
+            **/obj/**/*.cs,
+            **/wwwroot/**
+          </ExcludeByFile>
+
+          <!-- Only measure coverage on your actual source projects -->
+          <Include>
+            [FF.Domain]*
+            [FF.Application]*
+            [FF.Infrastructure]*
+            [FF.API]*
+            [FF.SharedKernel]*
+          </Include>
+
+          <!-- Merge results from multiple test projects into a single report -->
+          <MergeWith>/tmp/coverage-merge</MergeWith>
+
+          <!-- Use deterministic (stable) file paths for reproducible reports -->
+          <UseSourceLink>true</UseSourceLink>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+
+  <TestRunParameters>
+    <!-- Signals to tests that they are running in CI - use InMemory DB, no real connections -->
+    <Parameter name="CI" value="true" />
+    <Parameter name="ASPNETCORE_ENVIRONMENT" value="Testing" />
+  </TestRunParameters>
+
+  <!-- Fail fast on first error in CI to keep feedback loop tight -->
+  <RunConfiguration>
+    <MaxCpuCount>1</MaxCpuCount>
+    <ResultsDirectory>./coverage</ResultsDirectory>
+    <TargetPlatform>x64</TargetPlatform>
+  </RunConfiguration>
+</RunSettings>

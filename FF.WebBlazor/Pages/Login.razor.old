@@ -1,0 +1,91 @@
+﻿@page "/login"
+@using FF.WebBlazor.Services
+@using FF.WebBlazor.Shared
+@layout LoginLayout
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudPaper Elevation="3" Class="pa-8">
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-6">
+            FF Analytics Login
+        </MudText>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@_errorMessage</MudAlert>
+        }
+
+        <MudTextField @bind-Value ="_email"
+                      Label="Email"
+                      InputType="InputType.Email"
+                      Variant="Variant.Outlined"
+                      Class="mb-4"
+                      FullWidth="true" />
+
+        <MudTextField @bind-Value ="_password"
+                      Label="Password"
+                      InputType="InputType.Password"
+                      Variant="Variant.Outlined"
+                      Class="mb-6"
+                      FullWidth="true" />
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
+                   Disabled="_isLoading"
+                   OnClick="HandleLogin">
+            @if (_isLoading)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Login
+        </MudButton>
+
+        <MudDivider Class="my-4" />
+
+        <MudText Align="Align.Center">
+            Don't have an account?
+            <MudLink Href="/register">Register</MudLink>
+        </MudText>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string _errorMessage = string.Empty;
+    private bool _isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Redirect if already logged in
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+            Navigation.NavigateTo("/");
+    }
+
+    private async Task HandleLogin()
+    {
+        _errorMessage = string.Empty;
+        _isLoading = true;
+
+        var result = await AuthService.LoginAsync(new(Email: _email, Password: _password));
+
+        if (result is null)
+        {
+            _errorMessage = "Invalid email or password.";
+            _isLoading = false;
+            return;
+        }
+
+        var authProvider = (CustomAuthStateProvider)AuthStateProvider;
+        authProvider.MarkUserAsAuthenticated(
+            result.AccessToken,
+            result.RefreshToken,
+            result.AccessTokenExpiry);
+
+        Navigation.NavigateTo("/");
+    }
+}
