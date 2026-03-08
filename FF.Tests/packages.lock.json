@@ -117,6 +117,11 @@
           "System.Diagnostics.EventLog": "6.0.0"
         }
       },
+      "CsvHelper": {
+        "type": "Transitive",
+        "resolved": "33.0.1",
+        "contentHash": "fev4lynklAU2A9GVMLtwarkwaanjSYB4wUqO2nOJX5hnzObORzUqVLe+bDYCUyIIRQM4o5Bsq3CcyJR89iMmEQ=="
+      },
       "DnsClient": {
         "type": "Transitive",
         "resolved": "1.6.1",
@@ -1141,6 +1146,7 @@
       "ff.infrastructure": {
         "type": "Project",
         "dependencies": {
+          "CsvHelper": "[33.0.1, )",
           "FF.Application": "[1.0.0, )",
           "FF.Domain": "[1.0.0, )",
           "FF.SharedKernel": "[1.0.0, )",
