@@ -1,56 +1,158 @@
-﻿@page "/login"
-@using FF.WebBlazor.Services
-@using FF.WebBlazor.Shared
+@page "/login"
 @layout LoginLayout
-@inject AuthService AuthService
+@inject FF.WebBlazor.Services.AuthService AuthService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
+<title>FantasyCombine.AI</title>
+<style>
+    .login-bg {
+        min-height: 100vh;
+        width: 100%;
+        background-image: url('/images/ff_bg_wide.jpg');
+        background-size: cover;
+        background-position: center top;
+        background-repeat: no-repeat;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;   /* push card to right side */
+        position: relative;
+        margin: 0;          /* ← add this */
+        padding: 0;         /* ← add this */
+    }
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudPaper Elevation="3" Class="pa-8">
-        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-6">
-            FF Analytics Login
-        </MudText>
+    .login-bg::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            135deg,
+            rgba(0, 20, 60, 0.75) 0%,
+            rgba(0, 10, 40, 0.60) 100%
+        );
+        z-index: 0;
+    }
 
-        @if (!string.IsNullOrEmpty(_errorMessage))
-        {
-            <MudAlert Severity="Severity.Error" Class="mb-4">@_errorMessage</MudAlert>
+    .login-card-wrapper {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 420px;
+        padding: 16px;
+        margin-right: 8%;   /* breathing room from right edge */
+    }
+
+    .login-card {
+        background: rgba(255, 255, 255, 0.97) !important;
+        border-radius: 16px !important;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5) !important;
+        padding: 40px 36px !important;
+    }
+
+    .login-title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #1a237e;
+        text-align: center;
+        margin-bottom: 4px;
+        letter-spacing: 0.5px;
+    }
+
+    .login-subtitle {
+        font-size: 0.85rem;
+        color: #607d8b;
+        text-align: center;
+        margin-bottom: 28px;
+        letter-spacing: 0.3px;
+    }
+
+    .login-badge {
+        display: inline-block;
+        background: linear-gradient(90deg, #1a237e, #00b0ff);
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 4px 14px;
+        border-radius: 20px;
+        margin-bottom: 20px;
+    }
+
+    /* On smaller screens fall back to centered */
+    @@media (max-width: 768px) {
+        .login-bg {
+            justify-content: center;
         }
+        .login-card-wrapper {
+            margin-right: 0;
+        }
+    }
+</style>
 
-        <MudTextField @bind-Value ="_email"
-                      Label="Email"
-                      InputType="InputType.Email"
-                      Variant="Variant.Outlined"
-                      Class="mb-4"
-                      FullWidth="true" />
+<div class="login-bg">
+    <div class="login-card-wrapper">
+        <MudPaper Class="login-card" Elevation="0">
 
-        <MudTextField @bind-Value ="_password"
-                      Label="Password"
-                      InputType="InputType.Password"
-                      Variant="Variant.Outlined"
-                      Class="mb-6"
-                      FullWidth="true" />
+            <div style="text-align:center; margin-bottom: 8px;">
+                <span class="login-badge">&#127944; FantasyCombine.AI</span>
+            </div>
 
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   FullWidth="true"
-                   Disabled="_isLoading"
-                   OnClick="HandleLogin">
-            @if (_isLoading)
+            <div class="login-title">Welcome Back</div>
+            <div class="login-subtitle">Advanced Analytics &amp; Player Intelligence</div>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
             {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_errorMessage</MudAlert>
             }
-            Login
-        </MudButton>
 
-        <MudDivider Class="my-4" />
+            <MudTextField @bind-Value="_email"
+                          Label="Email Address"
+                          InputType="InputType.Email"
+                          Variant="Variant.Outlined"
+                          Class="mb-3"
+                          FullWidth="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Email"
+                          AdornmentColor="Color.Primary" />
 
-        <MudText Align="Align.Center">
-            Don't have an account?
-            <MudLink Href="/register">Register</MudLink>
-        </MudText>
-    </MudPaper>
-</MudContainer>
+            <MudTextField @bind-Value="_password"
+                          Label="Password"
+                          InputType="InputType.Password"
+                          Variant="Variant.Outlined"
+                          Class="mb-5"
+                          FullWidth="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Lock"
+                          AdornmentColor="Color.Primary" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Disabled="_isLoading"
+                       OnClick="HandleLogin"
+                       Style="background: linear-gradient(90deg, #1a237e, #1565c0); border-radius: 8px; font-weight: 700; letter-spacing: 1px; padding: 12px;">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" Color="Color.Surface" />
+                    <span>Signing In...</span>
+                }
+                else
+                {
+                    <span>Sign In</span>
+                }
+            </MudButton>
+
+            <MudDivider Class="my-4" />
+
+            <MudText Align="Align.Center" Typo="Typo.body2" Style="color: #607d8b;">
+                Don't have an account?
+                <MudLink Href="/register" Style="font-weight: 700; color: #1565c0;">Create Account</MudLink>
+            </MudText>
+
+        </MudPaper>
+    </div>
+</div>
 
 @code {
     private string _email = string.Empty;
@@ -60,7 +162,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Redirect if already logged in
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
             Navigation.NavigateTo("/");
@@ -71,16 +172,17 @@
         _errorMessage = string.Empty;
         _isLoading = true;
 
-        var result = await AuthService.LoginAsync(new(Email: _email, Password: _password));
+        var result = await AuthService.LoginAsync(
+            new FF.WebBlazor.Models.Auth.LoginRequest(Email: _email, Password: _password));
 
         if (result is null)
         {
-            _errorMessage = "Invalid email or password.";
+            _errorMessage = "Invalid email or password. Please try again.";
             _isLoading = false;
             return;
         }
 
-        var authProvider = (CustomAuthStateProvider)AuthStateProvider;
+        var authProvider = (FF.WebBlazor.Services.CustomAuthStateProvider)AuthStateProvider;
         authProvider.MarkUserAsAuthenticated(
             result.AccessToken,
             result.RefreshToken,

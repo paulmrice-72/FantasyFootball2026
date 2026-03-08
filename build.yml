@@ -1,0 +1,119 @@
+name: CI - Build and Test
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+      - main
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for SonarCloud (future), required for coverage diffs
+
+      # ── .NET SDK ────────────────────────────────────────────────────────
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # ── NuGet Cache ─────────────────────────────────────────────────────
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # ── Restore ─────────────────────────────────────────────────────────
+      - name: Restore dependencies
+        run: dotnet restore --locked-mode
+        # Note: If you don't have packages.lock.json files yet, remove --locked-mode
+        # and run 'dotnet restore' locally first to generate them, then commit.
+        # For now, fallback without locked mode:
+        continue-on-error: false
+
+      # ── Build ────────────────────────────────────────────────────────────
+      - name: Build (Release)
+        run: dotnet build --no-restore --configuration Release
+
+      # ── Test with Coverage ───────────────────────────────────────────────
+      - name: Run tests with coverage
+        run: |
+          dotnet test \
+            --no-build \
+            --configuration Release \
+            --settings codecoverage.runsettings \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage \
+            --logger "trx;LogFileName=test-results.trx" \
+            --logger "console;verbosity=normal" \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+        env:
+          # Tests use EF Core InMemory - no live DB connection needed
+          ASPNETCORE_ENVIRONMENT: Testing
+
+      # ── Publish Test Results ─────────────────────────────────────────────
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: success() || failure()   # always run so we see failures
+        with:
+          name: xUnit Test Results
+          path: ./coverage/*.trx
+          reporter: dotnet-trx
+          fail-on-error: true
+
+      # ── Generate Coverage Report ──────────────────────────────────────────
+      - name: Generate coverage report (ReportGenerator)
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        with:
+          reports: './coverage/**/coverage.cobertura.xml'
+          targetdir: './coverage/report'
+          reporttypes: 'HtmlInline_AzurePipelines;Cobertura;MarkdownSummaryGithub'
+          assemblyfilters: '-*.Tests*'
+          verbosity: 'Warning'
+
+      # ── Post Coverage Summary to PR ───────────────────────────────────────
+      - name: Post coverage summary to PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request'
+        with:
+          recreate: true
+          path: coverage/report/SummaryGithub.md
+
+      # ── Upload Coverage Artifact ──────────────────────────────────────────
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./coverage/report
+          retention-days: 14
+
+      # ── Coverage Threshold Gate ───────────────────────────────────────────
+      - name: Check coverage threshold
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        with:
+          reports: './coverage/**/coverage.cobertura.xml'
+          targetdir: './coverage/threshold'
+          reporttypes: 'Badges'
+          # Minimum 60% line coverage - raise this as you add more tests
+          # This step is informational for now; set fail_below_min: true when ready
+          assemblyfilters: '-*.Tests*'
+          verbosity: 'Warning'
