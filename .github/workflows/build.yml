@@ -44,7 +44,7 @@ jobs:
 
       # ── Restore ─────────────────────────────────────────────────────────
       - name: Restore dependencies
-        run: dotnet restore --locked-mode
+        run: dotnet restore FF.sln
         # Note: If you don't have packages.lock.json files yet, remove --locked-mode
         # and run 'dotnet restore' locally first to generate them, then commit.
         # For now, fallback without locked mode:
@@ -52,22 +52,20 @@ jobs:
 
       # ── Build ────────────────────────────────────────────────────────────
       - name: Build (Release)
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build FF.sln --no-restore --configuration Release
 
       # ── Test with Coverage ───────────────────────────────────────────────
       - name: Run tests with coverage
         run: |
-          dotnet test \
+          dotnet test FF.sln \
             --no-build \
             --configuration Release \
             --settings codecoverage.runsettings \
             --collect:"XPlat Code Coverage" \
             --results-directory ./coverage \
             --logger "trx;LogFileName=test-results.trx" \
-            --logger "console;verbosity=normal" \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+            --logger "console;verbosity=normal"
         env:
-          # Tests use EF Core InMemory - no live DB connection needed
           ASPNETCORE_ENVIRONMENT: Testing
 
       # ── Publish Test Results ─────────────────────────────────────────────
