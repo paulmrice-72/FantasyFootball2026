@@ -1,3 +1,4 @@
+
 name: CI - Build and Test
 
 on:
@@ -8,7 +9,12 @@ on:
     branches:
       - develop
       - main
-
+      
+permissions:
+  contents: read
+  checks: write        # required for dorny/test-reporter to post results
+  pull-requests: write # required for sticky PR coverage comment
+  
 env:
   DOTNET_VERSION: '9.0.x'
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
@@ -44,7 +50,7 @@ jobs:
 
       # ── Restore ─────────────────────────────────────────────────────────
       - name: Restore dependencies
-        run: dotnet restore FF.sln
+        run: dotnet restore FantasyFootball.sln
         # Note: If you don't have packages.lock.json files yet, remove --locked-mode
         # and run 'dotnet restore' locally first to generate them, then commit.
         # For now, fallback without locked mode:
@@ -52,12 +58,12 @@ jobs:
 
       # ── Build ────────────────────────────────────────────────────────────
       - name: Build (Release)
-        run: dotnet build FF.sln --no-restore --configuration Release
+        run: dotnet build FantasyFootball.sln --no-restore --configuration Release
 
       # ── Test with Coverage ───────────────────────────────────────────────
       - name: Run tests with coverage
         run: |
-          dotnet test FF.sln \
+          dotnet test FantasyFootball.sln \
             --no-build \
             --configuration Release \
             --settings codecoverage.runsettings \
