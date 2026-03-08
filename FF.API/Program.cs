@@ -1,15 +1,21 @@
 using FF.API.Middleware;
 using FF.Application;
 using FF.Application.Common.Settings;
+using FF.Application.Interfaces.Persistence;
+using FF.Application.Stats.Queries.GetHistoricalStatsStatus;
 using FF.Infrastructure;
 using FF.Infrastructure.Jobs;
+using FF.Infrastructure.Persistence.Mongo.Repositories;
 using FF.Infrastructure.Persistence.SQL;
+using FF.SharedKernel.Common;
 using Hangfire;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Events;
 using System.Text;
+
 
 Serilog.Debugging.SelfLog.Enable(msg => Console.WriteLine($"SERILOG: {msg}"));
 
@@ -65,7 +71,12 @@ try
             ?? "http://192.168.6.17:5341"));
 
     // ── API SERVICES ──────────────────────────────────────
-    builder.Services.AddControllers();
+    builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
 
@@ -127,7 +138,9 @@ try
     app.UseAuthorization();
     app.MapControllers();
 
-    // Hangfire Dashboard --- Development only
+    app.MapControllers();
+
+    // ── HANGFIRE DASHBOARD ────────────────────────────────
     if (app.Environment.IsDevelopment())
     {
         app.UseHangfireDashboard("/hangfire", new DashboardOptions
@@ -136,12 +149,54 @@ try
         });
     }
 
-    // Register recurring jobs
-    using var scope = app.Services.CreateScope();
+    // ── STARTUP TASKS ─────────────────────────────────────
+    // DatabaseInitialiser runs migrations + seed on every startup (idempotent)
+    await DatabaseInitialiser.InitialiseAsync(app.Services);
+
+    // MongoDB index creation — idempotent, safe to run on every startup
+    using (var scope = app.Services.CreateScope())
+    {
+        var gameLogRepo = scope.ServiceProvider
+            .GetRequiredService<IPlayerGameLogRepository>();
+        await gameLogRepo.EnsureIndexesAsync();
+    }
+
+    // ── RECURRING JOBS ────────────────────────────────────
+    // Static Hangfire client --- no scope needed for registration
+    var utcOptions = new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc };
+
     RecurringJob.AddOrUpdate<SystemHealthCheckJob>(
-        "system-health-check",
-        job => job.Execute(),
-        "*/15 * * * *"); // Every 15 minutes
+        recurringJobId: "system-health-check",
+        methodCall: job => job.Execute(),
+        cronExpression: "*/15 * * * *",
+        options: utcOptions);
+
+    RecurringJob.AddOrUpdate<LeagueSyncJob>(
+        recurringJobId: "league-sync-weekly",
+        methodCall: job => job.SyncAllLeaguesAsync(),
+        cronExpression: "0 10 * * 2",
+        options: utcOptions);
+
+    RecurringJob.AddOrUpdate<PlayerSyncJob>(
+        recurringJobId: "player-sync-weekly",
+        methodCall: job => job.SyncPlayersAsync(),
+        cronExpression: "0 6 * * 2",
+        options: utcOptions);
+
+    RecurringJob.AddOrUpdate<HistoricalStatsSyncJob>(
+        recurringJobId: "weekly-stats-sync",
+        methodCall: x => x.SyncCurrentSeasonAsync(),
+        cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 8),
+        options: utcOptions);
+
+    //RecurringJob.AddOrUpdate<WaiverSyncJob>(
+    //recurringJobId: "waiver-sync",
+    //methodCall: job => job.SyncWaiversAsync(),
+    //cronExpression: "5 0 * * 3", // 12:05 AM UTC Wednesday = ~8:05 PM ET Tuesday
+    //options: new RecurringJobOptions
+    //{
+    //    TimeZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time")
+    //});
 
     app.Run();
 }

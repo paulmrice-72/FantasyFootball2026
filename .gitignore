@@ -13,6 +13,10 @@
 *.userosscache
 *.sln.docstates
 
+  # Historical stats CSV data files
+  **/Data/Historical/
+  Data/
+
 # ASP.NET Core environment-specific settings (contain secrets)
 appsettings.Development.json
 appsettings.Production.json
