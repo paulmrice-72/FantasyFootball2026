@@ -1,11 +1,10 @@
 ﻿// FF.API/Controllers/StatsController.cs
 
+using FF.Application.Stats.Commands.HistoricalImportStats;
+using FF.Application.Stats.Queries.GetDataQuality;
+using FF.Application.Stats.Queries.GetHistoricalStatsStatus;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using FF.Application.Stats.Commands;
-using FF.Application.Stats.Queries;
-using FF.Application.Stats.Commands.ImportHistoricalStats;
-using FF.Application.Stats.Queries.GetHistoricalStatsStatus;
 
 namespace FF.API.Controllers;
 
@@ -70,6 +69,23 @@ public class StatsController(IMediator mediator) : ControllerBase
         var result = await _mediator.Send(
             new GetHistoricalStatsStatusQuery(),
             cancellationToken);
+
+        if (result.IsFailure)
+            return BadRequest(new { error = result.Error.Message });
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>
+    /// Runs data quality validation across all imported PlayerGameLog documents.
+    /// Checks document counts, stat ranges, missing fields, and position coverage.
+    /// GET /api/v1/stats/quality
+    /// </summary>
+    [HttpGet("quality")]
+    public async Task<IActionResult> GetDataQuality(CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetDataQualityQuery(), cancellationToken);
 
         if (result.IsFailure)
             return BadRequest(new { error = result.Error.Message });
