@@ -8,6 +8,7 @@ using FF.Application.Stats.Commands;
 using FF.Domain.Documents;
 using FF.Infrastructure.ExternalApis.CsvImport;
 using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
+using FF.Infrastructure.ExternalApis.Nflverse;
 using FF.Infrastructure.ExternalApis.Sleeper;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
@@ -53,6 +54,20 @@ public static class DependencyInjection
         services.AddScoped<ILeagueRepository, LeagueRepository>();
         services.AddScoped<IRosterRepository, RosterRepository>();
         services.AddScoped<IPlayerGameLogRepository, PlayerGameLogRepository>();
+
+        // Add named HttpClient for nflverse — GitHub redirects require following redirects
+        services.AddHttpClient<NflverseDownloadService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(2); // CSV can be large
+            client.DefaultRequestHeaders.Add(
+                "User-Agent", "FantasyCombine.AI/1.0");
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            AllowAutoRedirect = true // GitHub releases use redirects
+        });
+
+        services.AddScoped<INflverseDownloadService, NflverseDownloadService>();
 
         // Health Checks
         services.AddHealthChecks()
