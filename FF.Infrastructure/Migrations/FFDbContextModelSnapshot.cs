@@ -198,6 +198,58 @@ namespace FF.Infrastructure.Migrations
                     b.ToTable("Rosters", (string)null);
                 });
 
+            modelBuilder.Entity("FF.Domain.Entities.Transaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AddsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DropsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("LeagueId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SleeperTransactionId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("TransactionDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Week")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeagueId");
+
+                    b.HasIndex("SleeperTransactionId")
+                        .IsUnique()
+                        .HasFilter("[SleeperTransactionId] IS NOT NULL");
+
+                    b.ToTable("Transactions", (string)null);
+                });
+
             modelBuilder.Entity("FF.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -406,6 +458,17 @@ namespace FF.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("FF.Domain.Entities.Roster", b =>
+                {
+                    b.HasOne("FF.Domain.Entities.League", "League")
+                        .WithMany()
+                        .HasForeignKey("LeagueId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("League");
+                });
+
+            modelBuilder.Entity("FF.Domain.Entities.Transaction", b =>
                 {
                     b.HasOne("FF.Domain.Entities.League", "League")
                         .WithMany()
