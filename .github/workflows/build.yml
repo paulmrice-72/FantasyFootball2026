@@ -50,7 +50,7 @@ jobs:
 
       # ── Restore ─────────────────────────────────────────────────────────
       - name: Restore dependencies
-        run: dotnet restore FantasyFootball.sln --locked-mode
+        run: dotnet restore FantasyFootball.sln
         # Note: If you don't have packages.lock.json files yet, remove --locked-mode
         # and run 'dotnet restore' locally first to generate them, then commit.
         # For now, fallback without locked mode:
