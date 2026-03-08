@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddHangfireServer();
         services.AddScoped<IBackgroundJobService, HangfireBackgroundJobService>();
         services.AddScoped<ISleeperLeagueImportService, SleeperLeagueImportService>();
+        services.AddScoped<ISleeperPlayerSyncService, SleeperPlayerSyncService>();
         services.AddScoped<SystemHealthCheckJob>();
         services.AddSleeperApiClient();
 

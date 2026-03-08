@@ -47,4 +47,21 @@ public class Player : Entity
         NflTeam = nflTeam;
         SetUpdated();
     }
+
+    public void UpdateFields(
+    string firstName,
+    string lastName,
+    Position position,
+    int? age,
+    int? yearsExperience,
+    int? jerseyNumber)
+    {
+        FirstName = firstName;
+        LastName = lastName;
+        Position = position;
+        Age = age;
+        YearsExperience = yearsExperience;
+        JerseyNumber = jerseyNumber;
+        SetUpdated();
+    }
 }
