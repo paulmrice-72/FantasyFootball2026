@@ -12,6 +12,7 @@
 *.user
 *.userosscache
 *.sln.docstates
+Data\
 
 # ASP.NET Core environment-specific settings (contain secrets)
 appsettings.Development.json
