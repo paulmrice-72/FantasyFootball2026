@@ -16,7 +16,9 @@
 
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
+using MongoDB.Bson;
 using MongoDB.Driver;
+using System.Diagnostics.Metrics;
 
 namespace FF.Infrastructure.Persistence.Mongo.Repositories;
 
@@ -34,13 +36,16 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
     public async Task EnsureIndexesAsync()
     {
         // Register BSON class map if not already registered
-        if (!MongoDB.Bson.Serialization.BsonClassMap.IsClassMapRegistered(typeof(PlayerGameLogDocument)))
+        if (!MongoDB.Bson.Serialization.BsonClassMap.IsClassMapRegistered(
+            typeof(PlayerGameLogDocument)))
         {
             MongoDB.Bson.Serialization.BsonClassMap.RegisterClassMap<PlayerGameLogDocument>(cm =>
             {
                 cm.AutoMap();
                 cm.MapIdMember(c => c.Id)
-                  .SetIdGenerator(MongoDB.Bson.Serialization.IdGenerators.StringObjectIdGenerator.Instance);
+                  .SetIdGenerator(MongoDB.Bson.Serialization.IdGenerators.StringObjectIdGenerator.Instance)
+                  .SetSerializer(new MongoDB.Bson.Serialization.Serializers.StringSerializer(
+                      MongoDB.Bson.BsonType.ObjectId));  // ← ADD THIS LINE
             });
         }
         var indexModels = new List<CreateIndexModel<PlayerGameLogDocument>>

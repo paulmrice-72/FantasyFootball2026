@@ -4,7 +4,7 @@ using FF.SharedKernel;
 using FF.SharedKernel.Common;
 using MediatR;
 
-namespace FF.Application.Stats.Commands.ImportHistoricalStats;
+namespace FF.Application.Stats.Commands.HistoricalImportStats;
 
 /// <summary>
 /// Triggers the full historical stats import pipeline.

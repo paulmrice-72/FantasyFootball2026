@@ -5,6 +5,7 @@ using FF.Application.Interfaces.Jobs;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
 using FF.Application.Stats.Commands;
+using FF.Domain.Documents;
 using FF.Infrastructure.ExternalApis.CsvImport;
 using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
 using FF.Infrastructure.ExternalApis.Sleeper;
@@ -20,6 +21,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.IdGenerators;
+using MongoDB.Bson.Serialization.Serializers;
 
 namespace FF.Infrastructure;
 
@@ -30,6 +35,8 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.Configure<HistoricalDataSettings>(configuration.GetSection(HistoricalDataSettings.SectionName));
+
+        RegisterBsonClassMaps();
 
         System.Diagnostics.Debug.WriteLine("AddInfrastructure starting...");
         // Database
@@ -97,5 +104,19 @@ public static class DependencyInjection
         return services;
 
 
+    }
+
+    private static void RegisterBsonClassMaps()
+    {
+        if (!BsonClassMap.IsClassMapRegistered(typeof(PlayerGameLogDocument)))
+        {
+            BsonClassMap.RegisterClassMap<PlayerGameLogDocument>(cm =>
+            {
+                cm.AutoMap();
+                cm.MapIdMember(c => c.Id)
+                  .SetIdGenerator(StringObjectIdGenerator.Instance)
+                  .SetSerializer(new StringSerializer(BsonType.ObjectId));
+            });
+        }
     }
 }

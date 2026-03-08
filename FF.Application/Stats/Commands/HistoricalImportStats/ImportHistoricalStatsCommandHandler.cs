@@ -1,13 +1,12 @@
 ﻿// FF.Application/Stats/Commands/ImportHistoricalStats/ImportHistoricalStatsCommandHandler.cs
 
 using FF.Application.Interfaces.Services;
-using FF.Application.Stats.Commands.ImportHistoricalStats;
 using FF.SharedKernel.Common;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace FF.Application.Stats.Commands.ImportHistoricalStats;
+namespace FF.Application.Stats.Commands.HistoricalImportStats;
 
 public class ImportHistoricalStatsCommandHandler(
     IHistoricalStatsImportService importService,
