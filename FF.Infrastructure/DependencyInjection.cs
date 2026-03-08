@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using FF.Infrastructure.ExternalApis.Sleeper;
 
 namespace FF.Infrastructure;
 
@@ -50,6 +51,7 @@ public static class DependencyInjection
         services.AddHangfireServer();
         services.AddScoped<IBackgroundJobService, HangfireBackgroundJobService>();
         services.AddScoped<SystemHealthCheckJob>();
+        services.AddSleeperApiClient();
 
         // Identity
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
