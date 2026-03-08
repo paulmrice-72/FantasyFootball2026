@@ -138,10 +138,19 @@ try
 
     // Register recurring jobs
     using var scope = app.Services.CreateScope();
-    RecurringJob.AddOrUpdate<SystemHealthCheckJob>(
-        "system-health-check",
-        job => job.Execute(),
-        "*/15 * * * *"); // Every 15 minutes
+    { 
+        RecurringJob.AddOrUpdate<SystemHealthCheckJob>(
+            "system-health-check",
+            job => job.Execute(),
+            "*/15 * * * *"); // Every 15 minutes
+
+        RecurringJob.AddOrUpdate<LeagueSyncJob>(
+            "league-sync-weekly",
+            job => job.SyncAllLeaguesAsync(),
+            "0 10 * * 2");
+
+        await DatabaseInitialiser.InitialiseAsync(app.Services);
+    }
 
     app.Run();
 }

@@ -2,17 +2,19 @@
 using FF.Application.Interfaces.Auth;
 using FF.Application.Interfaces.Jobs;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
+using FF.Infrastructure.ExternalApis.Sleeper;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.Mongo;
 using FF.Infrastructure.Persistence.SQL;
 using FF.Infrastructure.Persistence.SQL.Repositories;
+using FF.Infrastructure.Services;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using FF.Infrastructure.ExternalApis.Sleeper;
 
 namespace FF.Infrastructure;
 
@@ -50,9 +52,11 @@ public static class DependencyInjection
 
         services.AddHangfireServer();
         services.AddScoped<IBackgroundJobService, HangfireBackgroundJobService>();
+        services.AddScoped<ISleeperLeagueImportService, SleeperLeagueImportService>();
         services.AddScoped<SystemHealthCheckJob>();
         services.AddSleeperApiClient();
 
+ 
         // Identity
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         {
