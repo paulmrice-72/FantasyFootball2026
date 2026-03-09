@@ -1,6 +1,7 @@
 ﻿// FF.Application/Interfaces/Services/INflverseDownloadService.cs
 namespace FF.Application.Interfaces.Services;
 
+
 public interface INflverseDownloadService
 {
     /// <summary>
@@ -8,6 +9,10 @@ public interface INflverseDownloadService
     /// Saves to the configured HistoricalData.BasePath for subsequent import.
     /// </summary>
     Task<NflverseDownloadResult> DownloadCurrentSeasonAsync(
+        int season,
+        CancellationToken cancellationToken = default);
+
+    Task<NflverseDownloadResult> DownloadSnapCountsAsync(
         int season,
         CancellationToken cancellationToken = default);
 }

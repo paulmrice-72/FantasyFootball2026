@@ -14,4 +14,8 @@
     <ProjectReference Include="..\FF.SharedKernel\FF.SharedKernel.csproj" />
     <ProjectReference Include="..\FF.Domain\FF.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Interfaces\Repositories\" />
+    <Folder Include="Services\" />
+  </ItemGroup>
 </Project>
