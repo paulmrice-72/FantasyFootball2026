@@ -98,8 +98,7 @@ try
 
     var app = builder.Build();
 
-    await DatabaseInitialiser.InitialiseAsync(app.Services);
-    
+   
     // ── MIDDLEWARE PIPELINE ───────────────────────────────
     // Order matters — do not rearrange without understanding the implications
     app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -150,7 +149,6 @@ try
     }
 
     // ── STARTUP TASKS ─────────────────────────────────────
-    // DatabaseInitialiser runs migrations + seed on every startup (idempotent)
     await DatabaseInitialiser.InitialiseAsync(app.Services);
 
     // MongoDB index creation — idempotent, safe to run on every startup
@@ -187,6 +185,12 @@ try
         recurringJobId: "weekly-stats-sync",
         methodCall: x => x.SyncCurrentSeasonAsync(),
         cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 8),
+        options: utcOptions);
+
+    RecurringJob.AddOrUpdate<UsageMetricsAggregationJob>(
+        recurringJobId: "usage-metrics-aggregation",
+        methodCall: job => job.ExecuteAsync(2024),
+        cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 6),
         options: utcOptions);
 
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(

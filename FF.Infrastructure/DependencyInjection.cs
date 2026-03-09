@@ -4,7 +4,7 @@ using FF.Application.Interfaces.Auth;
 using FF.Application.Interfaces.Jobs;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
-using FF.Application.Stats.Commands;
+using FF.Application.Interfaces.Services.Usage;
 using FF.Domain.Documents;
 using FF.Infrastructure.ExternalApis.CsvImport;
 using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
@@ -54,6 +54,10 @@ public static class DependencyInjection
         services.AddScoped<ILeagueRepository, LeagueRepository>();
         services.AddScoped<IRosterRepository, RosterRepository>();
         services.AddScoped<IPlayerGameLogRepository, PlayerGameLogRepository>();
+        services.AddScoped<IUsageMetricsRepository, UsageMetricsRepository>();
+        services.AddScoped<ISnapCountRepository, SnapCountRepository>();
+        services.AddScoped<IUsageMetricsService, UsageMetricsService>();
+        services.AddScoped<UsageMetricsAggregationJob>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
@@ -129,15 +133,76 @@ public static class DependencyInjection
 
     private static void RegisterBsonClassMaps()
     {
-        if (!BsonClassMap.IsClassMapRegistered(typeof(PlayerGameLogDocument)))
+        try
         {
-            BsonClassMap.RegisterClassMap<PlayerGameLogDocument>(cm =>
+            var decimalSerializer = new DecimalSerializer(BsonType.Decimal128);
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(PlayerUsageMetricsDocument)))
             {
-                cm.AutoMap();
-                cm.MapIdMember(c => c.Id)
-                  .SetIdGenerator(StringObjectIdGenerator.Instance)
-                  .SetSerializer(new StringSerializer(BsonType.ObjectId));
-            });
+                System.Diagnostics.Debug.WriteLine("Registering PlayerUsageMetricsDocument...");
+                BsonClassMap.RegisterClassMap<PlayerUsageMetricsDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+
+                    cm.MapMember(c => c.TargetShare3Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.TargetShare5Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.TargetShareSeason).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.SnapPct3Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.SnapPct5Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.SnapPctSeason).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.AirYardsShare3Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.AirYardsShare5Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.AirYardsShareSeason).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.CarryShare3Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.CarryShare5Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.CarryShareSeason).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.Wopr3Wk).SetSerializer(decimalSerializer);
+                    cm.MapMember(c => c.WoprSeason).SetSerializer(decimalSerializer);
+                });
+                System.Diagnostics.Debug.WriteLine("PlayerUsageMetricsDocument registered OK");
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(PlayerGameLogDocument)))
+            {
+                BsonClassMap.RegisterClassMap<PlayerGameLogDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FAILED PlayerUsageMetricsDocument: {ex.Message}");
+            throw;
+        }
+
+        try
+        {
+            if (!BsonClassMap.IsClassMapRegistered(typeof(SnapCountDocument)))
+            {
+                System.Diagnostics.Debug.WriteLine("Registering SnapCountDocument...");
+                BsonClassMap.RegisterClassMap<SnapCountDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+                System.Diagnostics.Debug.WriteLine("SnapCountDocument registered OK");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"FAILED SnapCountDocument: {ex.Message}");
+            throw;
         }
     }
 }

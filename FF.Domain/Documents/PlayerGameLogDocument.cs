@@ -96,4 +96,10 @@ public class PlayerGameLogDocument
     public decimal? PfrFantasyPoints { get; set; }             // PFR's fantasy point total
     public decimal? PfrVariance { get; set; }                  // difference vs nflfastR
     public DateTime ImportedAt { get; set; } = DateTime.UtcNow;
+
+    // ── Snap Count Data ───────────────────────────────────────────────────
+    // Sourced from nflverse snap_counts dataset (PFR data)
+    // Populated by SnapCountImportJob — separate from main game log import
+    public int OffenseSnaps { get; set; }       // raw snap count
+    public decimal SnapPct { get; set; }        // offense_pct (0.0 to 1.0)
 }

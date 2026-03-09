@@ -14,6 +14,7 @@
 //   Filter: PlayerId + Season + Week (the natural unique key from nflfastR).
 //   This makes the import fully idempotent — re-running the same file is safe.
 
+using FF.Application.Interfaces.Persistence;
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
@@ -22,7 +23,7 @@ using System.Diagnostics.Metrics;
 
 namespace FF.Infrastructure.Persistence.Mongo.Repositories;
 
-public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameLogRepository> logger) : FF.Application.Interfaces.Persistence.IPlayerGameLogRepository
+public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameLogRepository> logger) : IPlayerGameLogRepository
 {
     private readonly IMongoCollection<PlayerGameLogDocument> _collection = context.Database.GetCollection<PlayerGameLogDocument>(CollectionName);
     private readonly ILogger<PlayerGameLogRepository> _logger = logger;
@@ -257,5 +258,28 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
         var filter = Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, season);
         var result = await _collection.DeleteManyAsync(filter, cancellationToken);
         return result.DeletedCount;
+    }
+
+    public async Task<List<PlayerGameLogDocument>> GetByPlayerSeasonAsync(
+    string playerId,
+    int season,
+    CancellationToken cancellationToken = default)
+    {
+        return await _collection
+            .Find(x => x.PlayerId == playerId && x.Season == season)
+            .SortBy(x => x.Week)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<string>> GetDistinctPlayerIdsAsync(
+        int season,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<PlayerGameLogDocument>.Filter
+            .Eq(x => x.Season, season);
+
+        return await _collection
+            .Distinct(x => x.PlayerId, filter, cancellationToken: cancellationToken)
+            .ToListAsync(cancellationToken);
     }
 }
