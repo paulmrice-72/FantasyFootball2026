@@ -21,6 +21,15 @@ public interface IPlayerGameLogRepository
         int week,
         CancellationToken cancellationToken = default);
 
+    Task<List<PlayerGameLogDocument>> GetByPlayerSeasonAsync(
+    string playerId,
+    int season,
+    CancellationToken cancellationToken = default);
+
+    Task<List<string>> GetDistinctPlayerIdsAsync(
+        int season,
+        CancellationToken cancellationToken = default);
+
     Task<long> DeleteSeasonAsync(
         int season,
         CancellationToken cancellationToken = default);

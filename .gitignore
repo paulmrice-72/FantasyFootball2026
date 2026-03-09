@@ -492,3 +492,4 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+/create_github_issues.sh
