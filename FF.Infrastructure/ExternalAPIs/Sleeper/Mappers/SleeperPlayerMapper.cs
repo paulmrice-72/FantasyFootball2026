@@ -36,7 +36,8 @@ public static class SleeperPlayerMapper
             lastName: dto.LastName,
             position: position.Value,
             nflTeam: dto.Team,
-            sleeperPlayerId: dto.PlayerId
+            sleeperPlayerId: dto.PlayerId,
+            gsisId: dto.GsisId        // ← add this
         );
     }
 

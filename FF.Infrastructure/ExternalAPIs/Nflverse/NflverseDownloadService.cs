@@ -128,4 +128,59 @@ public class NflverseDownloadService(
             };
         }
     }
+    private const string RostersBaseUrl =
+    "https://github.com/nflverse/nflverse-data/releases/download/rosters";
+
+    public async Task<NflverseDownloadResult> DownloadRostersAsync(
+        int season,
+        CancellationToken cancellationToken = default)
+    {
+        var startedAt = DateTime.UtcNow;
+        var url = $"{RostersBaseUrl}/roster_{season}.csv";
+        var savePath = Path.Combine(
+            _settings.BasePath, "nflfastr", $"roster_{season}.csv");
+
+        _logger.LogInformation(
+            "Downloading nflverse rosters for season {Season} from {Url}",
+            season, url);
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+
+            var response = await _httpClient.GetAsync(url, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            await File.WriteAllBytesAsync(savePath, bytes, cancellationToken);
+
+            var duration = DateTime.UtcNow - startedAt;
+
+            _logger.LogInformation(
+                "Downloaded roster_{Season}.csv — {Size:N0} bytes in {Duration}",
+                season, bytes.Length, duration);
+
+            return new NflverseDownloadResult
+            {
+                Success = true,
+                Season = season,
+                SavedPath = savePath,
+                FileSizeBytes = bytes.Length,
+                Duration = duration
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to download nflverse rosters for season {Season}", season);
+
+            return new NflverseDownloadResult
+            {
+                Success = false,
+                Season = season,
+                ErrorMessage = ex.Message,
+                Duration = DateTime.UtcNow - startedAt
+            };
+        }
+    }
 }
