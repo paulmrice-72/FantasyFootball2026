@@ -282,4 +282,41 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
             .Distinct(x => x.PlayerId, filter, cancellationToken: cancellationToken)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<List<PlayerGameLogDocument>> GetDocumentsWithNullSleeperIdAsync(
+    CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<PlayerGameLogDocument>.Filter.Or(
+            Builders<PlayerGameLogDocument>.Filter.Exists(x => x.SleeperPlayerId, false),
+            Builders<PlayerGameLogDocument>.Filter.Eq(x => x.SleeperPlayerId, null),
+            Builders<PlayerGameLogDocument>.Filter.Eq(x => x.SleeperPlayerId, "")
+        );
+
+        // Only need identity fields, not all stat fields
+        var projection = Builders<PlayerGameLogDocument>.Projection
+            .Include(x => x.PlayerId)
+            .Include(x => x.Position)
+            .Include(x => x.PlayerName);
+
+        return await _collection
+            .Find(filter)
+            .Project<PlayerGameLogDocument>(projection)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task UpdateSleeperPlayerIdAsync(
+        string playerId,
+        string sleeperPlayerId,
+        CancellationToken cancellationToken = default)
+    {
+        // Update ALL documents for this player in one shot
+        var filter = Builders<PlayerGameLogDocument>.Filter
+            .Eq(x => x.PlayerId, playerId);
+
+        var update = Builders<PlayerGameLogDocument>.Update
+            .Set(x => x.SleeperPlayerId, sleeperPlayerId);
+
+        await _collection.UpdateManyAsync(filter, update,
+            cancellationToken: cancellationToken);
+    }
 }

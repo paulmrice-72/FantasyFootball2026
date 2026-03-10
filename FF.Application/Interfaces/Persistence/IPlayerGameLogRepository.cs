@@ -34,5 +34,13 @@ public interface IPlayerGameLogRepository
         int season,
         CancellationToken cancellationToken = default);
 
+    Task<List<PlayerGameLogDocument>> GetDocumentsWithNullSleeperIdAsync(
+    CancellationToken cancellationToken = default);
+
+    Task UpdateSleeperPlayerIdAsync(
+        string playerId,
+        string sleeperPlayerId,
+        CancellationToken cancellationToken = default);
+
     Task EnsureIndexesAsync();
 }
