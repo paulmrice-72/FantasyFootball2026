@@ -59,6 +59,9 @@ public class SleeperPlayerDto
 
     [JsonPropertyName("search_rank")]
     public int? SearchRank { get; set; }
+
+    [JsonPropertyName("gsis_id")]
+    public string? GsisId { get; set; }
 }
 
 // ── User ─────────────────────────────────────────────────────────────────────

@@ -14,16 +14,19 @@ public class HistoricalStatsSyncJobTests
     private readonly Mock<INflverseDownloadService> _mockDownloadService;
     private readonly Mock<ILogger<HistoricalStatsSyncJob>> _mockLogger;
     private readonly HistoricalStatsSyncJob _job;
+    private readonly Mock<IPlayerIdResolutionService> _mockResolutionService;
 
     public HistoricalStatsSyncJobTests()
     {
         _mockImportService = new Mock<IHistoricalStatsImportService>();
         _mockDownloadService = new Mock<INflverseDownloadService>();
+        _mockResolutionService = new Mock<IPlayerIdResolutionService>();
         _mockLogger = new Mock<ILogger<HistoricalStatsSyncJob>>();
 
         _job = new HistoricalStatsSyncJob(
             _mockImportService.Object,
             _mockDownloadService.Object,
+            _mockResolutionService.Object,
             _mockLogger.Object);
     }
 
@@ -53,6 +56,11 @@ public class HistoricalStatsSyncJobTests
                 TotalInserted = 0,
                 TotalReplaced = 5226
             });
+
+        _mockResolutionService
+            .Setup(x => x.BackfillMissingSleeperIdsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PlayerIdResolutionResult(0, 0, 0, []));
+
 
         // Act
         await _job.SyncCurrentSeasonAsync();
@@ -85,6 +93,10 @@ public class HistoricalStatsSyncJobTests
                 TotalInserted = 0,
                 TotalReplaced = 100
             });
+
+        _mockResolutionService
+            .Setup(x => x.BackfillMissingSleeperIdsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PlayerIdResolutionResult(0, 0, 0, new Dictionary<string, int>()));
 
         // Act
         var act = async () => await _job.SyncCurrentSeasonAsync();

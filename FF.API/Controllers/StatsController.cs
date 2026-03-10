@@ -1,5 +1,6 @@
 ﻿// FF.API/Controllers/StatsController.cs
 
+using FF.Application.Interfaces.Services;
 using FF.Application.Stats.Commands.HistoricalImportStats;
 using FF.Application.Stats.Queries.GetDataQuality;
 using FF.Application.Stats.Queries.GetHistoricalStatsStatus;
@@ -91,5 +92,15 @@ public class StatsController(IMediator mediator) : ControllerBase
             return BadRequest(new { error = result.Error.Message });
 
         return Ok(result.Value);
+    }
+
+    [HttpPost("resolve-player-ids")]
+    [ProducesResponseType(typeof(PlayerIdResolutionResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ResolvePlayerIds(
+    [FromServices] IPlayerIdResolutionService resolutionService,
+    CancellationToken cancellationToken)
+    {
+        var result = await resolutionService.BackfillMissingSleeperIdsAsync(cancellationToken);
+        return Ok(result);
     }
 }

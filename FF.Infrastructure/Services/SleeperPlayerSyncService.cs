@@ -102,7 +102,8 @@ public class SleeperPlayerSyncService(
                         position: domainPlayer.Position,
                         age: sleeperPlayer.Age,
                         yearsExperience: sleeperPlayer.YearsExp,
-                        jerseyNumber: sleeperPlayer.Number);
+                        jerseyNumber: sleeperPlayer.Number,
+                        gsisId: sleeperPlayer.GsisId);
                     existing.SetUpdated();
                     updated++;
                 }
