@@ -15,7 +15,7 @@ public class Player : Entity
     public string? SleeperPlayerId { get; private set; }
     public int? Age { get; private set; }
     public int? YearsExperience { get; private set; }
-
+    public string? GsisId { get; set; }
     private Player() { } // EF Core constructor
 
     public static Player Create(
@@ -23,7 +23,8 @@ public class Player : Entity
         string lastName,
         Position position,
         string? nflTeam = null,
-        string? sleeperPlayerId = null)
+        string? sleeperPlayerId = null,
+        string? gsisId = null)
     {
         return new Player
         {
@@ -32,7 +33,7 @@ public class Player : Entity
             Position = position,
             NflTeam = nflTeam,
             SleeperPlayerId = sleeperPlayerId,
-            Status = PlayerStatus.Active
+            GsisId = gsisId
         };
     }
 
@@ -49,12 +50,13 @@ public class Player : Entity
     }
 
     public void UpdateFields(
-    string firstName,
-    string lastName,
-    Position position,
-    int? age,
-    int? yearsExperience,
-    int? jerseyNumber)
+        string firstName,
+        string lastName,
+        Position position,
+        int? age,
+        int? yearsExperience,
+        int? jerseyNumber,
+        string? gsisId = null)
     {
         FirstName = firstName;
         LastName = lastName;
@@ -62,6 +64,6 @@ public class Player : Entity
         Age = age;
         YearsExperience = yearsExperience;
         JerseyNumber = jerseyNumber;
-        SetUpdated();
+        if (gsisId != null) GsisId = gsisId; // only overwrite if Sleeper provides it
     }
 }

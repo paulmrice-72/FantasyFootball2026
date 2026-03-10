@@ -15,6 +15,10 @@ public interface INflverseDownloadService
     Task<NflverseDownloadResult> DownloadSnapCountsAsync(
         int season,
         CancellationToken cancellationToken = default);
+
+    Task<NflverseDownloadResult> DownloadRostersAsync(
+        int season,
+        CancellationToken cancellationToken = default);
 }
 
 public class NflverseDownloadResult

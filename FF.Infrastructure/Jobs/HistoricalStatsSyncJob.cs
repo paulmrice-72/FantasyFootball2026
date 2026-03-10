@@ -7,16 +7,17 @@ namespace FF.Infrastructure.Jobs
     public class HistoricalStatsSyncJob(
         IHistoricalStatsImportService importService,
         INflverseDownloadService downloadService,
+        IPlayerIdResolutionService resolutionService,
         ILogger<HistoricalStatsSyncJob> logger)
     {
         private readonly IHistoricalStatsImportService _importService = importService;
         private readonly INflverseDownloadService _downloadService = downloadService;
+        private readonly IPlayerIdResolutionService _resolutionService = resolutionService;
         private readonly ILogger<HistoricalStatsSyncJob> _logger = logger;
 
         public async Task SyncCurrentSeasonAsync()
         {
             var currentSeason = GetCurrentNflSeason();
-
             _logger.LogInformation(
                 "Hangfire weekly sync starting for season {Season}", currentSeason);
 
@@ -49,6 +50,18 @@ namespace FF.Infrastructure.Jobs
                     result.TotalInserted,
                     result.TotalReplaced,
                     result.Duration);
+
+                // Step 3 — Backfill any new documents missing SleeperPlayerId
+                _logger.LogInformation(
+                    "Running SleeperPlayerId backfill after season {Season} import",
+                    currentSeason);
+
+                var resolution = await _resolutionService.BackfillMissingSleeperIdsAsync();
+
+                _logger.LogInformation(
+                    "SleeperPlayerId backfill complete — " +
+                    "Resolved: {Resolved}, Unresolved: {Unresolved}",
+                    resolution.Resolved, resolution.Unresolved);
             }
             catch (Exception ex)
             {

@@ -89,6 +89,7 @@ public static class DependencyInjection
         services.AddScoped<IBackgroundJobService, HangfireBackgroundJobService>();
         services.AddScoped<ISleeperLeagueImportService, SleeperLeagueImportService>();
         services.AddScoped<ISleeperPlayerSyncService, SleeperPlayerSyncService>();
+        services.AddScoped<IPlayerIdResolutionService, PlayerIdResolutionService>();
         services.AddScoped<SystemHealthCheckJob>();
         services.AddSleeperApiClient();
         services.AddMediatR(cfg =>
