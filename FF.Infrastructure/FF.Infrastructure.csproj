@@ -24,6 +24,7 @@
 		<PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Http.Polly" Version="9.0.13" />
 		<PackageReference Include="MongoDB.Driver" Version="2.28.0" />
+		<PackageReference Include="NSubstitute" Version="5.3.0" />
 		<PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
 		<PackageReference Include="Refit" Version="9.0.2" />
 		<PackageReference Include="Refit.HttpClientFactory" Version="9.0.2" />

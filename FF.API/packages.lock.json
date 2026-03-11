@@ -202,6 +202,14 @@
           "System.Threading.Tasks.Extensions": "4.5.4"
         }
       },
+      "Castle.Core": {
+        "type": "Transitive",
+        "resolved": "5.1.1",
+        "contentHash": "rpYtIczkzGpf+EkZgDr9CClTdemhsrwA/W5hMoPjLkRFnXzH44zDLoovXeKtmxb1ykXK9aJVODSpiJml8CTw2g==",
+        "dependencies": {
+          "System.Diagnostics.EventLog": "6.0.0"
+        }
+      },
       "CsvHelper": {
         "type": "Transitive",
         "resolved": "33.0.1",
@@ -848,6 +856,14 @@
         "resolved": "11.0.1",
         "contentHash": "pNN4l+J6LlpIvHOeNdXlwxv39NPJ2B5klz+Rd2UQZIx30Squ5oND1Yy3wEAUoKn0GPUj6Yxt9lxlYWQqfZcvKg=="
       },
+      "NSubstitute": {
+        "type": "Transitive",
+        "resolved": "5.3.0",
+        "contentHash": "lJ47Cps5Qzr86N99lcwd+OUvQma7+fBgr8+Mn+aOC0WrlqMNkdivaYD9IvnZ5Mqo6Ky3LS7ZI+tUq1/s9ERd0Q==",
+        "dependencies": {
+          "Castle.Core": "5.1.1"
+        }
+      },
       "Polly": {
         "type": "Transitive",
         "resolved": "7.2.4",
@@ -1047,6 +1063,11 @@
         "resolved": "10.0.0",
         "contentHash": "0KdBK+h7G13PuOSC2R/DalAoFMvdYMznvGRuICtkdcUMXgl/gYXsG6z4yUvTxHSMACorWgHCU1Faq0KUHU6yAQ=="
       },
+      "System.Diagnostics.EventLog": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "lcyUiXTsETK2ALsZrX+nWuHSIQeazhqPphLfaRxzdGaG93+0kELqpgEHtwWOlQe7+jSFnKwaCAgL4kjeZCQJnw=="
+      },
       "System.Drawing.Common": {
         "type": "Transitive",
         "resolved": "6.0.0",
@@ -1214,6 +1235,7 @@
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "[9.0.0, )",
           "Microsoft.Extensions.Http.Polly": "[9.0.13, )",
           "MongoDB.Driver": "[2.28.0, )",
+          "NSubstitute": "[5.3.0, )",
           "Polly.Extensions.Http": "[3.0.0, )",
           "Refit": "[9.0.2, )",
           "Refit.HttpClientFactory": "[9.0.2, )",
