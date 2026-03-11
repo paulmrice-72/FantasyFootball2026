@@ -1,4 +1,8 @@
 ﻿@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
 
 <MudNavMenu>
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
@@ -13,4 +17,71 @@
     <MudNavLink Href="dfs" Icon="@Icons.Material.Filled.SportsSoccer">
         DFS
     </MudNavLink>
+
+    <MudDivider Class="my-2" />
+
+    @if (_leagues.Any())
+    {
+        <MudText Typo="Typo.caption" Class="px-4 mud-text-secondary">LEAGUE</MudText>
+        <MudSelect T="string"
+                   Value="_activeLeagueId"
+                   ValueChanged="OnLeagueChanged"
+                   Dense="true"
+                   Margin="Margin.Dense"
+                   Class="px-2 mt-1"
+                   Variant="Variant.Outlined">
+            @foreach (var league in _leagues)
+            {
+                <MudSelectItem Value="@league.LeagueId">@league.LeagueName</MudSelectItem>
+            }
+        </MudSelect>
+    }
+
+    @if (_sleeperLinked == false && !_leagues.Any())
+    {
+        <MudNavLink Href="settings/sleeper" Icon="@Icons.Material.Filled.LinkOff">
+            Link Sleeper Account
+        </MudNavLink>
+    }
+
 </MudNavMenu>
+
+@code {
+    private List<LeagueItem> _leagues = new();
+    private string? _activeLeagueId;
+    private bool? _sleeperLinked;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var context = await Http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
+            if (context is not null)
+            {
+                _sleeperLinked = context.IsSleeperLinked;
+                _leagues = context.Leagues ?? new();
+                _activeLeagueId = context.ActiveLeagueId;
+            }
+        }
+        catch
+        {
+            // Not logged in or API unavailable — fail silently
+        }
+    }
+
+    private void OnLeagueChanged(string leagueId)
+    {
+        _activeLeagueId = leagueId;
+    }
+
+    private record UserContextResponse(
+        bool IsSleeperLinked,
+        List<LeagueItem>? Leagues,
+        string? ActiveLeagueId);
+
+    private record LeagueItem(
+        string LeagueId,
+        string LeagueName,
+        int Season,
+        string Role);
+}
