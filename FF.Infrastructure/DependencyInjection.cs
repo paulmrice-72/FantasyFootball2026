@@ -123,6 +123,10 @@ public static class DependencyInjection
         services.AddScoped<PfrCsvParser>();
         services.AddScoped<PfrValidationService>();
         services.AddScoped<IHistoricalStatsImportService, HistoricalStatsImportService>();
+        services.AddScoped<ISnapCountImportService, SnapCountImportService>();
+        services.AddScoped<ISnapCountMergeService, SnapCountMergeService>();
+        services.AddScoped<SnapCountSyncJob>();
+        services.AddScoped<SnapCountCsvParser>();
 
         // Register Hangfire job classes so DI can resolve them
         services.AddScoped<HistoricalStatsSyncJob>();

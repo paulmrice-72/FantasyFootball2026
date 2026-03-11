@@ -42,5 +42,13 @@ public interface IPlayerGameLogRepository
         string sleeperPlayerId,
         CancellationToken cancellationToken = default);
 
+    Task<List<PlayerGameLogDocument>> GetBySeasonAsync(
+    int season,
+    CancellationToken cancellationToken = default);
+
+    Task BulkUpdateSnapCountsAsync(
+        IEnumerable<PlayerGameLogDocument> documents,
+        CancellationToken cancellationToken = default);
+
     Task EnsureIndexesAsync();
 }
