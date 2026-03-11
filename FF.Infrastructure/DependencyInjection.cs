@@ -1,5 +1,6 @@
 ﻿using FF.Application;
 using FF.Application.Common.Settings;
+using FF.Application.Identity.Interfaces;
 using FF.Application.Interfaces.Auth;
 using FF.Application.Interfaces.Jobs;
 using FF.Application.Interfaces.Persistence;
@@ -10,6 +11,7 @@ using FF.Infrastructure.ExternalApis.CsvImport;
 using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
 using FF.Infrastructure.ExternalApis.Nflverse;
 using FF.Infrastructure.ExternalApis.Sleeper;
+using FF.Infrastructure.ExternalAPIs;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.Mongo;
@@ -126,6 +128,14 @@ public static class DependencyInjection
         services.AddScoped<SystemHealthCheckJob>();
         services.AddScoped<LeagueSyncJob>();
         services.AddScoped<PlayerSyncJob>();
+
+        // Sleeper Identity
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddHttpClient<ISleeperIdentityService, SleeperIdentityService>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.sleeper.app");
+            client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
+        });
 
         return services;
 

@@ -12,9 +12,17 @@ public class FFDbContext(DbContextOptions<FFDbContext> options) : IdentityDbCont
     public DbSet<Roster> Rosters => Set<Roster>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder); // Critical — must call base for Identity tables
         builder.ApplyConfigurationsFromAssembly(typeof(FFDbContext).Assembly);
+
+        builder.Entity<LeagueMembership>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.LeagueId, e.Season }).IsUnique();
+            entity.HasIndex(e => e.SleeperUserId);
+        });
     }
 }

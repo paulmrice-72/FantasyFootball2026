@@ -4,6 +4,7 @@ using FF.Infrastructure.Persistence.SQL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FF.Infrastructure.Migrations
 {
     [DbContext(typeof(FFDbContext))]
-    partial class FFDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260311024227_AddSleeperIdentityAndLeagueMembership")]
+    partial class AddSleeperIdentityAndLeagueMembership
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

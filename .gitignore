@@ -493,3 +493,7 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 /create_github_issues.sh
+/FF.WebBlazor/packages.lock.json
+/github_setup.ps1
+/github_setup.sh7.sh
+/github_setup8.sh
