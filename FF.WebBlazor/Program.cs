@@ -10,10 +10,15 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // HTTP Client
-builder.Services.AddScoped(sp => new HttpClient
+builder.Services.AddScoped<AuthorizationMessageHandler>();
+builder.Services.AddHttpClient("AuthAPI", client =>
 {
-    BaseAddress = new Uri("https://localhost:64233/")
-});
+    client.BaseAddress = new Uri("https://localhost:64233/");
+})
+.AddHttpMessageHandler<AuthorizationMessageHandler>();
+
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("AuthAPI"));
 
 // Auth
 builder.Services.AddSingleton<TokenStore>();

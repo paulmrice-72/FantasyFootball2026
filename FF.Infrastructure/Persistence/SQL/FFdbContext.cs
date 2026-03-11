@@ -13,6 +13,7 @@ public class FFDbContext(DbContextOptions<FFDbContext> options) : IdentityDbCont
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
+    public DbSet<LeaguePrivacyRule> LeaguePrivacyRules => Set<LeaguePrivacyRule>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

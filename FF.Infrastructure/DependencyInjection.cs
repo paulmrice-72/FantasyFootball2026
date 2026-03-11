@@ -60,6 +60,7 @@ public static class DependencyInjection
         services.AddScoped<ISnapCountRepository, SnapCountRepository>();
         services.AddScoped<IUsageMetricsService, UsageMetricsService>();
         services.AddScoped<UsageMetricsAggregationJob>();
+        services.AddScoped<ILeagueMembershipRepository, LeagueMembershipRepository>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
