@@ -319,4 +319,42 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
         await _collection.UpdateManyAsync(filter, update,
             cancellationToken: cancellationToken);
     }
+
+    public async Task<List<PlayerGameLogDocument>> GetBySeasonAsync(
+    int season,
+    CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, season);
+        return await _collection
+            .Find(filter)
+            .SortBy(x => x.Week)
+            .ThenBy(x => x.PlayerName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task BulkUpdateSnapCountsAsync(
+        IEnumerable<PlayerGameLogDocument> documents,
+        CancellationToken cancellationToken = default)
+    {
+        var updates = documents.Select(doc =>
+        {
+            var filter = Builders<PlayerGameLogDocument>.Filter.And(
+                Builders<PlayerGameLogDocument>.Filter.Eq(x => x.PlayerId, doc.PlayerId),
+                Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, doc.Season),
+                Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Week, doc.Week)
+            );
+
+            var update = Builders<PlayerGameLogDocument>.Update
+                .Set(x => x.OffenseSnaps, doc.OffenseSnaps)
+                .Set(x => x.SnapPct, doc.SnapPct);
+
+            return new UpdateOneModel<PlayerGameLogDocument>(filter, update);
+        }).ToList();
+
+        if (updates.Count == 0) return;
+
+        await _collection.BulkWriteAsync(updates,
+            new BulkWriteOptions { IsOrdered = false },
+            cancellationToken);
+    }
 }
