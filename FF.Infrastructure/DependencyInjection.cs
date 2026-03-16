@@ -19,6 +19,7 @@ using FF.Infrastructure.Persistence.Mongo.Repositories;
 using FF.Infrastructure.Persistence.SQL;
 using FF.Infrastructure.Persistence.SQL.Repositories;
 using FF.Infrastructure.Services;
+
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -93,7 +94,8 @@ public static class DependencyInjection
         services.AddScoped<ISleeperLeagueImportService, SleeperLeagueImportService>();
         services.AddScoped<ISleeperPlayerSyncService, SleeperPlayerSyncService>();
         services.AddScoped<IPlayerIdResolutionService, PlayerIdResolutionService>();
-        services.AddScoped<SystemHealthCheckJob>();
+        services.AddScoped<IDefensiveRankingRepository, DefensiveRankingRepository>();
+        services.AddScoped<IDefensiveRankingService, DefensiveRankingService>();
         services.AddSleeperApiClient();
         services.AddMediatR(cfg =>
         {
@@ -197,6 +199,19 @@ public static class DependencyInjection
             if (!BsonClassMap.IsClassMapRegistered(typeof(SnapCountDocument)))
             {
                 BsonClassMap.RegisterClassMap<SnapCountDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(DefensiveRankingDocument)))
+            {
+                BsonClassMap.RegisterClassMap<DefensiveRankingDocument>(cm =>
                 {
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);
