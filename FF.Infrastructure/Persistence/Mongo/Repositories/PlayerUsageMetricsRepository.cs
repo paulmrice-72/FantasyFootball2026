@@ -5,11 +5,11 @@ using MongoDB.Driver;
 
 namespace FF.Infrastructure.Persistence.Mongo.Repositories;
 
-public class UsageMetricsRepository : IUsageMetricsRepository
+public class PlayerUsageMetricsRepository : IPlayerUsageMetricsRepository
 {
     private readonly IMongoCollection<PlayerUsageMetricsDocument> _collection;
 
-    public UsageMetricsRepository(MongoDbContext database)
+    public PlayerUsageMetricsRepository(MongoDbContext database)
     {
         _collection = database.GetCollection<PlayerUsageMetricsDocument>(
             "player_usage_metrics");
@@ -75,5 +75,15 @@ public class UsageMetricsRepository : IUsageMetricsRepository
                 .Eq(x => x.Position, position);
 
         return await _collection.Find(filter).ToListAsync(ct);
+    }
+
+    public async Task<PlayerUsageMetricsDocument?> GetByPlayerIdAsync(
+    string playerId, int season, CancellationToken ct = default)
+    {
+        var filter = Builders<PlayerUsageMetricsDocument>.Filter.And(
+            Builders<PlayerUsageMetricsDocument>.Filter.Eq(x => x.PlayerId, playerId),
+            Builders<PlayerUsageMetricsDocument>.Filter.Eq(x => x.Season, season));
+
+        return await _collection.Find(filter).FirstOrDefaultAsync(ct);
     }
 }

@@ -125,7 +125,21 @@ public class DefensiveRankingRepository(
         logger.LogInformation("DefensiveRankingRepository indexes ensured");
     }
 
-private static FilterDefinition<DefensiveRankingDocument> BuildFilter(
+    public async Task<DefensiveRankingDocument?> GetByTeamPositionAsync(
+    string team, string position, int season, int week, CancellationToken ct = default)
+    {
+        var filter = Builders<DefensiveRankingDocument>.Filter.And(
+            Builders<DefensiveRankingDocument>.Filter.Eq(x => x.Team, team),
+            Builders<DefensiveRankingDocument>.Filter.Eq(x => x.Position, position),
+            Builders<DefensiveRankingDocument>.Filter.Eq(x => x.Season, season),
+            Builders<DefensiveRankingDocument>.Filter.Lte(x => x.Week, week));
+
+        return await _collection.Find(filter)
+            .SortByDescending(x => x.Week)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    private static FilterDefinition<DefensiveRankingDocument> BuildFilter(
     string team, string position, int season, int week) =>
     Builders<DefensiveRankingDocument>.Filter.And(
         Builders<DefensiveRankingDocument>.Filter.Eq(x => x.Team, team),

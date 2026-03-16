@@ -179,6 +179,11 @@
           "Hangfire.Core": "[1.8.23]"
         }
       },
+      "MathNet.Numerics": {
+        "type": "Transitive",
+        "resolved": "5.0.0",
+        "contentHash": "pg1W2VwaEQMAiTpGK840hZgzavnqjlCMTVSbtVCXVyT+7AX4mc1o89SPv4TBlAjhgCOo9c1Y+jZ5m3ti2YgGgA=="
+      },
       "MediatR": {
         "type": "Transitive",
         "resolved": "14.1.0",
@@ -1097,6 +1102,7 @@
           "FF.SharedKernel": "[1.0.0, )",
           "FluentValidation": "[12.1.1, )",
           "FluentValidation.DependencyInjectionExtensions": "[12.1.1, )",
+          "MathNet.Numerics": "[5.0.0, )",
           "MediatR": "[14.1.0, )"
         }
       },

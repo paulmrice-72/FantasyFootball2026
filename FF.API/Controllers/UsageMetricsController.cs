@@ -8,9 +8,9 @@ namespace FF.API.Controllers;
 [ApiController]
 [Route("api/v1/players")]
 [Authorize]
-public class UsageMetricsController(IUsageMetricsRepository repository) : ControllerBase
+public class UsageMetricsController(IPlayerUsageMetricsRepository repository) : ControllerBase
 {
-    private readonly IUsageMetricsRepository _repository = repository;
+    private readonly IPlayerUsageMetricsRepository _repository = repository;
 
     // GET /api/v1/players/{playerId}/usage?season=2024
     [HttpGet("{playerId}/usage")]

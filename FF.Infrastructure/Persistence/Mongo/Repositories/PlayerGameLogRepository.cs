@@ -357,4 +357,18 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
             new BulkWriteOptions { IsOrdered = false },
             cancellationToken);
     }
+
+    public async Task<IReadOnlyList<PlayerGameLogDocument>> GetRecentAsync(
+    string playerId, int season, int currentWeek, int lookbackWeeks, CancellationToken ct = default)
+    {
+        var minWeek = currentWeek - lookbackWeeks;
+        var filter = Builders<PlayerGameLogDocument>.Filter.And(
+            Builders<PlayerGameLogDocument>.Filter.Eq(x => x.PlayerId, playerId),
+            Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, season),
+            Builders<PlayerGameLogDocument>.Filter.Gt(x => x.Week, minWeek),
+            Builders<PlayerGameLogDocument>.Filter.Lt(x => x.Week, currentWeek));
+        return await _collection.Find(filter)
+            .SortByDescending(x => x.Week)
+            .ToListAsync(ct);
+    }
 }

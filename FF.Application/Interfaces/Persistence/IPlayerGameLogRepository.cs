@@ -51,4 +51,7 @@ public interface IPlayerGameLogRepository
         CancellationToken cancellationToken = default);
 
     Task EnsureIndexesAsync();
+
+    Task<IReadOnlyList<PlayerGameLogDocument>> GetRecentAsync(
+        string playerId, int season, int currentWeek, int lookbackWeeks, CancellationToken ct = default);
 }

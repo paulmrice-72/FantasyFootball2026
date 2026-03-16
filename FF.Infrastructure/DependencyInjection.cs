@@ -57,7 +57,7 @@ public static class DependencyInjection
         services.AddScoped<ILeagueRepository, LeagueRepository>();
         services.AddScoped<IRosterRepository, RosterRepository>();
         services.AddScoped<IPlayerGameLogRepository, PlayerGameLogRepository>();
-        services.AddScoped<IUsageMetricsRepository, UsageMetricsRepository>();
+        services.AddScoped<IPlayerUsageMetricsRepository, PlayerUsageMetricsRepository>();
         services.AddScoped<ISnapCountRepository, SnapCountRepository>();
         services.AddScoped<IUsageMetricsService, UsageMetricsService>();
         services.AddScoped<UsageMetricsAggregationJob>();
@@ -96,6 +96,9 @@ public static class DependencyInjection
         services.AddScoped<IPlayerIdResolutionService, PlayerIdResolutionService>();
         services.AddScoped<IDefensiveRankingRepository, DefensiveRankingRepository>();
         services.AddScoped<IDefensiveRankingService, DefensiveRankingService>();
+        services.AddScoped<IPlayerProjectionRepository, PlayerProjectionRepository>();
+        services.AddScoped<ProjectionInputBuilder>();
+        services.AddScoped<PlayerProjectionService>();
         services.AddSleeperApiClient();
         services.AddMediatR(cfg =>
         {
@@ -129,6 +132,7 @@ public static class DependencyInjection
         services.AddScoped<ISnapCountMergeService, SnapCountMergeService>();
         services.AddScoped<SnapCountSyncJob>();
         services.AddScoped<SnapCountCsvParser>();
+
 
         // Register Hangfire job classes so DI can resolve them
         services.AddScoped<HistoricalStatsSyncJob>();
@@ -220,6 +224,13 @@ public static class DependencyInjection
                       .SetSerializer(new StringSerializer(BsonType.ObjectId));
                 });
             }
+
+            BsonClassMap.RegisterClassMap<PlayerProjectionDocument>(cm =>
+            {
+                cm.AutoMap();
+                cm.SetIdMember(cm.GetMemberMap(x => x.Id));
+                cm.GetMemberMap(x => x.Id).SetIdGenerator(StringObjectIdGenerator.Instance);
+            });
         }
         catch (Exception ex)
         {
