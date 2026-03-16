@@ -154,9 +154,10 @@ try
     // MongoDB index creation — idempotent, safe to run on every startup
     using (var scope = app.Services.CreateScope())
     {
-        var gameLogRepo = scope.ServiceProvider
-            .GetRequiredService<IPlayerGameLogRepository>();
-        await gameLogRepo.EnsureIndexesAsync();
+        var sp = scope.ServiceProvider;
+        await sp.GetRequiredService<IPlayerGameLogRepository>().EnsureIndexesAsync();
+        await sp.GetRequiredService<ISnapCountRepository>().EnsureIndexesAsync();
+        await sp.GetRequiredService<IDefensiveRankingRepository>().EnsureIndexesAsync();
     }
 
     // ── RECURRING JOBS ────────────────────────────────────

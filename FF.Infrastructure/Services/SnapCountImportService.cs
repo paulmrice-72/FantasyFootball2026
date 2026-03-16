@@ -9,7 +9,6 @@ namespace FF.Infrastructure.Services;
 public class SnapCountImportService(
     INflverseDownloadService nflverseDownloadService,
     ISnapCountRepository snapCountRepository,
-    SnapCountCsvParser snapCountCsvParser,
     ILogger<SnapCountImportService> logger
 ) : ISnapCountImportService
 {

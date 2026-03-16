@@ -6,7 +6,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
-namespace FF.Tests.SnapCounts;
+namespace FF.Tests.Infrastructure.Jobs;
 
 public class SnapCountImportServiceTests
 {
@@ -23,7 +23,6 @@ public class SnapCountImportServiceTests
         _service = new SnapCountImportService(
             _downloadService,
             _snapCountRepository,
-            _parser,
             NullLogger<SnapCountImportService>.Instance);
     }
 
@@ -60,7 +59,7 @@ public class SnapCountImportServiceTests
                 Season = 2024
             });
 
-        _snapCountRepository.UpsertBatchAsync(Arg.Any<IEnumerable<FF.Domain.Documents.SnapCountDocument>>(),
+        _snapCountRepository.UpsertBatchAsync(Arg.Any<IEnumerable<Domain.Documents.SnapCountDocument>>(),
             Arg.Any<CancellationToken>())
             .Returns((2, 0));
 
