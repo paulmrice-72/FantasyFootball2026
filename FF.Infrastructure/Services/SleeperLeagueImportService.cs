@@ -65,6 +65,23 @@ public class SleeperLeagueImportService(
         }
         else
         {
+            league.SetUpdated();
+            _logger.LogInformation("Updating existing league: {LeagueName}", league.Name);
+        }
+
+        // Sync scoring settings from Sleeper on every import/sync
+        if (sleeperLeague.ScoringSettings is not null)
+        {
+            var rec = sleeperLeague.ScoringSettings.GetValueOrDefault("rec", 1m);
+            var passTd = sleeperLeague.ScoringSettings.GetValueOrDefault("pass_td", 4m);
+            var bonusRecTe = sleeperLeague.ScoringSettings.GetValueOrDefault("bonus_rec_te", 0m);
+            league.UpdateScoringSettings(rec, passTd, bonusRecTe);
+            _logger.LogInformation(
+                "Scoring settings synced for {LeagueName}: rec={Rec}, passTd={PassTd}, bonusRecTe={BonusRecTe}",
+                league.Name, rec, passTd, bonusRecTe);
+        }
+        else
+        {
             // Update mutable fields on existing league
             league.SetUpdated();
             _logger.LogInformation("Updating existing league: {LeagueName}", league.Name);
