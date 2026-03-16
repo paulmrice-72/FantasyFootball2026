@@ -8,8 +8,9 @@ public class SnapCountSyncJob(
     ISnapCountMergeService snapCountMergeService,
     ILogger<SnapCountSyncJob> logger)
 {
-    public async Task RunAsync(int season)
+    public async Task RunAsync()
     {
+        int season = GetCurrentNflSeason();
         logger.LogInformation("SnapCountSyncJob starting for season {Season}", season);
 
         var importResult = await snapCountImportService.ImportAsync(season);
@@ -32,5 +33,11 @@ public class SnapCountSyncJob(
         logger.LogInformation(
             "Merge complete. Merged: {Merged}, Unmatched: {Unmatched}",
             mergeResult.Merged, mergeResult.Unmatched);
+    }
+
+    private static int GetCurrentNflSeason()
+    {
+        var now = DateTime.UtcNow;
+        return now.Month >= 3 ? now.Year : now.Year - 1;
     }
 }

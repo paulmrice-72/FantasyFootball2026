@@ -8,7 +8,7 @@ namespace FF.Infrastructure.ExternalApis.CsvImport.Parsers;
 
 public class SnapCountCsvParser
 {
-    public IEnumerable<SnapCountDocument> Parse(Stream csvStream, int season)
+    public static IEnumerable<SnapCountDocument> Parse(Stream csvStream, int season)
     {
         using var reader = new StreamReader(csvStream);
         using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
@@ -41,6 +41,7 @@ public class SnapCountCsvParser
 
                 records.Add(new SnapCountDocument
                 {
+                    Id = MongoDB.Bson.ObjectId.GenerateNewId().ToString(),
                     PlayerName = playerName.Trim(),
                     Team = team.Trim().ToUpper(),
                     Position = position.Trim(),

@@ -193,6 +193,18 @@ public static class DependencyInjection
                       .SetSerializer(new StringSerializer(BsonType.ObjectId));
                 });
             }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(SnapCountDocument)))
+            {
+                BsonClassMap.RegisterClassMap<SnapCountDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
         }
         catch (Exception ex)
         {

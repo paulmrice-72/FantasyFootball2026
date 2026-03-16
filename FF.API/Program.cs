@@ -193,6 +193,12 @@ try
         cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 6),
         options: utcOptions);
 
+    RecurringJob.AddOrUpdate<SnapCountSyncJob>(
+        "snap-count-sync",
+        job => job.RunAsync(),
+        "0 9 * * 2",
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",
     //methodCall: job => job.SyncWaiversAsync(),

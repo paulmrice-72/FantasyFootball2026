@@ -29,7 +29,7 @@ public class SnapCountImportService(
                     $"Download failed: {download.ErrorMessage}");
 
             await using var stream = File.OpenRead(download.SavedPath);
-            var documents = snapCountCsvParser.Parse(stream, season).ToList();
+            var documents = SnapCountCsvParser.Parse(stream, season).ToList();
 
             logger.LogInformation("Parsed {Count} snap count records for {Season}",
                 documents.Count, season);
