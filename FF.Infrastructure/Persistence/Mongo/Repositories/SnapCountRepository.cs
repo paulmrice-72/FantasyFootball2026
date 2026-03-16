@@ -36,36 +36,49 @@ public class SnapCountRepository(MongoDbContext database,
     }
 
     public async Task<(int Inserted, int Replaced)> UpsertBatchAsync(
-        IEnumerable<SnapCountDocument> documents,
-        CancellationToken cancellationToken = default)
+    IEnumerable<SnapCountDocument> documents,
+    CancellationToken cancellationToken = default)
     {
         var docs = documents.ToList();
         if (docs.Count == 0) return (0, 0);
 
-        var inserted = 0;
-        var replaced = 0;
+        var totalInserted = 0;
+        var totalReplaced = 0;
+        const int batchSize = 500;
 
-        foreach (var doc in docs)
+        var batches = docs
+            .Select((doc, i) => new { doc, i })
+            .GroupBy(x => x.i / batchSize)
+            .Select(g => g.Select(x => x.doc).ToList());
+
+        foreach (var batch in batches)
         {
-            var filter = Builders<SnapCountDocument>.Filter.Where(x =>
-                x.PlayerName == doc.PlayerName &&
-                x.Team == doc.Team &&
-                x.Season == doc.Season &&
-                x.Week == doc.Week);
+            var bulkOps = batch.Select(doc =>
+            {
+                var filter = Builders<SnapCountDocument>.Filter.And(
+                    Builders<SnapCountDocument>.Filter.Eq(x => x.PlayerName, doc.PlayerName),
+                    Builders<SnapCountDocument>.Filter.Eq(x => x.Team, doc.Team),
+                    Builders<SnapCountDocument>.Filter.Eq(x => x.Season, doc.Season),
+                    Builders<SnapCountDocument>.Filter.Eq(x => x.Week, doc.Week)
+                );
 
-            var result = await _collection.ReplaceOneAsync(
-                filter,
-                doc,
-                new ReplaceOptions { IsUpsert = true },
+                return (WriteModel<SnapCountDocument>)new ReplaceOneModel<SnapCountDocument>(filter, doc)
+                {
+                    IsUpsert = true
+                };
+            }).ToList();
+
+            var result = await _collection.BulkWriteAsync(
+                bulkOps,
+                new BulkWriteOptions { IsOrdered = false },
                 cancellationToken);
 
-            if (result.MatchedCount == 0) inserted++;
-            else replaced++;
+            totalInserted += (int)result.Upserts.Count;
+            totalReplaced += (int)result.ModifiedCount;
         }
 
-        return (inserted, replaced);
+        return (totalInserted, totalReplaced);
     }
-
     public async Task<List<SnapCountDocument>> GetBySeasonWeekAsync(
         int season,
         int week,

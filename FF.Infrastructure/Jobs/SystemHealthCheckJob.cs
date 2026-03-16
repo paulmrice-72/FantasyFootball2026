@@ -2,14 +2,9 @@
 
 namespace FF.Infrastructure.Jobs;
 
-public class SystemHealthCheckJob
+public class SystemHealthCheckJob(ILogger<SystemHealthCheckJob> logger)
 {
-    private readonly ILogger<SystemHealthCheckJob> _logger;
-
-    public SystemHealthCheckJob(ILogger<SystemHealthCheckJob> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<SystemHealthCheckJob> _logger = logger;
 
     public void Execute()
     {
