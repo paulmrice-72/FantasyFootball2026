@@ -225,12 +225,16 @@ public static class DependencyInjection
                 });
             }
 
-            BsonClassMap.RegisterClassMap<PlayerProjectionDocument>(cm =>
+            if (!BsonClassMap.IsClassMapRegistered(typeof(PlayerProjectionDocument)))
             {
-                cm.AutoMap();
-                cm.SetIdMember(cm.GetMemberMap(x => x.Id));
-                cm.GetMemberMap(x => x.Id).SetIdGenerator(StringObjectIdGenerator.Instance);
-            });
+                BsonClassMap.RegisterClassMap<PlayerProjectionDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.MapIdMember(x => x.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
         }
         catch (Exception ex)
         {

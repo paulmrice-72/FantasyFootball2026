@@ -271,18 +271,30 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<List<string>> GetDistinctPlayerIdsAsync(
-        int season,
-        CancellationToken cancellationToken = default)
-    {
-        var filter = Builders<PlayerGameLogDocument>.Filter
-            .Eq(x => x.Season, season);
 
-        return await _collection
-            .Distinct(x => x.PlayerId, filter, cancellationToken: cancellationToken)
-            .ToListAsync(cancellationToken);
+    public async Task<IReadOnlyList<string>> GetDistinctPlayerIdsAsync(
+    int season, CancellationToken ct = default)
+    {
+        var filter = Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, season);
+        var playerIds = await _collection
+            .Distinct<string>("PlayerId", filter, cancellationToken: ct)
+            .ToListAsync(ct);
+        return playerIds;
     }
 
+    public async Task<PlayerGameLogDocument?> GetMostRecentAsync(
+        string playerId, int season, int beforeWeek, CancellationToken ct = default)
+    {
+        var filter = Builders<PlayerGameLogDocument>.Filter.And(
+            Builders<PlayerGameLogDocument>.Filter.Eq(x => x.PlayerId, playerId),
+            Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, season),
+            Builders<PlayerGameLogDocument>.Filter.Lt(x => x.Week, beforeWeek));
+
+        return await _collection
+            .Find(filter)
+            .SortByDescending(x => x.Week)
+            .FirstOrDefaultAsync(ct);
+    }
     public async Task<List<PlayerGameLogDocument>> GetDocumentsWithNullSleeperIdAsync(
     CancellationToken cancellationToken = default)
     {
@@ -359,14 +371,16 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
     }
 
     public async Task<IReadOnlyList<PlayerGameLogDocument>> GetRecentAsync(
-    string playerId, int season, int currentWeek, int lookbackWeeks, CancellationToken ct = default)
+        string playerId, int season, int currentWeek, int lookbackWeeks, CancellationToken ct = default)
     {
         var minWeek = currentWeek - lookbackWeeks;
+
         var filter = Builders<PlayerGameLogDocument>.Filter.And(
             Builders<PlayerGameLogDocument>.Filter.Eq(x => x.PlayerId, playerId),
             Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, season),
             Builders<PlayerGameLogDocument>.Filter.Gt(x => x.Week, minWeek),
-            Builders<PlayerGameLogDocument>.Filter.Lt(x => x.Week, currentWeek));
+            Builders<PlayerGameLogDocument>.Filter.Lte(x => x.Week, currentWeek)); // was Lt
+
         return await _collection.Find(filter)
             .SortByDescending(x => x.Week)
             .ToListAsync(ct);

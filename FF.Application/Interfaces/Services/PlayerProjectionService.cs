@@ -1,4 +1,5 @@
 ﻿// FF.Application/Services/PlayerProjectionService.cs
+using FF.Domain.Documents;
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
 
@@ -10,7 +11,7 @@ public class PlayerProjectionService
     public static PlayerProjectionResult Project(ProjectionInput input)
     {
         var logs = input.GameLogs
-            .Where(g => g.OffenseSnaps > 0 || g.Carries > 0 || g.Targets > 0) // exclude DNPs
+            .Where(g => DidPlay(g, input.Position))
             .OrderByDescending(g => g.Season * 100 + g.Week)
             .ToList();
 
@@ -50,6 +51,15 @@ public class PlayerProjectionService
             RSquared = (decimal)std.RSquared
         };
     }
+    private static bool DidPlay(PlayerGameLogDocument g, string position) =>
+    position switch
+    {
+        "QB" => g.Completions > 0 || g.PassingYards > 0,
+        "RB" => g.Carries > 0 || g.Targets > 0 || g.OffenseSnaps > 0,
+        "WR" => g.Targets > 0 || g.ReceivingYards > 0 || g.OffenseSnaps > 0,
+        "TE" => g.Targets > 0 || g.ReceivingYards > 0 || g.OffenseSnaps > 0,
+        _ => g.Targets > 0 || g.Carries > 0 || g.OffenseSnaps > 0
+    };
 
     private static double[] BuildRecencyWeights(int count, decimal recentBias)
     {

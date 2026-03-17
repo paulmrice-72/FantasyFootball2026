@@ -13,35 +13,50 @@ public class PlayerProjectionRepository(
 {
     private readonly IMongoCollection<PlayerProjectionDocument> _collection =
         database.GetCollection<PlayerProjectionDocument>("player_projections");
+
     private readonly ILogger<PlayerProjectionRepository> _logger = logger;
 
     public async Task UpsertAsync(PlayerProjectionDocument doc, CancellationToken ct = default)
     {
+        if (string.IsNullOrEmpty(doc.Id))
+            doc.Id = MongoDB.Bson.ObjectId.GenerateNewId().ToString();
+
         var filter = Builders<PlayerProjectionDocument>.Filter.And(
             Builders<PlayerProjectionDocument>.Filter.Eq(x => x.PlayerId, doc.PlayerId),
             Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Season, doc.Season),
             Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Week, doc.Week));
 
-        var update = Builders<PlayerProjectionDocument>.Update
-            .Set(x => x.PlayerName, doc.PlayerName)
-            .Set(x => x.Position, doc.Position)
-            .Set(x => x.NflTeam, doc.NflTeam)
-            .Set(x => x.OpponentTeam, doc.OpponentTeam)
-            .Set(x => x.SleeperPlayerId, doc.SleeperPlayerId)
-            .Set(x => x.ProjectedPoints, doc.ProjectedPoints)
-            .Set(x => x.ProjectedPointsPpr, doc.ProjectedPointsPpr)
-            .Set(x => x.ProjectedPointsHalfPpr, doc.ProjectedPointsHalfPpr)
-            .Set(x => x.WeightedAvgPoints, doc.WeightedAvgPoints)
-            .Set(x => x.MatchupAdjustmentFactor, doc.MatchupAdjustmentFactor)
-            .Set(x => x.SnapPctInput, doc.SnapPctInput)
-            .Set(x => x.TargetShareInput, doc.TargetShareInput)
-            .Set(x => x.GameSampleSize, doc.GameSampleSize)
-            .Set(x => x.RSquared, doc.RSquared)
-            .Set(x => x.CalculatedAt, doc.CalculatedAt)
-            .SetOnInsert(x => x.Id, ObjectId.GenerateNewId().ToString());
+        var existing = await _collection.Find(filter).FirstOrDefaultAsync(ct);
 
-        await _collection.UpdateOneAsync(filter, update,
-            new UpdateOptions { IsUpsert = true }, ct);
+        if (existing is null)
+        {
+            await _collection.InsertOneAsync(doc, cancellationToken: ct);
+        }
+        else
+        {
+            var update = Builders<PlayerProjectionDocument>.Update
+                .Set(x => x.PlayerName, doc.PlayerName)
+                .Set(x => x.SleeperPlayerId, doc.SleeperPlayerId)
+                .Set(x => x.Position, doc.Position)
+                .Set(x => x.NflTeam, doc.NflTeam)
+                .Set(x => x.OpponentTeam, doc.OpponentTeam)
+                .Set(x => x.ProjectedPoints, doc.ProjectedPoints)
+                .Set(x => x.ProjectedPointsPpr, doc.ProjectedPointsPpr)
+                .Set(x => x.ProjectedPointsHalfPpr, doc.ProjectedPointsHalfPpr)
+                .Set(x => x.WeightedAvgPoints, doc.WeightedAvgPoints)
+                .Set(x => x.MatchupAdjustmentFactor, doc.MatchupAdjustmentFactor)
+                .Set(x => x.SnapPctInput, doc.SnapPctInput)
+                .Set(x => x.TargetShareInput, doc.TargetShareInput)
+                .Set(x => x.GameSampleSize, doc.GameSampleSize)
+                .Set(x => x.RSquared, doc.RSquared)
+                .Set(x => x.ScoringFormat, doc.ScoringFormat)
+                .Set(x => x.CalculatedAt, doc.CalculatedAt);
+
+            await _collection.UpdateOneAsync(
+                Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Id, existing.Id),
+                update,
+                cancellationToken: ct);
+        }
     }
 
     public async Task UpsertBatchAsync(IEnumerable<PlayerProjectionDocument> projections, CancellationToken ct = default)
