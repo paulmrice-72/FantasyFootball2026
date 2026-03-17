@@ -100,7 +100,7 @@ public class PfrValidationService(
             summary.MatchedPlayers++;
 
             var pfrFantasyPoints = pfrRow.FantPt ?? 0;
-            var variance = Math.Abs(player.TotalFantasyPoints - pfrFantasyPoints);
+            var variance = Math.Abs((player.TotalFantasyPoints ?? 0) - pfrFantasyPoints);
 
             if (variance > StandardVarianceThreshold)
             {

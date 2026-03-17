@@ -158,6 +158,7 @@ try
         await sp.GetRequiredService<IPlayerGameLogRepository>().EnsureIndexesAsync();
         await sp.GetRequiredService<ISnapCountRepository>().EnsureIndexesAsync();
         await sp.GetRequiredService<IDefensiveRankingRepository>().EnsureIndexesAsync();
+
     }
 
     // ── RECURRING JOBS ────────────────────────────────────

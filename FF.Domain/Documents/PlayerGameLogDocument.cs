@@ -87,8 +87,8 @@ public class PlayerGameLogDocument
     public int SpecialTeamsTds { get; set; }
 
     // ── Fantasy Points ────────────────────────────────────────────────────
-    public decimal FantasyPoints { get; set; }                 // standard scoring
-    public decimal FantasyPointsPpr { get; set; }              // PPR scoring
+    public decimal? FantasyPoints { get; set; }                 // standard scoring
+    public decimal? FantasyPointsPpr { get; set; }              // PPR scoring
 
     // ── Data Quality ──────────────────────────────────────────────────────
     public string DataSource { get; set; } = string.Empty;     // "nflfastr" or "pfr"

@@ -150,7 +150,7 @@ public class GetDataQualityQueryHandler(
                             PlayerId = doc.PlayerId,
                             PlayerName = doc.PlayerName,
                             FieldName = "FantasyPointsPpr",
-                            ActualValue = doc.FantasyPointsPpr.ToString("F2"),
+                            ActualValue = (doc.FantasyPointsPpr ?? 0m).ToString("F2"),
                             ExpectedRange = $"{DataQualityRules.FantasyPointsRange.Min}" +
                                             $"–{DataQualityRules.FantasyPointsRange.Max}"
                         });

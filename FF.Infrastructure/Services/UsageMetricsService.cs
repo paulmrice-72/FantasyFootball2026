@@ -8,11 +8,11 @@ namespace FF.Infrastructure.Services;
 
 public class UsageMetricsService(
     IPlayerGameLogRepository gameLogRepository,
-    IUsageMetricsRepository metricsRepository,
+    IPlayerUsageMetricsRepository metricsRepository,
     ILogger<UsageMetricsService> logger) : IUsageMetricsService
 {
     private readonly IPlayerGameLogRepository _gameLogRepository = gameLogRepository;
-    private readonly IUsageMetricsRepository _metricsRepository = metricsRepository;
+    private readonly IPlayerUsageMetricsRepository _metricsRepository = metricsRepository;
     private readonly ILogger<UsageMetricsService> _logger = logger;
 
     public async Task AggregatePlayerMetricsAsync(
