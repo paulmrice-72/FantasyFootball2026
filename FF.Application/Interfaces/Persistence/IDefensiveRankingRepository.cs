@@ -9,5 +9,6 @@ namespace FF.Application.Interfaces.Persistence
         Task<DefensiveRankingDocument?> GetAsync(string team, string position, int season, int week, CancellationToken ct = default);
         Task<List<DefensiveRankingDocument>> GetByWeekAsync(int season, int week, CancellationToken ct = default);
         Task EnsureIndexesAsync();
+        Task<DefensiveRankingDocument?> GetByTeamPositionAsync(string team, string position, int season, int week, CancellationToken ct = default);
     }
 }

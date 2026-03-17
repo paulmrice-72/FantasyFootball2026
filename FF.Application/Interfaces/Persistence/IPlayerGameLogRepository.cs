@@ -26,9 +26,8 @@ public interface IPlayerGameLogRepository
     int season,
     CancellationToken cancellationToken = default);
 
-    Task<List<string>> GetDistinctPlayerIdsAsync(
-        int season,
-        CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> GetDistinctPlayerIdsAsync(
+        int season, CancellationToken ct = default);
 
     Task<long> DeleteSeasonAsync(
         int season,
@@ -51,4 +50,10 @@ public interface IPlayerGameLogRepository
         CancellationToken cancellationToken = default);
 
     Task EnsureIndexesAsync();
+
+    Task<IReadOnlyList<PlayerGameLogDocument>> GetRecentAsync(
+        string playerId, int season, int currentWeek, int lookbackWeeks, CancellationToken ct = default);
+
+    Task<PlayerGameLogDocument?> GetMostRecentAsync(
+        string playerId, int season, int beforeWeek, CancellationToken ct = default);
 }
