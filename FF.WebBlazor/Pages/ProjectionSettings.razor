@@ -1,0 +1,279 @@
+﻿@* FF.WebBlazor/Pages/ProjectionSettings.razor *@
+@using System.Net.Http.Json
+@page "/projection-settings"
+@using MudBlazor
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@attribute [Authorize]
+
+<PageTitle>Projection Weight Tuner</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudText Typo="Typo.h5" Class="mb-1">Projection Weight Tuner</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+        Adjust how the regression model weighs each factor when calculating projections.
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-6" Elevation="2">
+                <MudText Typo="Typo.h6" Class="mb-4">Weight Profile</MudText>
+
+                <MudTextField @bind-Value="_profileName"
+                              Label="Profile Name"
+                              Variant="Variant.Outlined"
+                              Class="mb-4" />
+
+                <MudText Typo="Typo.subtitle2" Class="mb-1">
+                    Recency Bias — <strong>@(_recentGameWeight.ToString("P0"))</strong>
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                    How much more weight recent games get vs older games
+                </MudText>
+                <MudSlider @bind-Value="_recentGameWeight"
+                           Min="0.1" Max="0.9" Step="0.05"
+                           Color="Color.Primary" Class="mb-4" />
+
+                <MudText Typo="Typo.subtitle2" Class="mb-1">
+                    Snap Count Influence — <strong>@(_snapCountWeight.ToString("P0"))</strong>
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                    How much snap percentage affects the projection
+                </MudText>
+                <MudSlider @bind-Value="_snapCountWeight"
+                           Min="0.0" Max="0.4" Step="0.05"
+                           Color="Color.Primary" Class="mb-4" />
+
+                <MudText Typo="Typo.subtitle2" Class="mb-1">
+                    Matchup Difficulty — <strong>@(_matchupWeight.ToString("P0"))</strong>
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                    How much the opponent defensive ranking adjusts the projection
+                </MudText>
+                <MudSlider @bind-Value="_matchupWeight"
+                           Min="0.0" Max="0.5" Step="0.05"
+                           Color="Color.Primary" Class="mb-4" />
+
+                <MudDivider Class="mb-4" />
+
+                <MudNumericField @bind-Value="_minGamesRequired"
+                                 Label="Minimum Games Required"
+                                 Min="2" Max="8"
+                                 Variant="Variant.Outlined"
+                                 Class="mb-4" />
+
+                <MudNumericField @bind-Value="_lookbackWeeks"
+                                 Label="Lookback Window (weeks)"
+                                 Min="4" Max="17"
+                                 Variant="Variant.Outlined"
+                                 Class="mb-4" />
+
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="SaveProfile"
+                               Disabled="_saving">
+                        @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+                        else { <span>Save Profile</span> }
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Secondary"
+                               OnClick="ResetToDefaults">
+                        Reset Defaults
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-6" Elevation="2">
+                <MudText Typo="Typo.h6" Class="mb-4">Run Projections</MudText>
+
+                <MudGrid>
+                    <MudItem xs="6">
+                        <MudNumericField @bind-Value="_season"
+                                         Label="Season"
+                                         Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudNumericField @bind-Value="_week"
+                                         Label="Week"
+                                         Min="1" Max="18"
+                                         Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudSelect @bind-Value="_position"
+                                   Label="Position"
+                                   Variant="Variant.Outlined">
+                            <MudSelectItem Value="@("")">All</MudSelectItem>
+                            <MudSelectItem Value="@("QB")">QB</MudSelectItem>
+                            <MudSelectItem Value="@("RB")">RB</MudSelectItem>
+                            <MudSelectItem Value="@("WR")">WR</MudSelectItem>
+                            <MudSelectItem Value="@("TE")">TE</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Success"
+                                   FullWidth="true"
+                                   OnClick="LoadProjections"
+                                   Disabled="_loading">
+                            @if (_loading) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
+                            else { <span>Load Projections</span> }
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+
+                @if (_projections.Any())
+                {
+                    <MudTable Items="_projections" Dense="true" Hover="true"
+                              Class="mt-4" SortLabel="Sort By">
+                        <HeaderContent>
+                            <MudTh><MudTableSortLabel SortBy="new Func<ProjectionRow, object>(x => x.PlayerName)">Player</MudTableSortLabel></MudTh>
+                            <MudTh>Pos</MudTh>
+                            <MudTh>Team</MudTh>
+                            <MudTh><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<ProjectionRow, object>(x => x.HalfPpr)">Half PPR</MudTableSortLabel></MudTh>
+                            <MudTh>PPR</MudTh>
+                            <MudTh>Std</MudTh>
+                            <MudTh>Games</MudTh>
+                            <MudTh>R²</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.PlayerName</MudTd>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small" Color="@PositionColor(context.Position)">
+                                    @context.Position
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>@context.NflTeam</MudTd>
+                            <MudTd><strong>@context.HalfPpr.ToString("F1")</strong></MudTd>
+                            <MudTd>@context.Ppr.ToString("F1")</MudTd>
+                            <MudTd>@context.Std.ToString("F1")</MudTd>
+                            <MudTd>@context.GameSampleSize</MudTd>
+                            <MudTd>@context.RSquared.ToString("F3")</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private string _profileName = "Default";
+    private double _recentGameWeight = 0.6;
+    private double _snapCountWeight = 0.15;
+    private double _matchupWeight = 0.25;
+    private int _minGamesRequired = 3;
+    private int _lookbackWeeks = 12;
+    private int _season = 2024;
+    private int _week = 18;
+    private string _position = "";
+    private bool _saving;
+    private bool _loading;
+    private List<ProjectionRow> _projections = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfile();
+    }
+
+    private async Task LoadProfile()
+    {
+        try
+        {
+            var profile = await Http.GetFromJsonAsync<WeightProfileResponse>(
+                "api/v1/projections/weight-profile");
+
+            if (profile is not null)
+            {
+                _profileName = profile.ProfileName;
+                _recentGameWeight = (double)profile.RecentGameWeight;
+                _snapCountWeight = (double)profile.SnapCountWeight;
+                _matchupWeight = (double)profile.MatchupWeight;
+                _minGamesRequired = profile.MinGamesRequired;
+                _lookbackWeeks = profile.LookbackWeeks;
+            }
+        }
+        catch { /* use defaults */ }
+    }
+
+    private async Task SaveProfile()
+    {
+        _saving = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/v1/projections/weight-profile",
+                new
+                {
+                    profileName = _profileName,
+                    recentGameWeight = (decimal)_recentGameWeight,
+                    snapCountWeight = (decimal)_snapCountWeight,
+                    matchupWeight = (decimal)_matchupWeight,
+                    minGamesRequired = _minGamesRequired,
+                    lookbackWeeks = _lookbackWeeks
+                });
+
+            if (response.IsSuccessStatusCode)
+                Snackbar.Add("Profile saved", Severity.Success);
+            else
+                Snackbar.Add("Failed to save profile", Severity.Error);
+        }
+        finally { _saving = false; }
+    }
+
+    private void ResetToDefaults()
+    {
+        _profileName = "Default";
+        _recentGameWeight = 0.6;
+        _snapCountWeight = 0.15;
+        _matchupWeight = 0.25;
+        _minGamesRequired = 3;
+        _lookbackWeeks = 12;
+    }
+
+    private async Task LoadProjections()
+    {
+        _loading = true;
+        try
+        {
+            var url = $"api/v1/projections?season={_season}&week={_week}";
+            if (!string.IsNullOrEmpty(_position))
+                url += $"&position={_position}";
+
+            var results = await Http.GetFromJsonAsync<List<ProjectionResponse>>(url);
+            _projections = (results ?? [])
+                .OrderByDescending(x => x.ProjectedPointsHalfPpr)
+                .Select(x => new ProjectionRow(
+                    x.PlayerName, x.Position, x.NflTeam,
+                    x.ProjectedPointsHalfPpr, x.ProjectedPointsPpr,
+                    x.ProjectedPoints, x.GameSampleSize, x.RSquared))
+                .ToList();
+        }
+        finally { _loading = false; }
+    }
+
+    private static Color PositionColor(string position) => position switch
+    {
+        "QB" => Color.Error,
+        "RB" => Color.Success,
+        "WR" => Color.Primary,
+        "TE" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private record ProjectionRow(
+        string PlayerName, string Position, string NflTeam,
+        decimal HalfPpr, decimal Ppr, decimal Std,
+        int GameSampleSize, decimal RSquared);
+
+    private record WeightProfileResponse(
+        decimal RecentGameWeight, decimal SnapCountWeight,
+        decimal MatchupWeight, int MinGamesRequired,
+        int LookbackWeeks, string ProfileName);
+
+    private record ProjectionResponse(
+        string PlayerName, string Position, string NflTeam,
+        decimal ProjectedPoints, decimal ProjectedPointsPpr,
+        decimal ProjectedPointsHalfPpr, int GameSampleSize, decimal RSquared);
+}
