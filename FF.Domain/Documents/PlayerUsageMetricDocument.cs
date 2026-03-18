@@ -1,4 +1,6 @@
 ﻿// FF.Domain/Documents/PlayerUsageMetricsDocument.cs
+using FF.Domain.Enums;
+
 namespace FF.Domain.Documents;
 
 public class PlayerUsageMetricsDocument
@@ -47,4 +49,8 @@ public class PlayerUsageMetricsDocument
 
     public DateTime CalculatedAt { get; set; }
     public int DataWeeksAvailable { get; set; }
+
+    // Role classification — set by RoleClassificationService after metrics are calculated
+    public PlayerRole Role { get; set; } = PlayerRole.Unknown;
+    public DateTime? RoleClassifiedAt { get; set; }
 }
