@@ -201,6 +201,18 @@ try
         "0 9 * * 2",
         new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
+    RecurringJob.AddOrUpdate<SimulationJob>(
+        "simulation-weekly-wed",
+        job => job.RunAsync(),
+        "0 6 * * 3",
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    RecurringJob.AddOrUpdate<SimulationJob>(
+        "simulation-weekly-thu",
+        job => job.RunAsync(),
+        "0 6 * * 4",
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",
     //methodCall: job => job.SyncWaiversAsync(),
