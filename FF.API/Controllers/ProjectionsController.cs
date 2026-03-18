@@ -1,9 +1,11 @@
 ﻿// FF.API/Controllers/ProjectionsController.cs
+using FF.Application.Features.Lineups.Commands.OptimizeLineup;
 using FF.Application.Features.Projections.Commands.CalculateProjections;
 using FF.Application.Features.Projections.Commands.SaveWeightProfile;
 using FF.Application.Features.Projections.Queries.GetWeightProfile;
 using FF.Application.Features.Simulations.Commands.RunSimulations;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Services.LineupOptimizer;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -85,6 +87,33 @@ namespace FF.API.Controllers
 
             return Ok(results);
         }
+
+        [HttpPost("optimize")]
+        public async Task<IActionResult> Optimize(
+    [FromQuery] int season,
+    [FromQuery] int week,
+    [FromQuery] OptimizationMode mode = OptimizationMode.Median,
+    [FromBody] OptimizeLineupRequest? request = null,
+    CancellationToken ct = default)
+        {
+            if (season == 0 || week == 0)
+                return BadRequest("season and week are required.");
+
+            var result = await mediator.Send(new OptimizeLineupCommand(
+                season,
+                week,
+                mode,
+                request?.LockedPlayerIds,
+                request?.ExcludedPlayerIds), ct);
+
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(result.Error);
+        }
+
+        public record OptimizeLineupRequest(
+            IReadOnlyList<string>? LockedPlayerIds,
+            IReadOnlyList<string>? ExcludedPlayerIds);
 
         [HttpGet("weight-profile")]
         public async Task<IActionResult> GetWeightProfile(CancellationToken ct)

@@ -18,6 +18,20 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "2.1.0"
         }
       },
+      "Google.OrTools": {
+        "type": "Direct",
+        "requested": "[9.9.3963, )",
+        "resolved": "9.9.3963",
+        "contentHash": "7sS6B1AgRHdMlP6KOiIOtWNjV6QACGCoMUrMZ4dGQy+2Y/phqFfh61SBn0gKnzHSNZRAU8E/BtUGOa7sUv7v5g==",
+        "dependencies": {
+          "Google.OrTools.runtime.linux-arm64": "9.9.3963",
+          "Google.OrTools.runtime.linux-x64": "9.9.3963",
+          "Google.OrTools.runtime.osx-arm64": "9.9.3963",
+          "Google.OrTools.runtime.osx-x64": "9.9.3963",
+          "Google.OrTools.runtime.win-x64": "9.9.3963",
+          "Google.Protobuf": "3.25.3"
+        }
+      },
       "MathNet.Numerics": {
         "type": "Direct",
         "requested": "[5.0.0, )",
@@ -35,6 +49,36 @@
           "Microsoft.Extensions.Logging.Abstractions": "10.0.0",
           "Microsoft.IdentityModel.JsonWebTokens": "8.14.0"
         }
+      },
+      "Google.OrTools.runtime.linux-arm64": {
+        "type": "Transitive",
+        "resolved": "9.9.3963",
+        "contentHash": "+xEhOkBBe1udy+eJ5j780Tn/MQZ2JdFL4IOwjH1zAuJjWYBw4VMBD8lzGinT8cG2bTmdaGJA+bkL+zZVZWI3Lg=="
+      },
+      "Google.OrTools.runtime.linux-x64": {
+        "type": "Transitive",
+        "resolved": "9.9.3963",
+        "contentHash": "wfDR1cifntypi6aHVfwKEHY2tauTOE33n1Yq68x8d3dIZMWM6mxkAxZXARIwZD35IVRQMYK+KHaEziV4xZb10w=="
+      },
+      "Google.OrTools.runtime.osx-arm64": {
+        "type": "Transitive",
+        "resolved": "9.9.3963",
+        "contentHash": "LiJSLcdFeRb57scpiAuKEiP3vcZihKXC+HecvQvR72HiJoCrw3FpQNT2gyd1YEmdmjK+nZwGEjr1fVjfaYcXHQ=="
+      },
+      "Google.OrTools.runtime.osx-x64": {
+        "type": "Transitive",
+        "resolved": "9.9.3963",
+        "contentHash": "EHno6lHjUZeHg3pBjheaUBaIj07ynuSGh697FuGbkdkVjIdq5+k0Jx3L6hyYf6p8PbhXeJwKu13e59eyDZzGrQ=="
+      },
+      "Google.OrTools.runtime.win-x64": {
+        "type": "Transitive",
+        "resolved": "9.9.3963",
+        "contentHash": "9yXXTzkmPD6qUree85zp6YzPvakIszjL/XKiA43WJpvuy5S/tH4rP4Kqfd4cJNzB0nkOpKgJM7qfS8UNB4LVnA=="
+      },
+      "Google.Protobuf": {
+        "type": "Transitive",
+        "resolved": "3.25.3",
+        "contentHash": "fDY/kt0gy2nVcoeMmiyDMtwgvDJG5qaU7+Ic77szKTvVkIvoo7tyf+d+QDlKSosB+FjoKocX/ObObxqKCq60uA=="
       },
       "MediatR.Contracts": {
         "type": "Transitive",
