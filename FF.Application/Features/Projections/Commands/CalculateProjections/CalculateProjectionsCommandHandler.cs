@@ -78,9 +78,13 @@ public class CalculateProjectionsCommandHandler(
                 var position = recentLog.Position;
 
                 var input = await inputBuilder.BuildAsync(
-                    playerId, recentLog.Position, "UNK",
-                    request.Season, request.Week,
-                    ProjectionWeightProfile.Default, cancellationToken);
+                    playerId,
+                    recentLog.Position,
+                    recentLog.OpponentTeam ?? "UNK",   // ← was hardcoded "UNK"
+                    request.Season,
+                    request.Week,
+                    ProjectionWeightProfile.Default,
+                    cancellationToken);
 
                 if (input is null)
                 {

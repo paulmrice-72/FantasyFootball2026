@@ -29,6 +29,14 @@ public class ProjectionInputBuilder(
         var usage = await _usageMetrics.GetByPlayerIdAsync(playerId, season, ct);
         var matchup = await _defRankings.GetByTeamPositionAsync(opponentTeam, position, season, week, ct);
 
+        // Use SOS-adjusted score if available, fall back to raw difficulty score,
+        // then fall back to neutral (50) if no ranking found at all.
+        var difficultyScore = matchup is null
+            ? 50m
+            : matchup.SosAdjustedDifficultyScore > 0
+                ? matchup.SosAdjustedDifficultyScore
+                : matchup.DifficultyScore;
+
         return new ProjectionInput
         {
             PlayerId = playerId,
@@ -36,7 +44,7 @@ public class ProjectionInputBuilder(
             GameLogs = logs,
             SnapPct = usage?.SnapPct3Wk ?? 0m,
             TargetShare = usage?.TargetShare3Wk ?? 0m,
-            MatchupDifficultyScore = matchup?.DifficultyScore ?? 50m, // 50 = neutral
+            MatchupDifficultyScore = difficultyScore,
             Weights = weights
         };
     }
