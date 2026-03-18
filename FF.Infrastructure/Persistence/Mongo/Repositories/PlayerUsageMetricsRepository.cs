@@ -64,7 +64,9 @@ public class PlayerUsageMetricsRepository : IPlayerUsageMetricsRepository
             .Set(x => x.Tprr5Wk, metrics.Tprr5Wk)
             .Set(x => x.TprrSeason, metrics.TprrSeason)
             .Set(x => x.DataWeeksAvailable, metrics.DataWeeksAvailable)
-            .Set(x => x.CalculatedAt, metrics.CalculatedAt);
+            .Set(x => x.CalculatedAt, metrics.CalculatedAt)
+            .Set(x => x.Role, metrics.Role)
+            .Set(x => x.RoleClassifiedAt, metrics.RoleClassifiedAt);
 
         await _collection.UpdateOneAsync(
             filter,
