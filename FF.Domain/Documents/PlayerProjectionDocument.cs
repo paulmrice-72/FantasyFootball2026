@@ -29,4 +29,10 @@ public class PlayerProjectionDocument
     public decimal RSquared { get; set; }
     public string ScoringFormat { get; set; } = "HalfPpr";
     public DateTime CalculatedAt { get; set; }
+    // Game script context — populated when Vegas spread data is available
+    // Defaults to Competitive (neutral) when spread is unknown
+    public string GameScript { get; set; } = "Unknown";
+    public decimal RbVolumeMultiplier { get; set; } = 1.0m;
+    public decimal WrTeVolumeMultiplier { get; set; } = 1.0m;
+    public decimal SpreadInput { get; set; } = 0m;
 }

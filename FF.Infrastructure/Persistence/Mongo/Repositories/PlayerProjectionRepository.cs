@@ -50,7 +50,13 @@ public class PlayerProjectionRepository(
                 .Set(x => x.GameSampleSize, doc.GameSampleSize)
                 .Set(x => x.RSquared, doc.RSquared)
                 .Set(x => x.ScoringFormat, doc.ScoringFormat)
-                .Set(x => x.CalculatedAt, doc.CalculatedAt);
+                .Set(x => x.CalculatedAt, doc.CalculatedAt)
+                .Set(x => x.ScoringFormat, doc.ScoringFormat)
+                .Set(x => x.GameScript, doc.GameScript)
+                .Set(x => x.RbVolumeMultiplier, doc.RbVolumeMultiplier)
+                .Set(x => x.WrTeVolumeMultiplier, doc.WrTeVolumeMultiplier)
+                .Set(x => x.SpreadInput, doc.SpreadInput)
+                .Set(x => x.CalculatedAt, doc.CalculatedAt); 
 
             await _collection.UpdateOneAsync(
                 Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Id, existing.Id),
