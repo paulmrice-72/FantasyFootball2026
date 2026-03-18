@@ -16,7 +16,6 @@ public class CalculateProjectionsCommandHandler(
     IPlayerGameLogRepository gameLogRepository,
     IPlayerProjectionRepository projectionRepository,
     ProjectionInputBuilder inputBuilder,
-    PlayerProjectionService projectionService,
     ILogger<CalculateProjectionsCommandHandler> logger)
     : IRequestHandler<CalculateProjectionsCommand, Result<CalculateProjectionsResult>>
 {

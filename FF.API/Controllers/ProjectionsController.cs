@@ -1,8 +1,11 @@
 ﻿// FF.API/Controllers/ProjectionsController.cs
 using FF.Application.Features.Projections.Commands.CalculateProjections;
+using FF.Application.Features.Projections.Commands.SaveWeightProfile;
+using FF.Application.Features.Projections.Queries.GetWeightProfile;
 using FF.Application.Interfaces.Persistence;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace FF.API.Controllers
 {
@@ -46,5 +49,43 @@ namespace FF.API.Controllers
                 ? Ok(result.Value)
                 : BadRequest(result.Error);
         }
+
+        [HttpGet("weight-profile")]
+        public async Task<IActionResult> GetWeightProfile(CancellationToken ct)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var result = await mediator.Send(new GetWeightProfileQuery(userId), ct);
+            return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+        }
+
+        [HttpPost("weight-profile")]
+        public async Task<IActionResult> SaveWeightProfile(
+            [FromBody] SaveWeightProfileRequest request,
+            CancellationToken ct)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            var result = await mediator.Send(new SaveWeightProfileCommand(
+                userId,
+                request.ProfileName,
+                request.RecentGameWeight,
+                request.SnapCountWeight,
+                request.MatchupWeight,
+                request.MinGamesRequired,
+                request.LookbackWeeks), ct);
+
+            return result.IsSuccess ? Ok() : BadRequest(result.Error);
+        }
+
+        public record SaveWeightProfileRequest(
+            string ProfileName,
+            decimal RecentGameWeight,
+            decimal SnapCountWeight,
+            decimal MatchupWeight,
+            int MinGamesRequired,
+            int LookbackWeeks);
     }
 }

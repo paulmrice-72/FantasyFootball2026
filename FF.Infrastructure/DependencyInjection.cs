@@ -16,6 +16,7 @@ using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.Mongo;
 using FF.Infrastructure.Persistence.Mongo.Repositories;
+using FF.Infrastructure.Persistence.Sql.Repositories;
 using FF.Infrastructure.Persistence.SQL;
 using FF.Infrastructure.Persistence.SQL.Repositories;
 using FF.Infrastructure.Services;
@@ -62,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<IUsageMetricsService, UsageMetricsService>();
         services.AddScoped<UsageMetricsAggregationJob>();
         services.AddScoped<ILeagueMembershipRepository, LeagueMembershipRepository>();
+        services.AddScoped<IUserProjectionWeightProfileRepository, UserProjectionWeightProfileRepository>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
