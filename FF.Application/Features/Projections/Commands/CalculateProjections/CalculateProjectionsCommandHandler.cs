@@ -1,6 +1,7 @@
 ﻿// FF.Application/Features/Projections/Commands/CalculateProjections/CalculateProjectionsCommandHandler.cs
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
+using FF.Application.Services;
 using FF.Domain.Documents;
 using FF.Domain.ValueObjects;
 using FF.SharedKernel;
@@ -104,7 +105,11 @@ public class CalculateProjectionsCommandHandler(
                     continue;
                 }
 
-                var doc = MapToDocument(result, recentLog, request.Season, request.Week);
+                // Game script — spread = 0 until Vegas data source is wired in (future PBI)
+                // Classifier returns Competitive/neutral multipliers when spread is unknown
+                var correlation = GameScriptClassifier.Classify(spread: 0m);
+                var doc = MapToDocument(result, recentLog, request.Season, request.Week, correlation);
+
                 await projectionRepository.UpsertAsync(doc, cancellationToken);
                 calculated++;
                 countByPosition[position] = countByPosition.GetValueOrDefault(position) + 1;
@@ -123,11 +128,20 @@ public class CalculateProjectionsCommandHandler(
     }
 
     private static PlayerProjectionDocument MapToDocument(
-    PlayerProjectionResult result,
-    PlayerGameLogDocument recentLog,
-    int season,
-    int week)
+        PlayerProjectionResult result,
+        PlayerGameLogDocument recentLog,
+        int season,
+        int week,
+        FF.Domain.ValueObjects.CorrelationMetadata correlation)
     {
+        // Apply game script volume multiplier to projections
+        var adjustedPpr = GameScriptClassifier.ApplyMultiplier(
+                                  result.ProjectedPointsPpr, recentLog.Position, correlation);
+        var adjustedHalfPpr = GameScriptClassifier.ApplyMultiplier(
+                                  result.ProjectedPointsHalfPpr, recentLog.Position, correlation);
+        var adjustedStd = GameScriptClassifier.ApplyMultiplier(
+                                  result.ProjectedPoints, recentLog.Position, correlation);
+
         return new PlayerProjectionDocument
         {
             PlayerId = result.PlayerId,
@@ -138,9 +152,9 @@ public class CalculateProjectionsCommandHandler(
             OpponentTeam = recentLog.OpponentTeam ?? "UNK",
             Season = season,
             Week = week,
-            ProjectedPoints = result.ProjectedPoints,
-            ProjectedPointsPpr = result.ProjectedPointsPpr,
-            ProjectedPointsHalfPpr = result.ProjectedPointsHalfPpr,
+            ProjectedPoints = adjustedStd,
+            ProjectedPointsPpr = adjustedPpr,
+            ProjectedPointsHalfPpr = adjustedHalfPpr,
             WeightedAvgPoints = result.WeightedAvgPoints,
             MatchupAdjustmentFactor = result.MatchupAdjustmentFactor,
             SnapPctInput = result.SnapPctInput,
@@ -148,6 +162,10 @@ public class CalculateProjectionsCommandHandler(
             GameSampleSize = result.GameSampleSize,
             RSquared = result.RSquared,
             ScoringFormat = "HalfPpr",
+            GameScript = correlation.Script.ToString(),
+            RbVolumeMultiplier = correlation.RbVolumeMultiplier,
+            WrTeVolumeMultiplier = correlation.WrTeVolumeMultiplier,
+            SpreadInput = correlation.Spread,
             CalculatedAt = DateTime.UtcNow
         };
     }
