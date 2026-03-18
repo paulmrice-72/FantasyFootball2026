@@ -1,6 +1,7 @@
 ﻿// FF.Infrastructure/Services/UsageMetricsService.cs
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services.Usage;
+using FF.Application.Services;
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
 
@@ -99,11 +100,15 @@ public class UsageMetricsService(
             DataWeeksAvailable = activeLogs.Count
         };
 
+        // Classify role after metrics are calculated
+        metrics.Role = RoleClassificationService.Classify(metrics);
+        metrics.RoleClassifiedAt = DateTime.UtcNow;
+
         await _metricsRepository.UpsertAsync(metrics, ct);
 
         _logger.LogInformation(
-            "Aggregated usage metrics for {PlayerId} season {Season} — {Weeks} weeks",
-            playerId, season, activeLogs.Count);
+            "Aggregated usage metrics for {PlayerId} season {Season} — {Weeks} weeks, Role: {Role}",
+            playerId, season, activeLogs.Count, metrics.Role);
     }
 
     public async Task AggregateAllPlayersAsync(
