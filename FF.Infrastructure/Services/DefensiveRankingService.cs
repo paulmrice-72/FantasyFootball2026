@@ -19,7 +19,6 @@ public class DefensiveRankingService(
             "DefensiveRankingService starting for season {Season} through week {Week}",
             season, throughWeek);
 
-        // Pull all regular season game logs up to throughWeek
         var logs = await gameLogRepository.GetBySeasonAsync(season, ct);
         var regLogs = logs
             .Where(x => x.SeasonType == "REG"
@@ -38,39 +37,61 @@ public class DefensiveRankingService(
         }
 
         var documents = new List<DefensiveRankingDocument>();
-        var l4wMinWeek = Math.Max(1, throughWeek - 3); // last 4 weeks
+        var l4wMinWeek = Math.Max(1, throughWeek - 3);
+
+        // ── SOS Pre-computation ───────────────────────────────────────────────
+        // For each (offensiveTeam, position) pair, compute average PPR points
+        // scored per game. This measures offensive strength — used to weight
+        // how difficult each defense's schedule actually was.
+        //
+        // Key: (NflTeam, Position)  Value: avg PPR points scored per game
+        var offensiveStrength = regLogs
+            .GroupBy(x => (Team: x.NflTeam, x.Position))
+            .ToDictionary(
+                g => g.Key,
+                g => g.Average(x => (double)(x.FantasyPointsPpr.GetValueOrDefault() > 0
+                    ? x.FantasyPointsPpr.GetValueOrDefault()
+                    : x.FantasyPoints.GetValueOrDefault())));
 
         foreach (var position in TrackedPositions)
         {
             var posLogs = regLogs.Where(x => x.Position == position).ToList();
 
-            // Season averages per defending team
+            // League-wide average offensive output for this position
+            // Used as the neutral baseline for the SOS factor
+            var leagueAvgOffense = offensiveStrength
+                .Where(kv => kv.Key.Position == position)
+                .Select(kv => kv.Value)
+                .DefaultIfEmpty(1.0)
+                .Average();
+
             var seasonGroups = posLogs
                 .GroupBy(x => x.OpponentTeam)
                 .Select(g => new
                 {
                     Team = g.Key,
-                    AvgAllowed = g.Average(x => (double)(x.FantasyPointsPpr > 0 ? x.FantasyPointsPpr : x.FantasyPoints)),
-                    GamesAllowed = g.Select(x => x.Week).Distinct().Count()
+                    AvgAllowed = g.Average(x => (double)(x.FantasyPointsPpr.GetValueOrDefault() > 0
+                        ? x.FantasyPointsPpr.GetValueOrDefault()
+                        : x.FantasyPoints.GetValueOrDefault())),
+                    GamesAllowed = g.Select(x => x.Week).Distinct().Count(),
+                    // Collect the offensive teams this defense faced
+                    OpponentTeams = g.Select(x => x.NflTeam).Distinct().ToList()
                 })
                 .ToList();
 
-            // L4W averages per defending team
             var l4wGroups = posLogs
                 .Where(x => x.Week >= l4wMinWeek)
                 .GroupBy(x => x.OpponentTeam)
                 .Select(g => new
                 {
                     Team = g.Key,
-                    AvgAllowedL4W = g.Average(x => (double)(x.FantasyPointsPpr > 0 ? x.FantasyPointsPpr : x.FantasyPoints))
+                    AvgAllowedL4W = g.Average(x => (double)(x.FantasyPointsPpr.GetValueOrDefault() > 0
+                        ? x.FantasyPointsPpr.GetValueOrDefault()
+                        : x.FantasyPoints.GetValueOrDefault()))
                 })
                 .ToDictionary(x => x.Team ?? string.Empty, x => x.AvgAllowedL4W);
 
-            // Percentile rank within position group
-            var seasonRanked = seasonGroups
-                .OrderBy(x => x.AvgAllowed)
-                .ToList();
-
+            var seasonRanked = seasonGroups.OrderBy(x => x.AvgAllowed).ToList();
             var teamCount = seasonRanked.Count;
 
             for (var index = 0; index < teamCount; index++)
@@ -83,15 +104,33 @@ public class DefensiveRankingService(
 
                 l4wGroups.TryGetValue(entry.Team ?? string.Empty, out var avgL4W);
 
-                // L4W percentile — rank within teams that have L4W data
                 var l4wRanked = l4wGroups.OrderBy(x => x.Value).ToList();
-                var l4wIndex = l4wRanked.FindIndex(x => x.Key == entry.Team);
+                var l4wIndex = l4wRanked.FindIndex(x => x.Key == (entry.Team ?? string.Empty));
                 var l4wPct = l4wIndex >= 0 && l4wRanked.Count > 1
                     ? Math.Round((decimal)l4wIndex / (l4wRanked.Count - 1) * 100, 1)
-                    : seasonPct; // fall back to season percentile if no L4W data
+                    : seasonPct;
 
-                // Composite: 40% season, 60% recent
                 var difficultyScore = Math.Round(seasonPct * 0.4m + l4wPct * 0.6m, 1);
+
+                // ── SOS Adjustment ────────────────────────────────────────────
+                // Average offensive strength of opponents this defense faced.
+                // If they faced mostly weak offenses, factor < 1 → score deflated.
+                // If they faced mostly strong offenses, factor > 1 → score bumped.
+                var opponentStrengthValues = entry.OpponentTeams
+                    .Select(t => offensiveStrength.TryGetValue((t, position), out var s) ? s : leagueAvgOffense)
+                    .ToList();
+
+                var avgOpponentStrength = opponentStrengthValues.Count > 0
+                    ? opponentStrengthValues.Average()
+                    : leagueAvgOffense;
+
+                var sosFactor = leagueAvgOffense > 0
+                    ? avgOpponentStrength / leagueAvgOffense
+                    : 1.0;
+
+                // Apply factor and clamp to 0–100
+                var sosAdjustedScore = Math.Round(
+                    Math.Clamp((double)difficultyScore * sosFactor, 0.0, 100.0), 1);
 
                 documents.Add(new DefensiveRankingDocument
                 {
@@ -105,6 +144,7 @@ public class DefensiveRankingService(
                     SeasonPercentile = seasonPct,
                     L4WPercentile = l4wPct,
                     DifficultyScore = difficultyScore,
+                    SosAdjustedDifficultyScore = (decimal)sosAdjustedScore,
                     GamesAllowed = entry.GamesAllowed,
                     CalculatedAt = DateTime.UtcNow
                 });

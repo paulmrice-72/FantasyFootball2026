@@ -19,6 +19,11 @@ public class DefensiveRankingDocument
     // Composite score (0-100)
     public decimal DifficultyScore { get; set; }
 
+    // SOS-adjusted composite score (0-100)
+    // Corrects for quality of offenses faced — defenses that faced weak
+    // offensive slates are deflated; those that faced strong slates are bumped.
+    public decimal SosAdjustedDifficultyScore { get; set; }
+
     public int GamesAllowed { get; set; }                  // sample size
     public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
 }

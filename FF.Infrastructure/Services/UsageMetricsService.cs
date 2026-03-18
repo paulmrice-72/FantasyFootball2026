@@ -23,8 +23,6 @@ public class UsageMetricsService(
         var gameLogs = await _gameLogRepository
             .GetByPlayerSeasonAsync(playerId, season, ct);
 
-        // Exclude weeks where the player had zero snaps (DNP / inactive)
-        // SnapPct not yet on document — using Targets + Carries as proxy for active
         var activeLogs = gameLogs
             .Where(g => g.Targets > 0 || g.Carries > 0 ||
                         g.Completions > 0 || g.SpecialTeamsTds > 0)
@@ -39,40 +37,66 @@ public class UsageMetricsService(
             return;
         }
 
+        // Rolling windows — take last N games from the ordered list
+        var recent3 = activeLogs.TakeLast(3).ToList();
+        var recent5 = activeLogs.TakeLast(5).ToList();
+
         var targetShares = activeLogs.Select(g => g.TargetShare).ToList();
         var airYardsShares = activeLogs.Select(g => g.AirYardsShare).ToList();
         var woprs = activeLogs.Select(g => g.Wopr).ToList();
+        var snapPcts = activeLogs.Select(g => g.SnapPct).ToList();
 
-        // CarryShare: Carries / team total carries not on document yet
-        // Store raw carries for now — will refine when snap/team data added
         var carryShares = activeLogs
             .Select(g => g.Carries > 0 ? (decimal)g.Carries : 0m)
             .ToList();
 
+        var lastLog = activeLogs.Last();
+
         var metrics = new PlayerUsageMetricsDocument
         {
             PlayerId = playerId,
+            PlayerName = lastLog.PlayerName,
+            NflTeam = lastLog.NflTeam,
+            Position = lastLog.Position,
             Season = season,
-            Position = activeLogs.Last().Position,
 
+            // Target Share
             TargetShare3Wk = UsageMetricsCalculator.WeightedAverage(targetShares, 3),
             TargetShare5Wk = UsageMetricsCalculator.WeightedAverage(targetShares, 5),
             TargetShareSeason = UsageMetricsCalculator.SimpleAverage(targetShares),
 
+            // Air Yards Share
             AirYardsShare3Wk = UsageMetricsCalculator.WeightedAverage(airYardsShares, 3),
             AirYardsShare5Wk = UsageMetricsCalculator.WeightedAverage(airYardsShares, 5),
             AirYardsShareSeason = UsageMetricsCalculator.SimpleAverage(airYardsShares),
 
+            // WOPR
+            Wopr3Wk = UsageMetricsCalculator.WeightedAverage(woprs, 3),
+            Wopr5Wk = UsageMetricsCalculator.WeightedAverage(woprs, 5),
+            WoprSeason = UsageMetricsCalculator.SimpleAverage(woprs),
+
+            // Carry Share
             CarryShare3Wk = UsageMetricsCalculator.WeightedAverage(carryShares, 3),
             CarryShare5Wk = UsageMetricsCalculator.WeightedAverage(carryShares, 5),
             CarryShareSeason = UsageMetricsCalculator.SimpleAverage(carryShares),
 
-            Wopr3Wk = UsageMetricsCalculator.WeightedAverage(woprs, 3),
-            WoprSeason = UsageMetricsCalculator.SimpleAverage(woprs),
+            // Snap Percentage
+            SnapPct3Wk = UsageMetricsCalculator.WeightedAverage(snapPcts, 3),
+            SnapPct5Wk = UsageMetricsCalculator.WeightedAverage(snapPcts, 5),
+            SnapPctSeason = UsageMetricsCalculator.SimpleAverage(snapPcts),
 
-            WeeksPlayed = activeLogs.Count,
-            LastWeekProcessed = activeLogs.Last().Week,
-            LastUpdated = DateTime.UtcNow
+            // aDOT — Average Depth of Target (ReceivingAirYards / Targets)
+            ADot3Wk = CalculateADot(recent3),
+            ADot5Wk = CalculateADot(recent5),
+            ADotSeason = CalculateADot(activeLogs),
+
+            // TPRR — Targets Per Route Run (Targets / OffenseSnaps as proxy)
+            Tprr3Wk = CalculateTprr(recent3),
+            Tprr5Wk = CalculateTprr(recent5),
+            TprrSeason = CalculateTprr(activeLogs),
+
+            CalculatedAt = DateTime.UtcNow,
+            DataWeeksAvailable = activeLogs.Count
         };
 
         await _metricsRepository.UpsertAsync(metrics, ct);
@@ -101,5 +125,23 @@ public class UsageMetricsService(
 
         _logger.LogInformation(
             "Completed usage aggregation for season {Season}", season);
+    }
+
+    // aDOT = ReceivingAirYards / Targets
+    private static decimal CalculateADot(List<PlayerGameLogDocument> logs)
+    {
+        var totalTargets = logs.Sum(g => g.Targets);
+        if (totalTargets == 0) return 0m;
+        var totalAirYards = logs.Sum(g => g.ReceivingAirYards);
+        return totalAirYards / totalTargets;
+    }
+
+    // TPRR = Targets / OffenseSnaps (snap count as route proxy)
+    private static decimal CalculateTprr(List<PlayerGameLogDocument> logs)
+    {
+        var totalSnaps = logs.Sum(g => g.OffenseSnaps);
+        if (totalSnaps == 0) return 0m;
+        var totalTargets = logs.Sum(g => g.Targets);
+        return (decimal)totalTargets / totalSnaps;
     }
 }
