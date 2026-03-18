@@ -2,6 +2,7 @@
 using FF.Application.Features.Projections.Commands.CalculateProjections;
 using FF.Application.Features.Projections.Commands.SaveWeightProfile;
 using FF.Application.Features.Projections.Queries.GetWeightProfile;
+using FF.Application.Features.Simulations.Commands.RunSimulations;
 using FF.Application.Interfaces.Persistence;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -13,8 +14,9 @@ namespace FF.API.Controllers
     [Route("api/v1/projections")]
     // [Authorize]
     public class ProjectionsController(
-        IPlayerProjectionRepository repo,
-        IMediator mediator) : ControllerBase
+    IPlayerProjectionRepository repo,
+    ISimulationResultRepository simulationRepo,
+    IMediator mediator) : ControllerBase
     {
         [HttpGet]
         public async Task<IActionResult> Get(
@@ -48,6 +50,40 @@ namespace FF.API.Controllers
             return result.IsSuccess
                 ? Ok(result.Value)
                 : BadRequest(result.Error);
+        }
+
+        [HttpPost("simulate")]
+        public async Task<IActionResult> Simulate(
+    [FromQuery] int season,
+    [FromQuery] int week,
+    CancellationToken ct)
+        {
+            if (season == 0 || week == 0)
+                return BadRequest("season and week are required.");
+
+            var result = await mediator.Send(
+                new RunSimulationsCommand(season, week), ct);
+
+            return result.IsSuccess
+                ? Ok(result.Value)
+                : BadRequest(result.Error);
+        }
+
+        [HttpGet("simulations")]
+        public async Task<IActionResult> GetSimulations(
+            [FromQuery] int season,
+            [FromQuery] int week,
+            [FromQuery] string? position,
+            CancellationToken ct)
+        {
+            if (season == 0 || week == 0)
+                return BadRequest("season and week are required.");
+
+            var results = string.IsNullOrWhiteSpace(position)
+                ? await simulationRepo.GetByWeekAsync(season, week, ct)
+                : await simulationRepo.GetByPositionAsync(season, week, position.ToUpper(), ct);
+
+            return Ok(results);
         }
 
         [HttpGet("weight-profile")]
