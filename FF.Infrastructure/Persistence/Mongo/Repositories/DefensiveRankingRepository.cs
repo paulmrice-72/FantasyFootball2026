@@ -29,6 +29,7 @@ public class DefensiveRankingRepository(
             .Set(x => x.SeasonPercentile, document.SeasonPercentile)
             .Set(x => x.L4WPercentile, document.L4WPercentile)
             .Set(x => x.DifficultyScore, document.DifficultyScore)
+            .Set(x => x.SosAdjustedDifficultyScore, document.SosAdjustedDifficultyScore)
             .Set(x => x.GamesAllowed, document.GamesAllowed)
             .Set(x => x.CalculatedAt, document.CalculatedAt);
 
@@ -65,6 +66,7 @@ public class DefensiveRankingRepository(
                     .Set(x => x.SeasonPercentile, doc.SeasonPercentile)
                     .Set(x => x.L4WPercentile, doc.L4WPercentile)
                     .Set(x => x.DifficultyScore, doc.DifficultyScore)
+                    .Set(x => x.SosAdjustedDifficultyScore, doc.SosAdjustedDifficultyScore)
                     .Set(x => x.GamesAllowed, doc.GamesAllowed)
                     .Set(x => x.CalculatedAt, doc.CalculatedAt);
 

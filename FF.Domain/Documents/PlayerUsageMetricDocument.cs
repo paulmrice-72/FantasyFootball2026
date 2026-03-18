@@ -3,37 +3,48 @@ namespace FF.Domain.Documents;
 
 public class PlayerUsageMetricsDocument
 {
-    public string? Id { get; set; }
+    public string Id { get; set; } = string.Empty;
     public string PlayerId { get; set; } = string.Empty;
-    public int Season { get; set; }
+    public string PlayerName { get; set; } = string.Empty;
     public string Position { get; set; } = string.Empty;
+    public string NflTeam { get; set; } = string.Empty;
+    public int Season { get; set; }
 
-    // Target Share rolling averages
+    // Target Share
     public decimal TargetShare3Wk { get; set; }
     public decimal TargetShare5Wk { get; set; }
     public decimal TargetShareSeason { get; set; }
 
-    // Snap % rolling averages
-    // NOTE: SnapPct is not on PlayerGameLogDocument yet — see note below
-    public decimal SnapPct3Wk { get; set; }
-    public decimal SnapPct5Wk { get; set; }
-    public decimal SnapPctSeason { get; set; }
-
-    // Air Yards Share rolling averages
+    // Air Yards Share
     public decimal AirYardsShare3Wk { get; set; }
     public decimal AirYardsShare5Wk { get; set; }
     public decimal AirYardsShareSeason { get; set; }
 
-    // Carry Share rolling averages (RB primary, others near zero)
+    // WOPR
+    public decimal Wopr3Wk { get; set; }
+    public decimal Wopr5Wk { get; set; }
+    public decimal WoprSeason { get; set; }
+
+    // Carry Share
     public decimal CarryShare3Wk { get; set; }
     public decimal CarryShare5Wk { get; set; }
     public decimal CarryShareSeason { get; set; }
 
-    // WOPR rolling averages — averaged from existing Wopr on game logs
-    public decimal Wopr3Wk { get; set; }
-    public decimal WoprSeason { get; set; }
+    // Snap Percentage
+    public decimal SnapPct3Wk { get; set; }
+    public decimal SnapPct5Wk { get; set; }
+    public decimal SnapPctSeason { get; set; }
 
-    public int WeeksPlayed { get; set; }
-    public int LastWeekProcessed { get; set; }
-    public DateTime LastUpdated { get; set; }
+    // aDOT — Average Depth of Target (AirYards / Targets)
+    public decimal ADot3Wk { get; set; }
+    public decimal ADot5Wk { get; set; }
+    public decimal ADotSeason { get; set; }
+
+    // TPRR — Targets Per Route Run (Targets / OffenseSnaps as route proxy)
+    public decimal Tprr3Wk { get; set; }
+    public decimal Tprr5Wk { get; set; }
+    public decimal TprrSeason { get; set; }
+
+    public DateTime CalculatedAt { get; set; }
+    public int DataWeeksAvailable { get; set; }
 }
