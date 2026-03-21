@@ -1,7 +1,138 @@
-@attribute [Authorize]
 @page "/"
+@attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
 
-<h1>Hello from FF.WebBlazor</h1>
+<PageTitle>Home — FantasyCombine.AI</PageTitle>
 
-<p>This is a minimal Blazor WebAssembly standalone project targeting .NET 9.0.</p>
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.Home" Class="mr-2" Style="vertical-align:middle;" />
+        War Room
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Season @_season · Week @_week
+    </MudText>
+</div>
+
+@* ── QUICK STAT CARDS ────────────────────────────────────── *@
+<MudGrid Spacing="3" Class="mb-6">
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="fc-stat-card" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.People" Class="fc-stat-card-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-cyan">@_playerCount</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Players Projected</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="fc-stat-card" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.Casino" Class="fc-stat-card-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-cyan">@_simCount</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Simulations Run</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="fc-stat-card" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="fc-stat-card-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-boom">@_topBoomPlayer</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Top Boom Candidate</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="fc-stat-card" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="fc-stat-card-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-ceiling">@_topCeilingPlayer</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Highest Ceiling</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@* ── QUICK LINKS ─────────────────────────────────────────── *@
+<MudGrid Spacing="3">
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Class="fc-quick-link" Elevation="0" @onclick='@(() => Nav.NavigateTo("/projections"))'>
+            <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="fc-quick-link-icon" />
+            <div>
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Weekly Projections</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Floor · Median · Ceiling · Boom/Bust</MudText>
+            </div>
+            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="ml-auto mud-text-secondary" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Class="fc-quick-link" Elevation="0" @onclick='@(() => Nav.NavigateTo("/optimizer"))'>
+            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="fc-quick-link-icon" />
+            <div>
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Lineup Optimizer</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Safe · Ceiling · Contrarian modes</MudText>
+            </div>
+            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="ml-auto mud-text-secondary" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="4">
+        <MudPaper Class="fc-quick-link" Elevation="0" @onclick='@(() => Nav.NavigateTo("/projection-settings"))'>
+            <MudIcon Icon="@Icons.Material.Filled.Tune" Class="fc-quick-link-icon" />
+            <div>
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Projection Tuner</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Customize weight profiles</MudText>
+            </div>
+            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="ml-auto mud-text-secondary" />
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+    private int _week;
+    private int _playerCount;
+    private int _simCount;
+    private string _topBoomPlayer = "—";
+    private string _topCeilingPlayer = "—";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _week = GetCurrentNflWeek();
+
+        try
+        {
+            var sims = await Http.GetFromJsonAsync<List<SimSummary>>(
+                $"api/v1/projections/simulations?season={_season}&week={_week}");
+
+            if (sims is { Count: > 0 })
+            {
+                _simCount = sims.Count;
+                _playerCount = sims.Count;
+
+                var topBoom = sims.MaxBy(s => s.BoomProbability);
+                var topCeil = sims.MaxBy(s => s.Ceiling);
+
+                _topBoomPlayer = topBoom?.PlayerName ?? "—";
+                _topCeilingPlayer = topCeil?.PlayerName ?? "—";
+            }
+        }
+        catch
+        {
+            // API unavailable — cards show defaults
+        }
+    }
+
+    private static int GetCurrentNflWeek()
+    {
+        var now = DateTime.UtcNow;
+        var season = now.Month >= 3 ? now.Year : now.Year - 1;
+        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+        var seasonStart = sept1.AddDays(daysUntilThursday);
+        if (now < seasonStart) return 18;
+        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
+        return Math.Clamp(week, 1, 18);
+    }
+
+    private record SimSummary(
+        string PlayerName,
+        string Position,
+        decimal Ceiling,
+        decimal BoomProbability);
+}
