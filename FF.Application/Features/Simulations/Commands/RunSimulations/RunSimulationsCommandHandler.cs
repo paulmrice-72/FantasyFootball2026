@@ -13,6 +13,7 @@ public class RunSimulationsCommandHandler(
     IPlayerProjectionRepository projectionRepository,
     IPlayerUsageMetricsRepository usageMetricsRepository,
     ISimulationResultRepository simulationRepository,
+    IVegasLineRepository vegasLineRepository,
     ILogger<RunSimulationsCommandHandler> logger)
     : IRequestHandler<RunSimulationsCommand, Result<RunSimulationsResult>>
 {
@@ -36,6 +37,29 @@ public class RunSimulationsCommandHandler(
         logger.LogInformation(
             "Found {Count} projections to simulate for {Season} Week {Week}",
             projections.Count, request.Season, request.Week);
+
+        // Pre-load all vegas lines for the week — one batch fetch, not per-player
+        var vegasLines = await vegasLineRepository.GetByWeekAsync(
+            request.Season, request.Week, cancellationToken);
+
+        var vegasLookup = vegasLines
+                    .SelectMany(v =>
+                    {
+                        var homeScript = GameScriptClassifier.Classify(v.HomeSpread).Script.ToString();
+                        var awayScript = GameScriptClassifier.Classify(v.AwaySpread).Script.ToString();
+                        return new[]
+                        {
+                    (Team: v.HomeTeam, Spread: v.HomeSpread, GameScript: homeScript),
+                    (Team: v.AwayTeam, Spread: v.AwaySpread, GameScript: awayScript)
+                        };
+                    })
+                    .GroupBy(x => x.Team, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(),
+                        StringComparer.OrdinalIgnoreCase);
+
+        logger.LogInformation(
+            "Loaded {Count} Vegas lines for Season {Season} Week {Week}",
+            vegasLines.Count, request.Season, request.Week);
 
         var countByPosition = new Dictionary<string, int>
         {
@@ -63,15 +87,19 @@ public class RunSimulationsCommandHandler(
                     continue;
                 }
 
-                // Look up role for variance modulation
                 var usageMetrics = await usageMetricsRepository.GetByPlayerIdAsync(
                     projection.PlayerId, projection.Season, cancellationToken);
 
-                var role = usageMetrics is not null
-                    ? usageMetrics.Role
-                    : PlayerRole.Unknown;
+                var role = usageMetrics?.Role ?? PlayerRole.Unknown;
 
                 var result = MonteCarloSimulationService.Simulate(projection, role);
+
+                // Stamp Vegas context if available — falls back to defaults on doc
+                if (vegasLookup.TryGetValue(projection.NflTeam, out var line))
+                {
+                    result.Spread = line.Spread;
+                    result.GameScript = line.GameScript;
+                }
 
                 await simulationRepository.UpsertAsync(result, cancellationToken);
 

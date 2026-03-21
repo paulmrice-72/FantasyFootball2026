@@ -4,6 +4,7 @@ using FF.Application.Common.Settings;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Stats.Queries.GetHistoricalStatsStatus;
 using FF.Infrastructure;
+using FF.Infrastructure.ExternalServices.OddsAPI;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.Mongo.Repositories;
 using FF.Infrastructure.Persistence.SQL;
@@ -12,6 +13,7 @@ using Hangfire;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Refit;
 using Serilog;
 using Serilog.Events;
 using System.Text;
@@ -96,6 +98,12 @@ try
         });
     });
 
+    // Odds API
+    builder.Services.Configure<OddsApiSettings>(builder.Configuration.GetSection("OddsApi"));
+    builder.Services.AddRefitClient<IOddsApiClient>()
+        .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.the-odds-api.com"));
+
+
     var app = builder.Build();
 
    
@@ -135,8 +143,6 @@ try
     app.UseHttpsRedirection();
     app.UseCors("BlazorWasm");
     app.UseAuthorization();
-    app.MapControllers();
-
     app.MapControllers();
 
     // ── HANGFIRE DASHBOARD ────────────────────────────────
@@ -212,6 +218,12 @@ try
         job => job.RunAsync(),
         "0 6 * * 4",
         new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    // Hangfire — add after existing job registrations
+    RecurringJob.AddOrUpdate<VegasLineSyncJob>(
+        "vegas-line-sync",
+        job => job.RunAsync(CancellationToken.None),
+        "0 5 * * 3", utcOptions);  // Wednesday 5am UTC — fires before simulation at 6am
 
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",

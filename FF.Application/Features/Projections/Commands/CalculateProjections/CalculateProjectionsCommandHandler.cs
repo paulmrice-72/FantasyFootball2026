@@ -17,8 +17,8 @@ public class CalculateProjectionsCommandHandler(
     IPlayerGameLogRepository gameLogRepository,
     IPlayerProjectionRepository projectionRepository,
     ProjectionInputBuilder inputBuilder,
+    IVegasLineRepository vegasLineRepository,
     ILogger<CalculateProjectionsCommandHandler> logger)
-    : IRequestHandler<CalculateProjectionsCommand, Result<CalculateProjectionsResult>>
 {
     private static readonly string[] SupportedPositions = ["QB", "RB", "WR", "TE"];
 
@@ -105,9 +105,16 @@ public class CalculateProjectionsCommandHandler(
                     continue;
                 }
 
-                // Game script — spread = 0 until Vegas data source is wired in (future PBI)
-                // Classifier returns Competitive/neutral multipliers when spread is unknown
-                var correlation = GameScriptClassifier.Classify(spread: 0m);
+                var vegasLine = await vegasLineRepository.GetByTeamAsync(
+                    recentLog.NflTeam, request.Season, request.Week, cancellationToken);
+
+                var spread = vegasLine is not null
+                    ? recentLog.NflTeam == vegasLine.HomeTeam
+                        ? vegasLine.HomeSpread
+                        : vegasLine.AwaySpread
+                    : 0m;  // fallback: no line posted yet → Competitive/neutral
+
+                var correlation = GameScriptClassifier.Classify(spread);
                 var doc = MapToDocument(result, recentLog, request.Season, request.Week, correlation);
 
                 await projectionRepository.UpsertAsync(doc, cancellationToken);

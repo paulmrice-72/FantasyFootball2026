@@ -49,7 +49,9 @@ public class SimulationResultRepository(
                 .Set(x => x.BustProbability, document.BustProbability)
                 .Set(x => x.PlayerRole, document.PlayerRole)
                 .Set(x => x.ScoringFormat, document.ScoringFormat)
-                .Set(x => x.CalculatedAt, document.CalculatedAt);
+                .Set(x => x.CalculatedAt, document.CalculatedAt)
+                .Set(x => x.Spread, document.Spread)
+                .Set(x => x.GameScript, document.GameScript);
 
             await _collection.UpdateOneAsync(
                 Builders<SimulationResultDocument>.Filter.Eq(x => x.Id, existing.Id),
