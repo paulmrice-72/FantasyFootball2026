@@ -1,0 +1,461 @@
+﻿@page "/optimizer"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Lineup Optimizer — FantasyCombine.AI</PageTitle>
+
+@* ── HEADER ─────────────────────────────────────────────── *@
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-2" Style="vertical-align:middle;" />
+        Lineup Optimizer
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Season @_season · Week @_week · @(string.IsNullOrEmpty(_riskProfile) ? "No" : _riskProfile) risk profile
+    </MudText>
+</div>
+
+<MudGrid Spacing="3">
+
+    @* ── LEFT PANEL — Settings + Player Pool ────────────── *@
+    <MudItem xs="12" md="4" lg="3">
+
+        @* Settings Card *@
+        <MudPaper Class="fc-card mb-3 pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">SETTINGS</MudText>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="6">
+                    <MudNumericField @bind-Value="_season"
+                                     Label="Season"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="2022" Max="2030" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudNumericField @bind-Value="_week"
+                                     Label="Week"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Min="1" Max="18" />
+                </MudItem>
+            </MudGrid>
+
+            <MudSelect T="string"
+                       @bind-Value="_mode"
+                       Label="Score Mode"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Class="mt-2"
+                       Clearable="true">
+                <MudSelectItem Value="@("Median")">Median</MudSelectItem>
+                <MudSelectItem Value="@("Floor")">Floor</MudSelectItem>
+                <MudSelectItem Value="@("Ceiling")">Ceiling</MudSelectItem>
+            </MudSelect>
+
+            <MudSelect T="string"
+                       @bind-Value="_riskProfile"
+                       Label="Risk Profile"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Class="mt-2"
+                       Clearable="true">
+                <MudSelectItem T="string" Value="@("Safe")">Safe — high floor</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Ceiling")">Ceiling — max upside</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Contrarian")">Contrarian — low owned</MudSelectItem>
+            </MudSelect>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.AutoAwesome"
+                       FullWidth="true"
+                       Disabled="_optimizing || _pool.Count == 0"
+                       OnClick="RunOptimizer"
+                       Class="mt-3"
+                       Style="height:44px;">
+                @if (_optimizing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" Color="Color.Surface" />
+                    <span>Optimizing...</span>
+                }
+                else
+                {
+                    <span>Optimize Lineup</span>
+                }
+            </MudButton>
+        </MudPaper>
+
+        @* Player Pool Card *@
+        <MudPaper Class="fc-card pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-2">PLAYER POOL</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">
+                Click to lock 🔒 or exclude ❌
+            </MudText>
+
+            @if (_poolLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_pool.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Load pool to begin. Run simulate first.
+                </MudAlert>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="LoadPool"
+                           Class="mt-2">
+                    Load Player Pool
+                </MudButton>
+            }
+            else
+            {
+                <MudTextField @bind-Value="_poolSearch"
+                              Placeholder="Filter players..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              Class="mb-2" />
+
+                @* Position filter *@
+                <div class="d-flex gap-1 flex-wrap mb-2">
+                    @foreach (var pos in new[] { "ALL", "QB", "RB", "WR", "TE" })
+                    {
+                        <MudChip T="string"
+                                 Size="Size.Small"
+                                 Color="@(_poolPosition == pos ? Color.Primary : Color.Default)"
+                                 OnClick="@(() => { _poolPosition = pos; })"
+                                 Class="fc-pos-chip">
+                            @pos
+                        </MudChip>
+                    }
+                </div>
+
+                <div class="fc-pool-list">
+                    @foreach (var p in FilteredPool)
+                    {
+                        <div class="fc-pool-row @PoolRowClass(p)"
+                             @onclick="() => CyclePlayerState(p)">
+                            <div class="fc-pool-row-left">
+                                <MudText Typo="Typo.body2" Style="font-weight:600; line-height:1.2;">
+                                    @p.PlayerName
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @p.Position · @p.NflTeam
+                                </MudText>
+                            </div>
+                            <div class="fc-pool-row-right">
+                                <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
+                                    @p.Median.ToString("F1")
+                                </MudText>
+                                <span class="fc-pool-badge">@PoolBadge(p)</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           Size="Size.Small"
+                           OnClick="ClearLocks"
+                           Class="mt-2">
+                    Clear All Locks / Excludes
+                </MudButton>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* ── RIGHT PANEL — Optimized Lineup ─────────────────── *@
+    <MudItem xs="12" md="8" lg="9">
+        <MudPaper Class="fc-card pa-4" Elevation="0">
+            <div class="d-flex align-center mb-4">
+                <MudText Typo="Typo.subtitle2" Class="fc-section-label">OPTIMIZED LINEUP</MudText>
+                <MudSpacer />
+                @if (_result is not null)
+                {
+                    <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="fc-stat">
+                        @_result.TotalProjectedPoints.ToString("F1") pts projected
+                    </MudChip>
+                    @if (_result.RiskProfile is not null)
+                    {
+                        <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Class="ml-2">
+                            @_result.RiskProfile
+                        </MudChip>
+                    }
+                }
+            </div>
+
+            @if (_optimizerError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">@_optimizerError</MudAlert>
+            }
+
+            @if (_result is null && _optimizerError is null)
+            {
+                @* Empty state *@
+                <div class="fc-empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.AutoAwesome"
+                             Style="font-size:3rem; color: var(--fc-cyan); opacity:0.3;" />
+                    <MudText Typo="Typo.body1" Class="mud-text-secondary mt-2">
+                        Load your player pool, set your risk profile, and click Optimize.
+                    </MudText>
+                </div>
+            }
+            else if (_result is not null)
+            {
+                @* Lineup slots grouped by position *@
+                @foreach (var slotType in new[] { "QB", "RB", "WR", "TE", "FLEX" })
+                {
+                    var slots = _result.Lineup
+                        .Where(s => s.SlotType == slotType)
+                        .ToList();
+
+                    if (!slots.Any()) continue;
+
+                    <div class="fc-slot-group mb-3">
+                        <MudText Typo="Typo.overline" Class="fc-slot-label">@slotType</MudText>
+                        @foreach (var slot in slots)
+                        {
+                            <div class="fc-lineup-slot">
+                                <div class="fc-slot-pos-badge @PositionClass(slot.Position)">
+                                    @slot.Position
+                                </div>
+                                <div class="fc-slot-info">
+                                    <MudText Typo="Typo.body1" Style="font-weight:700;">
+                                        @slot.PlayerName
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @slot.Position
+                                    </MudText>
+                                </div>
+                                <div class="fc-slot-pts">
+                                    <MudText Typo="Typo.h6" Class="fc-stat fc-cyan">
+                                        @slot.ProjectedPoints.ToString("F1")
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">proj</MudText>
+                                </div>
+                                @if (slot.RiskScore.HasValue)
+                                {
+                                    <div class="fc-slot-risk">
+                                        <MudText Typo="Typo.body2" Class="fc-stat fc-ceiling">
+                                            @slot.RiskScore.Value.ToString("F1")
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">risk</MudText>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @* Total bar *@
+                <MudDivider Class="my-3" />
+                <div class="d-flex justify-space-between align-center">
+                    <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">
+                        TOTAL PROJECTED
+                    </MudText>
+                    <MudText Typo="Typo.h5" Class="fc-stat fc-cyan">
+                        @_result.TotalProjectedPoints.ToString("F1")
+                    </MudText>
+                </div>
+            }
+        </MudPaper>
+    </MudItem>
+
+</MudGrid>
+
+@code {
+    // ── State ────────────────────────────────────────────────
+    private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+    private int _week;
+    private string _mode = "Median";
+    private string _riskProfile = "";
+    private string _poolSearch = "";
+    private string _poolPosition = "ALL";
+
+    private bool _poolLoading;
+    private bool _optimizing;
+    private string? _optimizerError;
+
+    private List<PoolPlayer> _pool = [];
+    private OptimizerResult? _result;
+
+    private IEnumerable<PoolPlayer> FilteredPool => _pool
+        .Where(p => _poolPosition == "ALL" || p.Position == _poolPosition)
+        .Where(p => string.IsNullOrEmpty(_poolSearch) ||
+                    p.PlayerName.Contains(_poolSearch, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(p => p.Median);
+
+    // ── Lifecycle ────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        _week = GetCurrentNflWeek();
+        await LoadPool();
+    }
+
+    // ── Pool Loading ─────────────────────────────────────────
+    private async Task LoadPool()
+    {
+        _poolLoading = true;
+        _pool = [];
+        StateHasChanged();
+
+        try
+        {
+            var sims = await Http.GetFromJsonAsync<List<PoolPlayer>>(
+                $"api/v1/projections/simulations?season={_season}&week={_week}");
+
+            _pool = sims ?? [];
+
+            if (_pool.Count == 0)
+                Snackbar.Add($"No simulation data for {_season} Week {_week}. Run simulate first.", Severity.Warning);
+            else
+                Snackbar.Add($"Loaded {_pool.Count} players.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load pool: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _poolLoading = false;
+        }
+    }
+
+    // ── Player State Cycling ─────────────────────────────────
+    // Click cycles: Normal → Locked → Excluded → Normal
+    private void CyclePlayerState(PoolPlayer p)
+    {
+        p.State = p.State switch
+        {
+            PlayerState.Normal => PlayerState.Locked,
+            PlayerState.Locked => PlayerState.Excluded,
+            PlayerState.Excluded => PlayerState.Normal,
+            _ => PlayerState.Normal
+        };
+    }
+
+    private void ClearLocks()
+    {
+        foreach (var p in _pool)
+            p.State = PlayerState.Normal;
+    }
+
+    // ── Optimizer ────────────────────────────────────────────
+    private async Task RunOptimizer()
+    {
+        _optimizing = true;
+        _optimizerError = null;
+        _result = null;
+        StateHasChanged();
+
+        try
+        {
+            var lockedIds = _pool.Where(p => p.State == PlayerState.Locked)
+                                   .Select(p => p.PlayerId).ToList();
+            var excludedIds = _pool.Where(p => p.State == PlayerState.Excluded)
+                                   .Select(p => p.PlayerId).ToList();
+
+            var riskParam = string.IsNullOrEmpty(_riskProfile) ? "" : $"&riskProfile={_riskProfile}";
+            var url = $"api/v1/projections/optimize?season={_season}&week={_week}&mode={_mode}{riskParam}";
+
+            var body = new { LockedPlayerIds = lockedIds, ExcludedPlayerIds = excludedIds };
+            var response = await Http.PostAsJsonAsync(url, body);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _optimizerError = $"Optimizer error: {err}";
+                return;
+            }
+
+            _result = await response.Content.ReadFromJsonAsync<OptimizerResult>();
+
+            if (_result is not null)
+                Snackbar.Add($"Lineup optimized — {_result.TotalProjectedPoints:F1} pts projected.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _optimizerError = $"Failed to run optimizer: {ex.Message}";
+        }
+        finally
+        {
+            _optimizing = false;
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────
+    private static int GetCurrentNflWeek()
+    {
+        var now = DateTime.UtcNow;
+        var season = now.Month >= 3 ? now.Year : now.Year - 1;
+        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+        var seasonStart = sept1.AddDays(daysUntilThursday);
+        if (now < seasonStart) return 18;
+        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
+        return Math.Clamp(week, 1, 18);
+    }
+
+    private static string PositionClass(string pos) => pos switch
+    {
+        "QB" => "fc-chip-qb",
+        "RB" => "fc-chip-rb",
+        "WR" => "fc-chip-wr",
+        "TE" => "fc-chip-te",
+        _ => ""
+    };
+
+    private static string PoolRowClass(PoolPlayer p) => p.State switch
+    {
+        PlayerState.Locked => "fc-pool-row--locked",
+        PlayerState.Excluded => "fc-pool-row--excluded",
+        _ => ""
+    };
+
+    private static string PoolBadge(PoolPlayer p) => p.State switch
+    {
+        PlayerState.Locked => "🔒",
+        PlayerState.Excluded => "❌",
+        _ => ""
+    };
+
+    // ── DTOs ─────────────────────────────────────────────────
+    private enum PlayerState { Normal, Locked, Excluded }
+
+    private class PoolPlayer
+    {
+        public string PlayerId { get; set; } = "";
+        public string PlayerName { get; set; } = "";
+        public string Position { get; set; } = "";
+        public string NflTeam { get; set; } = "";
+        public decimal Median { get; set; }
+        public decimal Floor { get; set; }
+        public decimal Ceiling { get; set; }
+        public decimal BoomProbability { get; set; }
+        public decimal BustProbability { get; set; }
+        public PlayerState State { get; set; } = PlayerState.Normal;
+    }
+
+    private record OptimizerResult(
+        bool Success,
+        List<OptimizedSlot> Lineup,
+        decimal TotalProjectedPoints,
+        string Mode,
+        string? RiskProfile);
+
+    private record OptimizedSlot(
+        string PlayerId,
+        string PlayerName,
+        string Position,
+        string SlotType,
+        decimal ProjectedPoints,
+        decimal? RiskScore);
+}
