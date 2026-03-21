@@ -1,6 +1,7 @@
 ﻿// FF.Application/Features/Lineups/Commands/OptimizeLineup/OptimizeLineupCommandHandler.cs
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Services.LineupOptimizer;
+using FF.Domain.Documents;
 using FF.Domain.ValueObjects;
 using FF.SharedKernel.Common;
 using MediatR;
@@ -18,10 +19,9 @@ public class OptimizeLineupCommandHandler(
         CancellationToken cancellationToken)
     {
         logger.LogInformation(
-            "Optimizing lineup for Season {Season} Week {Week} Mode {Mode}",
-            request.Season, request.Week, request.Mode);
+            "Optimizing lineup Season {Season} Week {Week} Mode {Mode} RiskProfile {RiskProfile}",
+            request.Season, request.Week, request.Mode, request.RiskProfile?.ToString() ?? "None");
 
-        // Load simulation results — floor/median/ceiling per player
         var simResults = await simulationRepository.GetByWeekAsync(
             request.Season, request.Week, cancellationToken);
 
@@ -39,7 +39,6 @@ public class OptimizeLineupCommandHandler(
         var lockedIds = request.LockedPlayerIds ?? [];
         var excludedIds = request.ExcludedPlayerIds ?? [];
 
-        // Map simulation results to optimizer input slots
         var players = simResults
             .Select(s => new PlayerSlot
             {
@@ -50,6 +49,9 @@ public class OptimizeLineupCommandHandler(
                 ProjectedMedian = s.Median,
                 ProjectedFloor = s.Floor,
                 ProjectedCeiling = s.Ceiling,
+                BoomProbability = s.BoomProbability,
+                BustProbability = s.BustProbability,
+                // OwnershipPct not yet sourced — remains null until DIFF-009
                 IsLocked = lockedIds.Contains(s.PlayerId),
                 IsExcluded = excludedIds.Contains(s.PlayerId)
             })
@@ -60,6 +62,7 @@ public class OptimizeLineupCommandHandler(
             AvailablePlayers = players,
             RosterConfig = RosterConfiguration.Standard,
             Mode = request.Mode,
+            RiskProfile = request.RiskProfile,
             LockedPlayerIds = lockedIds,
             ExcludedPlayerIds = excludedIds
         };
@@ -74,8 +77,9 @@ public class OptimizeLineupCommandHandler(
         }
 
         logger.LogInformation(
-            "Lineup optimized — {Count} players, {Points} projected points, mode: {Mode}",
-            result.Lineup.Count, result.TotalProjectedPoints, result.Mode);
+            "Lineup optimized — {Count} players, {Points} pts, Mode: {Mode}, RiskProfile: {Profile}",
+            result.Lineup.Count, result.TotalProjectedPoints,
+            result.Mode, result.RiskProfile?.ToString() ?? "None");
 
         return Result.Success(result);
     }

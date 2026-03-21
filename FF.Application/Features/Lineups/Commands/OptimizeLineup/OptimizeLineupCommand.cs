@@ -1,5 +1,6 @@
 ﻿// FF.Application/Features/Lineups/Commands/OptimizeLineup/OptimizeLineupCommand.cs
 using FF.Application.Services.LineupOptimizer;
+using FF.Domain.Enums;
 using FF.SharedKernel.Common;
 using MediatR;
 
@@ -9,6 +10,7 @@ public record OptimizeLineupCommand(
     int Season,
     int Week,
     OptimizationMode Mode = OptimizationMode.Median,
+    RiskProfile? RiskProfile = null,
     IReadOnlyList<string>? LockedPlayerIds = null,
     IReadOnlyList<string>? ExcludedPlayerIds = null)
     : IRequest<Result<LineupOptimizerResult>>;
