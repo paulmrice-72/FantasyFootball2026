@@ -1,0 +1,261 @@
+/* ── FantasyCombine.AI Design Tokens ──────────────────── */
+:root {
+    --fc-navy: #0A0F1E;
+    --fc-surface: #111827;
+    --fc-drawer: #0D1424;
+    --fc-cyan: #00C8F0;
+    --fc-text: #E8EAF0;
+    --fc-muted: #6B7280;
+    --fc-border: #1F2937;
+    --fc-sidebar-w: 220px;
+}
+
+/* ── App Bar ───────────────────────────────────────────── */
+.fc-appbar {
+    border-bottom: 1px solid var(--fc-border) !important;
+}
+
+/* ── Logo ──────────────────────────────────────────────── */
+.fc-logo {
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--fc-text);
+}
+
+.fc-logo-accent {
+    color: var(--fc-cyan);
+}
+
+/* ── Drawer ────────────────────────────────────────────── */
+.fc-drawer {
+    border-right: 1px solid var(--fc-border) !important;
+    background-color: var(--fc-drawer) !important;
+}
+
+.fc-drawer-header {
+    padding: 16px 16px 8px 16px;
+    border-bottom: 1px solid var(--fc-border);
+}
+
+.fc-drawer-label {
+    color: var(--fc-muted);
+    font-size: 0.65rem;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+}
+
+/* ── Nav Menu ──────────────────────────────────────────── */
+.fc-navmenu .mud-nav-link {
+    border-radius: 6px;
+    margin: 2px 8px;
+    font-size: 0.875rem;
+    color: var(--fc-text) !important;
+    transition: background 0.15s ease;
+}
+
+    .fc-navmenu .mud-nav-link:hover {
+        background: rgba(0, 200, 240, 0.08) !important;
+    }
+
+    .fc-navmenu .mud-nav-link.active {
+        background: rgba(0, 200, 240, 0.15) !important;
+        color: var(--fc-cyan) !important;
+        font-weight: 600;
+    }
+
+/* ── Main Content ──────────────────────────────────────── */
+.fc-main-content {
+    background-color: var(--fc-navy);
+    min-height: 100vh;
+}
+
+/* ── Bottom Nav (xs only) ──────────────────────────────── */
+.fc-bottom-nav {
+    background-color: var(--fc-surface) !important;
+    border-top: 1px solid var(--fc-border) !important;
+}
+
+    .fc-bottom-nav .mud-bottom-navigation-item-label {
+        font-size: 0.65rem;
+    }
+
+/* ── Mobile padding — clear bottom nav ────────────────── */
+@media (max-width: 599px) {
+    .pb-16 {
+        padding-bottom: 64px !important;
+    }
+}
+
+/* ── Numbers use JetBrains Mono ────────────────────────── */
+.font-mono,
+td.numeric,
+.fc-stat {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+/* ── Page Header ───────────────────────────────────────── */
+.fc-page-header {
+    border-bottom: 1px solid var(--fc-border);
+    padding-bottom: 12px;
+}
+
+.fc-page-title {
+    color: var(--fc-text);
+    font-weight: 700;
+}
+
+/* ── Controls Bar ──────────────────────────────────────── */
+.fc-controls-bar {
+    background: var(--fc-surface) !important;
+    border: 1px solid var(--fc-border) !important;
+    border-radius: 8px !important;
+}
+
+/* ── Tabs ──────────────────────────────────────────────── */
+.fc-tabs .mud-tab {
+    color: var(--fc-muted);
+    font-weight: 500;
+}
+
+    .fc-tabs .mud-tab.mud-tab-active {
+        color: var(--fc-cyan) !important;
+    }
+
+/* ── Table ─────────────────────────────────────────────── */
+.fc-table-paper {
+    background: var(--fc-surface) !important;
+    border: 1px solid var(--fc-border) !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+}
+
+.fc-table {
+    background: transparent !important;
+}
+
+    .fc-table thead tr th {
+        background: var(--fc-drawer) !important;
+        color: var(--fc-muted) !important;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+    }
+
+    .fc-table tbody tr:hover {
+        background: rgba(0,200,240,0.05) !important;
+    }
+
+/* ── Stat colours ──────────────────────────────────────── */
+.fc-cyan {
+    color: #00C8F0 !important;
+}
+
+.fc-ceiling {
+    color: #A78BFA !important;
+}
+
+.fc-boom {
+    color: #34D399 !important;
+}
+
+.fc-bust {
+    color: #F87171 !important;
+}
+
+.fc-favoured {
+    color: #34D399 !important;
+}
+
+.fc-dog {
+    color: #F87171 !important;
+}
+
+/* ── Position Chips ────────────────────────────────────── */
+.fc-chip-qb {
+    background: rgba(59,130,246,0.2) !important;
+    color: #93C5FD !important;
+}
+
+.fc-chip-rb {
+    background: rgba(52,211,153,0.2) !important;
+    color: #6EE7B7 !important;
+}
+
+.fc-chip-wr {
+    background: rgba(167,139,250,0.2) !important;
+    color: #C4B5FD !important;
+}
+
+.fc-chip-te {
+    background: rgba(251,191,36,0.2) !important;
+    color: #FDE68A !important;
+}
+
+/* ── Game Script Chips ─────────────────────────────────── */
+.fc-chip-blowout {
+    background: rgba(52,211,153,0.15) !important;
+    color: #6EE7B7 !important;
+}
+
+.fc-chip-trailing {
+    background: rgba(248,113,113,0.15) !important;
+    color: #FCA5A5 !important;
+}
+
+.fc-chip-competitive {
+    background: rgba(0,200,240,0.12) !important;
+    color: #67E8F9 !important;
+}
+
+.fc-chip-neutral {
+    background: rgba(107,114,128,0.2) !important;
+    color: #9CA3AF !important;
+}
+
+/* ── Stat Card (Home) ──────────────────────────────────── */
+.fc-stat-card {
+    background: var(--fc-surface) !important;
+    border: 1px solid var(--fc-border) !important;
+    border-radius: 12px !important;
+    padding: 24px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.fc-stat-card-icon {
+    color: var(--fc-cyan);
+    opacity: 0.6;
+    font-size: 1.4rem;
+}
+
+.fc-stat-card-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* ── Quick Link Cards (Home) ───────────────────────────── */
+.fc-quick-link {
+    background: var(--fc-surface) !important;
+    border: 1px solid var(--fc-border) !important;
+    border-radius: 12px !important;
+    padding: 20px !important;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+    .fc-quick-link:hover {
+        border-color: var(--fc-cyan) !important;
+        background: rgba(0,200,240,0.05) !important;
+    }
+
+.fc-quick-link-icon {
+    color: var(--fc-cyan);
+    font-size: 1.8rem;
+    flex-shrink: 0;
+}

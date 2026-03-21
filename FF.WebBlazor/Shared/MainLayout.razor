@@ -1,48 +1,153 @@
-﻿@inject AuthenticationStateProvider AuthStateProvider
+﻿@using Microsoft.JSInterop
+@inject AuthenticationStateProvider AuthStateProvider
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 @inherits LayoutComponentBase
-<PageTitle>FantasyCombine.AI</PageTitle>
-<MudThemeProvider />
+@inject IJSRuntime JS
+
+<MudThemeProvider Theme="_theme" />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu"
-                       Color="Color.Inherit"
-                       Edge="Edge.Start"
-                       OnClick="@ToggleDrawer" />
-        <MudText Typo="Typo.h6" Class="ml-3">FantasyCombine.AI</MudText>
+
+    <MudAppBar Elevation="0" Dense="true" Class="fc-appbar">
+        <MudHidden Breakpoint="Breakpoint.MdAndUp">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                           Color="Color.Inherit"
+                           Edge="Edge.Start"
+                           OnClick="@ToggleDrawer" />
+        </MudHidden>
+
+        <MudText Typo="Typo.h6" Class="fc-logo ml-2">
+            FantasyCombine<span class="fc-logo-accent">.AI</span>
+        </MudText>
+
         <MudSpacer />
+
         <AuthorizeView>
             <Authorized>
-                <MudText Class="mr-3">@context.User.FindFirst("firstName")?.Value</MudText>
+                <MudText Typo="Typo.body2" Class="mr-2 mud-text-secondary d-none d-sm-flex">
+                    @context.User.FindFirst("firstName")?.Value
+                </MudText>
                 <MudIconButton Icon="@Icons.Material.Filled.Logout"
                                Color="Color.Inherit"
+                               title="Sign out"
                                OnClick="HandleLogout" />
             </Authorized>
         </AuthorizeView>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="2">
-        <MudDrawerHeader>
-            <MudText Typo="Typo.h6">Navigation</MudText>
+    <MudDrawer @bind-Open="_drawerOpen"
+               Variant="@_drawerVariant"
+               Elevation="0"
+               ClipMode="DrawerClipMode.Always"
+               Class="fc-drawer"
+               Width="220px">
+        <MudDrawerHeader Class="fc-drawer-header">
+            <MudText Typo="Typo.caption" Class="fc-drawer-label">NAVIGATION</MudText>
         </MudDrawerHeader>
-        <NavMenu />
+        <NavMenu OnNavItemClicked="CloseDrawerOnMobile" />
     </MudDrawer>
 
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudMainContent Class="fc-main-content">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-4 pb-16 pb-md-4">
             @Body
         </MudContainer>
     </MudMainContent>
+
+    <MudHidden Breakpoint="Breakpoint.SmAndUp">
+        <div class="fc-bottom-nav">
+            <MudIconButton Icon="@Icons.Material.Filled.Home"
+                           Color="Color.Inherit"
+                           title="Home"
+                           OnClick='@(() => Navigate(""))' />
+            <MudIconButton Icon="@Icons.Material.Filled.Analytics"
+                           Color="Color.Inherit"
+                           title="Projections"
+                           OnClick='@(() => Navigate("projections"))' />
+            <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome"
+                           Color="Color.Inherit"
+                           title="Optimizer"
+                           OnClick='@(() => Navigate("optimizer"))' />
+            <MudIconButton Icon="@Icons.Material.Filled.SportsSoccer"
+                           Color="Color.Inherit"
+                           title="DFS"
+                           OnClick='@(() => Navigate("dfs"))' />
+            <MudIconButton Icon="@Icons.Material.Filled.MoreHoriz"
+                           Color="Color.Inherit"
+                           title="More"
+                           OnClick="ToggleDrawer" />
+        </div>
+    </MudHidden>
+
 </MudLayout>
 
 @code {
     private bool _drawerOpen = true;
 
+    // md+ = permanent responsive drawer; below md = temporary overlay
+    private DrawerVariant _drawerVariant = DrawerVariant.Responsive;
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Background        = "#0A0F1E",
+            Surface           = "#111827",
+            DrawerBackground  = "#0D1424",
+            AppbarBackground  = "#0A0F1E",
+            Primary           = "#00C8F0",
+            PrimaryContrastText = "#0A0F1E",
+            TextPrimary       = "#E8EAF0",
+            TextSecondary     = "#6B7280",
+            ActionDefault     = "#00C8F0",
+            Divider           = "#1F2937",
+            OverlayDark       = "rgba(0,0,0,0.7)"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Background        = "#0A0F1E",
+            Surface           = "#111827",
+            DrawerBackground  = "#0D1424",
+            AppbarBackground  = "#0A0F1E",
+            Primary           = "#00C8F0",
+            PrimaryContrastText = "#0A0F1E",
+            TextPrimary       = "#E8EAF0",
+            TextSecondary     = "#6B7280",
+            ActionDefault     = "#00C8F0",
+            Divider           = "#1F2937",
+            OverlayDark       = "rgba(0,0,0,0.7)"
+        },
+        Typography = new Typography
+        {
+            Default = new Default { FontFamily = ["Inter", "Segoe UI", "sans-serif"] },
+            H6      = new H6      { FontFamily = ["Inter", "Segoe UI", "sans-serif"], FontWeight = 600 }
+        }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var width = await JS.InvokeAsync<int>("eval", "window.innerWidth");
+            _drawerOpen = width >= 960; // md breakpoint
+            StateHasChanged();
+        }
+    }
+
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private void CloseDrawerOnMobile()
+    {
+        // Only auto-close on xs/sm — on md+ the drawer is permanent
+        _drawerOpen = false;
+    }
+
+    private void Navigate(string path)
+    {
+        Navigation.NavigateTo("/" + path);
+    }
 
     private async Task HandleLogout()
     {
