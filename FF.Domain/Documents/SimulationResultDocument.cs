@@ -37,4 +37,7 @@ public class SimulationResultDocument
 
     public string ScoringFormat { get; set; } = "HalfPpr";
     public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
+    // Vegas context — stamped from VegasLineDocument at simulation time
+    public decimal Spread { get; set; } = 0m;
+    public string GameScript { get; set; } = "Unknown";
 }
