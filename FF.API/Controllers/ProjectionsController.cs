@@ -6,6 +6,7 @@ using FF.Application.Features.Projections.Queries.GetWeightProfile;
 using FF.Application.Features.Simulations.Commands.RunSimulations;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Services.LineupOptimizer;
+using FF.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -90,11 +91,12 @@ namespace FF.API.Controllers
 
         [HttpPost("optimize")]
         public async Task<IActionResult> Optimize(
-    [FromQuery] int season,
-    [FromQuery] int week,
-    [FromQuery] OptimizationMode mode = OptimizationMode.Median,
-    [FromBody] OptimizeLineupRequest? request = null,
-    CancellationToken ct = default)
+           [FromQuery] int season,
+           [FromQuery] int week,
+           [FromQuery] OptimizationMode mode = OptimizationMode.Median,
+           [FromQuery] RiskProfile? riskProfile = null,
+           [FromBody] OptimizeLineupRequest? request = null,
+           CancellationToken ct = default)
         {
             if (season == 0 || week == 0)
                 return BadRequest("season and week are required.");
@@ -103,6 +105,7 @@ namespace FF.API.Controllers
                 season,
                 week,
                 mode,
+                riskProfile,
                 request?.LockedPlayerIds,
                 request?.ExcludedPlayerIds), ct);
 

@@ -1,4 +1,5 @@
 ﻿// FF.Application/Services/LineupOptimizer/LineupOptimizerService.cs
+using FF.Domain.Enums;
 using Google.OrTools.Sat;
 
 namespace FF.Application.Services.LineupOptimizer;
@@ -30,49 +31,34 @@ public static class LineupOptimizerService
         var model = new CpModel();
         var solver = new CpSolver();
 
-        // One binary variable per player — selected or not
         var x = players.Select(_ => model.NewBoolVar("x")).ToArray();
 
-        // Objective — maximise scaled integer scores
         var scaledScores = players
-            .Select(p => (long)(GetScore(p, input.Mode) * ScaleFactor))
+            .Select(p => (long)(GetEffectiveScore(p, input.Mode, input.RiskProfile) * ScaleFactor))
             .ToArray();
         model.Maximize(LinearExpr.WeightedSum(x, scaledScores));
 
-        // Positional index groups
         var qbIdx = players.Select((p, i) => new { p, i }).Where(z => z.p.Position == "QB").Select(z => z.i).ToList();
         var rbIdx = players.Select((p, i) => new { p, i }).Where(z => z.p.Position == "RB").Select(z => z.i).ToList();
         var wrIdx = players.Select((p, i) => new { p, i }).Where(z => z.p.Position == "WR").Select(z => z.i).ToList();
         var teIdx = players.Select((p, i) => new { p, i }).Where(z => z.p.Position == "TE").Select(z => z.i).ToList();
-        var flexIdx = rbIdx.Concat(wrIdx).Concat(teIdx).ToList();
 
-        // Exact QB count
-        model.Add(LinearExpr.Sum(qbIdx.Select(i => x[i]).ToArray()) == config.QbSlots);
-
-        // Positional minimums
-        model.Add(LinearExpr.Sum(rbIdx.Select(i => x[i]).ToArray()) >= config.RbSlots);
-        model.Add(LinearExpr.Sum(wrIdx.Select(i => x[i]).ToArray()) >= config.WrSlots);
-        model.Add(LinearExpr.Sum(teIdx.Select(i => x[i]).ToArray()) >= config.TeSlots);
-
-        // Total starters
+        model.Add(LinearExpr.Sum([.. qbIdx.Select(i => x[i])]) == config.QbSlots);
+        model.Add(LinearExpr.Sum([.. rbIdx.Select(i => x[i])]) >= config.RbSlots);
+        model.Add(LinearExpr.Sum([.. wrIdx.Select(i => x[i])]) >= config.WrSlots);
+        model.Add(LinearExpr.Sum([.. teIdx.Select(i => x[i])]) >= config.TeSlots);
         model.Add(LinearExpr.Sum(x) == config.TotalStarters);
 
-        // FLEX count = total selected - QB slots - RB slots - WR slots - TE slots
-        // This is implicitly enforced by TotalStarters constraint above
-
-        // Locked players
         foreach (var i in Enumerable.Range(0, players.Count))
             if (input.LockedPlayerIds.Contains(players[i].PlayerId))
                 model.Add(x[i] == 1);
 
-        // Solve
         solver.StringParameters = "max_time_in_seconds:10.0";
         var status = solver.Solve(model);
 
         if (status is not (CpSolverStatus.Optimal or CpSolverStatus.Feasible))
             return LineupOptimizerResult.Failed($"Solver returned status: {status}");
 
-        // Build result — assign slots post-solve by filling minimums first
         var selected = Enumerable.Range(0, players.Count)
             .Where(i => solver.BooleanValue(x[i]))
             .Select(i => players[i])
@@ -83,10 +69,7 @@ public static class LineupOptimizerService
         var wrFilled = 0;
         var teFilled = 0;
 
-        // First pass: fill positional slots up to minimums, sorted by score desc
-        var remaining = new List<(string position, string id, string name, string team, decimal pts)>();
-
-        foreach (var p in selected.OrderByDescending(p => GetScore(p, input.Mode)))
+        foreach (var p in selected.OrderByDescending(p => GetEffectiveScore(p, input.Mode, input.RiskProfile)))
         {
             string slotType;
 
@@ -120,7 +103,10 @@ public static class LineupOptimizerService
                 PlayerName = p.PlayerName,
                 Position = p.Position,
                 SlotType = slotType,
-                ProjectedPoints = GetScore(p, input.Mode)
+                ProjectedPoints = GetEffectiveScore(p, input.Mode, input.RiskProfile),
+                RiskScore = input.RiskProfile.HasValue
+                    ? GetRiskScore(p, input.RiskProfile.Value)
+                    : null
             });
         }
 
@@ -129,14 +115,63 @@ public static class LineupOptimizerService
             Success = true,
             Lineup = lineup,
             TotalProjectedPoints = Math.Round(lineup.Sum(s => s.ProjectedPoints), 2),
-            Mode = input.Mode
+            Mode = input.Mode,
+            RiskProfile = input.RiskProfile
         };
     }
-    private static decimal GetScore(PlayerSlot player, OptimizationMode mode) =>
+
+    /// <summary>
+    /// Dispatches to risk scoring when a RiskProfile is set, otherwise falls back
+    /// to the legacy OptimizationMode score. RiskProfile always wins when present.
+    /// </summary>
+    private static decimal GetEffectiveScore(
+        PlayerSlot player,
+        OptimizationMode mode,
+        RiskProfile? riskProfile) =>
+        riskProfile.HasValue
+            ? GetRiskScore(player, riskProfile.Value)
+            : GetModeScore(player, mode);
+
+    /// <summary>Legacy OptimizationMode scoring — unchanged from PBI-027.</summary>
+    private static decimal GetModeScore(PlayerSlot player, OptimizationMode mode) =>
         mode switch
         {
             OptimizationMode.Floor => player.ProjectedFloor,
             OptimizationMode.Ceiling => player.ProjectedCeiling,
+            _ => player.ProjectedMedian
+        };
+
+    /// <summary>
+    /// Risk-adjusted scoring.
+    ///
+    /// Safe:        Floor  − (BustProbability × 10)
+    ///              Rewards consistent, high-floor players. Penalises bust risk.
+    ///
+    /// Ceiling:     Ceiling + (BoomProbability × 10)
+    ///              Rewards explosive upside. Accepts bust risk.
+    ///
+    /// Contrarian:  Ceiling + (BoomProbability × 8) − (OwnershipPct × 0.5)
+    ///              Seeks high-upside, low-ownership differentials.
+    ///
+    /// BoomProbability and BustProbability are 0-1 fractions from Monte Carlo output.
+    /// Multipliers (×10, ×8) are tunable — they express ~1 fantasy point per 10% probability.
+    /// </summary>
+    private static decimal GetRiskScore(PlayerSlot player, RiskProfile profile) =>
+        profile switch
+        {
+            RiskProfile.Safe =>
+                player.ProjectedFloor
+                - (player.BustProbability ?? 0m) * 10m,
+
+            RiskProfile.Ceiling =>
+                player.ProjectedCeiling
+                + (player.BoomProbability ?? 0m) * 10m,
+
+            RiskProfile.Contrarian =>
+                player.ProjectedCeiling
+                + (player.BoomProbability ?? 0m) * 8m
+                - (player.OwnershipPct ?? 0m) * 0.5m,
+
             _ => player.ProjectedMedian
         };
 }
