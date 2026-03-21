@@ -1,0 +1,346 @@
+﻿@page "/projections"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Projections — FantasyCombine.AI</PageTitle>
+
+@* ── HEADER ─────────────────────────────────────────────── *@
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="mr-2" Style="vertical-align:middle;" />
+        Weekly Projections
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Season @_season · Week @_week · @_scoringFormat
+    </MudText>
+</div>
+
+@* ── CONTROLS ────────────────────────────────────────────── *@
+<MudPaper Class="fc-controls-bar mb-4 pa-3" Elevation="0">
+    <MudGrid Spacing="2">
+        <MudItem xs="6" sm="3" md="2">
+            <MudNumericField @bind-Value="_season"
+                             Label="Season"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="2022" Max="2030" />
+        </MudItem>
+        <MudItem xs="6" sm="3" md="2">
+            <MudNumericField @bind-Value="_week"
+                             Label="Week"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="1" Max="18" />
+        </MudItem>
+        <MudItem xs="12" sm="4" md="3">
+            <MudSelect T="string"
+                       @bind-Value="_scoringFormat"
+                       Label="Scoring"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("HalfPpr")">Half PPR</MudSelectItem>
+                <MudSelectItem Value="@("Ppr")">Full PPR</MudSelectItem>
+                <MudSelectItem Value="@("Standard")">Standard</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="2" md="2" Class="d-flex align-end">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       FullWidth="true"
+                       Disabled="_loading"
+                       OnClick="LoadProjections"
+                       Style="height:56px;">
+                Load
+            </MudButton>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="3" Class="d-flex justify-end">
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Search player..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          DebounceInterval="200" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@* ── POSITION TABS ───────────────────────────────────────── *@
+<MudTabs @bind-ActivePanelIndex="_activeTab"
+         Rounded="true"
+         Border="true"
+         Class="mb-4 fc-tabs"
+         PanelClass="pa-0">
+    <MudTabPanel Text="All" />
+    <MudTabPanel Text="QB" />
+    <MudTabPanel Text="RB" />
+    <MudTabPanel Text="WR" />
+    <MudTabPanel Text="TE" />
+</MudTabs>
+
+@* ── DATA GRID ───────────────────────────────────────────── *@
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+}
+
+@if (!_loading && _filtered.Count == 0 && _error is null)
+{
+    <MudAlert Severity="Severity.Info">
+        No projections found for Season @_season Week @_week.
+        Run <strong>POST /api/v1/projections/calculate</strong> then
+        <strong>POST /api/v1/projections/simulate</strong> first.
+    </MudAlert>
+}
+else if (_filtered.Count > 0)
+{
+    <MudPaper Elevation="0" Class="fc-table-paper">
+        <MudTable Items="@_filtered"
+                  Dense="true"
+                  Hover="true"
+                  Striped="false"
+                  FixedHeader="true"
+                  Height="calc(100vh - 340px)"
+                  SortLabel="Sort"
+                  Class="fc-table">
+            <HeaderContent>
+                <MudTh><MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.PlayerName)">Player</MudTableSortLabel></MudTh>
+                <MudTh>Pos</MudTh>
+                <MudTh>Team</MudTh>
+                <MudTh>Opp</MudTh>
+                <MudTh>Script</MudTh>
+                <MudTh><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<SimRow, object>(x => x.Median)">Median</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.Floor)">Floor</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.Ceiling)">Ceiling</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.BoomPct)">Boom%</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.BustPct)">Bust%</MudTableSortLabel></MudTh>
+                <MudTh>Role</MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.Spread)">Spread</MudTableSortLabel></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Player">
+                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
+                </MudTd>
+                <MudTd DataLabel="Pos">
+                    <MudChip T="string" Size="Size.Small" Class="@PositionClass(context.Position)">
+                        @context.Position
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Team">
+                    <MudText Typo="Typo.body2" Class="fc-stat">@context.NflTeam</MudText>
+                </MudTd>
+                <MudTd DataLabel="Opp">
+                    <MudText Typo="Typo.body2" Class="fc-stat mud-text-secondary">@context.OpponentTeam</MudText>
+                </MudTd>
+                <MudTd DataLabel="Script">
+                    <MudChip T="string" Size="Size.Small" Class="@ScriptClass(context.GameScript)">
+                        @ScriptLabel(context.GameScript)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Median">
+                    <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">@context.Median.ToString("F1")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Floor">
+                    <MudText Typo="Typo.body2" Class="fc-stat">@context.Floor.ToString("F1")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Ceiling">
+                    <MudText Typo="Typo.body2" Class="fc-stat fc-ceiling">@context.Ceiling.ToString("F1")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Boom%">
+                    @{
+                        var boom = context.BoomPct * 100;
+                    }
+                    <MudText Typo="Typo.body2" Class="@(boom >= 30 ? "fc-stat fc-boom" : "fc-stat")">
+                        @boom.ToString("F0")%
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Bust%">
+                    @{
+                        var bust = context.BustPct * 100;
+                    }
+                    <MudText Typo="Typo.body2" Class="@(bust >= 30 ? "fc-stat fc-bust" : "fc-stat")">
+                        @bust.ToString("F0")%
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Role">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@FormatRole(context.PlayerRole)</MudText>
+                </MudTd>
+                <MudTd DataLabel="Spread">
+                    <MudText Typo="Typo.body2" Class="@(context.Spread > 0 ? "fc-stat fc-favoured" : context.Spread < 0 ? "fc-stat fc-dog" : "fc-stat mud-text-secondary")">
+                        @(context.Spread == 0 ? "—" : context.Spread > 0 ? $"+{context.Spread:F1}" : $"{context.Spread:F1}")
+                    </MudText>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 25, 50, 100 }" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    // ── State ────────────────────────────────────────────────
+    private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+    private int _week = 1;
+    private string _scoringFormat = "HalfPpr";
+    private string _search = string.Empty;
+    private int _activeTab = 0;
+    private bool _loading;
+    private string? _error;
+
+    private List<SimRow> _all = [];
+    private List<SimRow> _filtered = [];
+
+    private static readonly string[] Positions = ["", "QB", "RB", "WR", "TE"];
+
+    // ── Lifecycle ────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        // Default week — same logic as SimulationJob
+        _week = GetCurrentNflWeek();
+        await LoadProjections();
+    }
+
+    // ── Data Loading ─────────────────────────────────────────
+    private async Task LoadProjections()
+    {
+        _loading = true;
+        _error = null;
+        _all = [];
+        StateHasChanged();
+
+        try
+        {
+            var sims = await Http.GetFromJsonAsync<List<SimRow>>(
+                $"api/v1/projections/simulations?season={_season}&week={_week}");
+
+            _all = sims ?? [];
+
+            if (_all.Count == 0)
+                Snackbar.Add($"No simulation data for {_season} Week {_week}. Run simulate first.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load projections: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            ApplyFilters();
+        }
+    }
+
+    // ── Filtering ────────────────────────────────────────────
+    private void ApplyFilters()
+    {
+        var position = Positions[_activeTab];
+
+        _filtered = _all
+            .Where(p => string.IsNullOrEmpty(position) || p.Position == position)
+            .Where(p => string.IsNullOrEmpty(_search) ||
+                        p.PlayerName.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(p => p.Median)
+            .ToList();
+
+        StateHasChanged();
+    }
+
+    // Watch for tab and search changes
+    private int _prevTab = 0;
+    private string _prevSearch = string.Empty;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_activeTab != _prevTab || _search != _prevSearch)
+        {
+            _prevTab = _activeTab;
+            _prevSearch = _search;
+            ApplyFilters();
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────
+    private static int GetCurrentNflWeek()
+    {
+        var now = DateTime.UtcNow;
+        var season = now.Month >= 3 ? now.Year : now.Year - 1;
+        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+        var seasonStart = sept1.AddDays(daysUntilThursday);
+        if (now < seasonStart) return 18;
+        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
+        return Math.Clamp(week, 1, 18);
+    }
+
+    private static string PositionClass(string pos) => pos switch
+    {
+        "QB" => "fc-chip-qb",
+        "RB" => "fc-chip-rb",
+        "WR" => "fc-chip-wr",
+        "TE" => "fc-chip-te",
+        _ => ""
+    };
+
+    private static string ScriptClass(string script) => script switch
+    {
+        "BlowoutWin" => "fc-chip-blowout",
+        "Trailing" => "fc-chip-trailing",
+        "Competitive" => "fc-chip-competitive",
+        _ => "fc-chip-neutral"
+    };
+
+    private static string ScriptLabel(string script) => script switch
+    {
+        "BlowoutWin" => "Blowout",
+        "Trailing" => "Chase",
+        "Competitive" => "Even",
+        _ => "—"
+    };
+
+    private static string FormatRole(string role) => role switch
+    {
+        "WR1Alpha" => "WR1 Alpha",
+        "SlotPossession" => "Slot",
+        "DeepThreat" => "Deep",
+        "BellCow" => "Bell Cow",
+        "PassCatcher" => "Pass Catcher",
+        "Handcuff" => "Handcuff",
+        "SeamReceiver" => "Seam",
+        "BlockerSpot" => "Blocker",
+        "StartingQB" => "Starter",
+        "BackupQB" => "Backup",
+        _ => role
+    };
+
+    // ── DTO ──────────────────────────────────────────────────
+    private record SimRow(
+        string PlayerId,
+        string PlayerName,
+        string Position,
+        string NflTeam,
+        string OpponentTeam,
+        decimal Floor,
+        decimal Median,
+        decimal Ceiling,
+        decimal BoomProbability,
+        decimal BustProbability,
+        string PlayerRole,
+        string ScoringFormat,
+        decimal Spread,
+        string GameScript)
+    {
+        // Convenience aliases used in the table
+        public decimal BoomPct => BoomProbability;
+        public decimal BustPct => BustProbability;
+    }
+}

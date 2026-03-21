@@ -4,33 +4,62 @@
 @inject HttpClient Http
 @inject NavigationManager Nav
 
-<MudNavMenu>
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
+<MudNavMenu Class="fc-navmenu pt-2">
+
+    <MudNavLink Href=""
+                Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Filled.Home"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
         Home
     </MudNavLink>
-    <MudNavLink Href="projections" Icon="@Icons.Material.Filled.Analytics">
+
+    <MudNavLink Href="projections"
+                Icon="@Icons.Material.Filled.Analytics"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
         Projections
     </MudNavLink>
-    <MudNavLink Href="dynasty" Icon="@Icons.Material.Filled.People">
+
+    <MudNavLink Href="optimizer"
+                Icon="@Icons.Material.Filled.AutoAwesome"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
+        Optimizer
+    </MudNavLink>
+
+    <MudNavLink Href="dynasty"
+                Icon="@Icons.Material.Filled.People"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
         Dynasty
     </MudNavLink>
-    <MudNavLink Href="dfs" Icon="@Icons.Material.Filled.SportsSoccer">
+
+    <MudNavLink Href="dfs"
+                Icon="@Icons.Material.Filled.SportsSoccer"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
         DFS
     </MudNavLink>
-    <MudNavLink Href="projection-settings" Icon="@Icons.Material.Filled.Tune">
+
+    <MudNavLink Href="projection-settings"
+                Icon="@Icons.Material.Filled.Tune"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
         Projection Tuner
     </MudNavLink>
-    <MudDivider Class="my-2" />
+
+    <MudDivider Class="my-3" />
 
     @if (_leagues.Any())
     {
-        <MudText Typo="Typo.caption" Class="px-4 mud-text-secondary">LEAGUE</MudText>
+        <MudText Typo="Typo.overline" Class="px-4 mud-text-secondary">MY LEAGUE</MudText>
         <MudSelect T="string"
                    Value="_activeLeagueId"
                    ValueChanged="OnLeagueChanged"
                    Dense="true"
                    Margin="Margin.Dense"
-                   Class="px-2 mt-1"
+                   Class="px-3 mt-1"
                    Variant="Variant.Outlined">
             @foreach (var league in _leagues)
             {
@@ -41,7 +70,10 @@
 
     @if (_sleeperLinked == false && !_leagues.Any())
     {
-        <MudNavLink Href="settings/sleeper" Icon="@Icons.Material.Filled.LinkOff">
+        <MudNavLink Href="settings/sleeper"
+                    Icon="@Icons.Material.Filled.LinkOff"
+                    IconColor="Color.Warning"
+                    OnClick="NotifyNavClicked">
             Link Sleeper Account
         </MudNavLink>
     }
@@ -49,6 +81,8 @@
 </MudNavMenu>
 
 @code {
+    [Parameter] public EventCallback OnNavItemClicked { get; set; }
+
     private List<LeagueItem> _leagues = new();
     private string? _activeLeagueId;
     private bool? _sleeperLinked;
@@ -57,11 +91,12 @@
     {
         try
         {
-            var context = await Http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
+            var context = await Http.GetFromJsonAsync<UserContextResponse>(
+                "api/v1/identity/context");
             if (context is not null)
             {
                 _sleeperLinked = context.IsSleeperLinked;
-                _leagues = context.Leagues ?? new();
+                _leagues = context.Leagues ?? [];
                 _activeLeagueId = context.ActiveLeagueId;
             }
         }
@@ -74,6 +109,13 @@
     private void OnLeagueChanged(string leagueId)
     {
         _activeLeagueId = leagueId;
+        NotifyNavClicked();
+    }
+
+    private void NotifyNavClicked()
+    {
+        if (OnNavItemClicked.HasDelegate)
+            OnNavItemClicked.InvokeAsync();
     }
 
     private record UserContextResponse(
