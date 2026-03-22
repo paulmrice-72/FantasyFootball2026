@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<ISimulationResultRepository, SimulationResultRepository>();
         // Vegas Line
         services.AddScoped<IVegasLineRepository, VegasLineRepository>();
+        services.AddScoped<IRosterPlayerRepository, RosterPlayerRepository>();
         services.AddScoped<VegasLineSyncJob>();
         // Game-day refresh jobs
         services.AddScoped<ProjectionRefreshJob>();

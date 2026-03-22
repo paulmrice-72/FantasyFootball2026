@@ -8,27 +8,31 @@
 // We check by SleeperLeagueId, SleeperRosterId, etc. before inserting.
 // This means if the job runs twice, you get the same result as running it once.
 
-using FF.Application.Interfaces.Services;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
+using FF.Application.Leagues.Commands;
+using FF.Application.Leagues.Commands.ImportLeague;
+using FF.Domain.Documents;
 using FF.Domain.Entities;
 using FF.Infrastructure.ExternalApis.Sleeper;
 using FF.Infrastructure.ExternalApis.Sleeper.Mappers;
 using FF.Infrastructure.Persistence.SQL;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using FF.Application.Leagues.Commands;
-using FF.Application.Leagues.Commands.ImportLeague;
 
 namespace FF.Infrastructure.Services;
 
 public class SleeperLeagueImportService(
     ISleeperApiClient sleeperApi,
     FFDbContext dbContext,
+    IRosterPlayerRepository rosterPlayerRepository,
     ILogger<SleeperLeagueImportService> logger) : ISleeperLeagueImportService
 {
     private readonly ISleeperApiClient _sleeperApi = sleeperApi;
     private readonly FFDbContext _dbContext = dbContext;
+    private readonly IRosterPlayerRepository _rosterPlayerRepository = rosterPlayerRepository;
     private readonly ILogger<SleeperLeagueImportService> _logger = logger;
+
 
     // Import transactions for the last 2 seasons (current + previous)
     // Sleeper seasons are stored as strings e.g. "2024", "2025"
@@ -208,6 +212,43 @@ public class SleeperLeagueImportService(
         _logger.LogInformation(
             "Imported {Count} rosters for league {LeagueId}",
             rostersImported, sleeperLeagueId);
+
+        // Persist roster player assignments to MongoDB
+        var season = league.Season;
+        var rosterDocs = sleeperRosters.Select(sleeperRoster =>
+        {
+            var rosterId = sleeperRoster.RosterId.ToString();
+            var ownerName = "Unknown Owner";
+            var teamName = $"Team {sleeperRoster.RosterId}";
+            string? sleeperUserId = null;
+
+            if (sleeperRoster.OwnerId is not null &&
+                userLookup.TryGetValue(sleeperRoster.OwnerId, out var owner))
+            {
+                ownerName = owner.DisplayName ?? ownerName;
+                teamName = owner.Metadata?.TeamName ?? ownerName;
+                sleeperUserId = sleeperRoster.OwnerId;
+            }
+
+            return new RosterPlayerDocument
+            {
+                SleeperLeagueId = sleeperLeagueId,
+                SleeperRosterId = rosterId,
+                OwnerName = ownerName,
+                TeamName = teamName,
+                SleeperUserId = sleeperUserId,
+                PlayerIds = sleeperRoster.Players ?? [],
+                StarterIds = sleeperRoster.Starters ?? [],
+                Season = season,
+                SyncedAt = DateTime.UtcNow
+            };
+        }).ToList();
+
+        await _rosterPlayerRepository.UpsertBatchAsync(rosterDocs, cancellationToken);
+
+        _logger.LogInformation(
+            "Persisted {Count} roster player documents for league {LeagueId}",
+            rosterDocs.Count, sleeperLeagueId);
 
         return (rostersImported, playersTracked);
     }
