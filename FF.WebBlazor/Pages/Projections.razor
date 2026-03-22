@@ -129,7 +129,11 @@ else if (_filtered.Count > 0)
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Player">
-                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
+                    <MudLink Href="@($"players/{context.PlayerId}")"
+                             Typo="Typo.body2"
+                             Style="font-weight:600; color: var(--fc-cyan);">
+                        @context.PlayerName
+                    </MudLink>
                 </MudTd>
                 <MudTd DataLabel="Pos">
                     <MudChip T="string" Size="Size.Small" Class="@PositionClass(context.Position)">
