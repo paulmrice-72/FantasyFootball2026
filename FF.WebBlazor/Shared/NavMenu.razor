@@ -50,7 +50,17 @@
     </MudNavLink>
 
     <MudDivider Class="my-3" />
-
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <MudDivider Class="my-2" />
+            <MudNavLink Href="admin"
+                        Icon="@Icons.Material.Filled.AdminPanelSettings"
+                        IconColor="Color.Warning"
+                        OnClick="NotifyNavClicked">
+                Admin Console
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
     @if (_leagues.Any())
     {
         <MudText Typo="Typo.overline" Class="px-4 mud-text-secondary">MY LEAGUE</MudText>

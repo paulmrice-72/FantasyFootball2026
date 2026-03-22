@@ -1,0 +1,34 @@
+﻿@page "/admin/jobs"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+
+<PageTitle>Jobs — Admin — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" Style="vertical-align:middle;" />
+        Job Monitor
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Hangfire dashboard available at
+        <MudLink Href="http://localhost:64234/hangfire" Target="_blank" Style="color:var(--fc-amber);">
+            localhost:64234/hangfire
+        </MudLink>
+    </MudText>
+</div>
+
+<MudPaper Class="fc-card pa-4" Elevation="0">
+    <MudText Typo="Typo.body1" Class="mud-text-secondary">
+        Use the Hangfire dashboard to monitor, trigger, and manage recurring jobs.
+        The embedded panel will be available in a future release.
+    </MudText>
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Warning"
+               StartIcon="@Icons.Material.Filled.OpenInNew"
+               Href="http://localhost:64234/hangfire"
+               Target="_blank"
+               Class="mt-3">
+        Open Hangfire Dashboard
+    </MudButton>
+</MudPaper>
