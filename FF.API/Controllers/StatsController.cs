@@ -44,8 +44,8 @@ public class StatsController(IMediator mediator) : ControllerBase
         [FromQuery] bool validate = true,
         CancellationToken cancellationToken = default)
     {
-        if (season < 2022 || season > 2024)
-            return BadRequest(new { error = "Season must be 2022, 2023, or 2024" });
+        if (season < 2022 || season > 2025)
+            return BadRequest(new { error = "Season must be 2022, 2023, 2024, or 2025" });
 
         var result = await _mediator.Send(
             new ImportHistoricalStatsCommand(

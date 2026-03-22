@@ -68,6 +68,11 @@ public static class DependencyInjection
         // Vegas Line
         services.AddScoped<IVegasLineRepository, VegasLineRepository>();
         services.AddScoped<VegasLineSyncJob>();
+        // Game-day refresh jobs
+        services.AddScoped<ProjectionRefreshJob>();
+        services.AddScoped<TnfRefreshJob>();
+        services.AddScoped<SundayRefreshJob>();
+        services.AddScoped<MnfRefreshJob>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
@@ -106,11 +111,6 @@ public static class DependencyInjection
         services.AddScoped<ProjectionInputBuilder>();
         services.AddScoped<PlayerProjectionService>();
         services.AddSleeperApiClient();
-        services.AddMediatR(cfg =>
-        {
-            cfg.RegisterServicesFromAssembly(typeof(ApplicationAssemblyMarker).Assembly);
-            cfg.RegisterServicesFromAssembly(typeof(InfrastructureAssemblyMarker).Assembly);
-        });
 
         // Identity
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
