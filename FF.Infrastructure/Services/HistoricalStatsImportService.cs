@@ -44,7 +44,7 @@ public class HistoricalStatsImportService(
     private readonly ILogger<HistoricalStatsImportService> _logger = logger;
 
     private const int BatchSize = 500;
-    private static readonly int[] SupportedSeasons = [2022, 2023, 2024];
+    private static readonly int[] SupportedSeasons = [2022, 2023, 2024, 2025];
 
     /// <summary>
     /// Full import — used by the API endpoint for initial/manual loads.

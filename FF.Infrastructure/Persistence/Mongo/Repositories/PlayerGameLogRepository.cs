@@ -238,7 +238,7 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
     public async Task<Dictionary<int, long>> GetDocumentCountsBySeasonAsync(
         CancellationToken cancellationToken = default)
     {
-        var seasons = new[] { 2022, 2023, 2024 };
+        var seasons = new[] { 2022, 2023, 2024, 2025 };
         var counts = new Dictionary<int, long>();
 
         foreach (var season in seasons)

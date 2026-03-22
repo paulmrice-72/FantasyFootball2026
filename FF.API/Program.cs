@@ -191,7 +191,7 @@ try
 
     RecurringJob.AddOrUpdate<HistoricalStatsSyncJob>(
         recurringJobId: "weekly-stats-sync",
-        methodCall: x => x.SyncCurrentSeasonAsync(),
+        methodCall: x => x.SyncCurrentSeasonAsync(2024),
         cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 8),
         options: utcOptions);
 
@@ -224,6 +224,24 @@ try
         "vegas-line-sync",
         job => job.RunAsync(CancellationToken.None),
         "0 5 * * 3", utcOptions);  // Wednesday 5am UTC — fires before simulation at 6am
+
+    RecurringJob.AddOrUpdate<TnfRefreshJob>(
+        "tnf-projection-refresh",
+        job => job.RunAsync(CancellationToken.None),
+        "0 18 * * 4",   // Thursday 6pm UTC = 1pm ET
+        utcOptions);
+
+    RecurringJob.AddOrUpdate<SundayRefreshJob>(
+        "sunday-projection-refresh",
+        job => job.RunAsync(CancellationToken.None),
+        "0 11 * * 0",   // Sunday 11am UTC = 6am ET
+        utcOptions);
+
+    RecurringJob.AddOrUpdate<MnfRefreshJob>(
+        "mnf-projection-refresh",
+        job => job.RunAsync(CancellationToken.None),
+        "0 23 * * 1",   // Monday 11pm UTC = 6pm ET
+        utcOptions);
 
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",
