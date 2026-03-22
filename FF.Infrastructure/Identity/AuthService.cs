@@ -97,7 +97,7 @@ public class AuthService(
 
     private async Task<Result<AuthResponse>> GenerateAuthResponseAsync(ApplicationUser user)
     {
-        var (Token, Expiry) = GenerateAccessToken(user);
+        var (Token, Expiry) = await GenerateAccessTokenAsync(user);
         var refreshToken = GenerateRefreshToken();
 
         var refreshTokenEntity = RefreshToken.Create(
@@ -115,20 +115,26 @@ public class AuthService(
             Expiry));
     }
 
-    private (string Token, DateTime Expiry) GenerateAccessToken(ApplicationUser user)
+    private async Task<(string Token, DateTime Expiry)> GenerateAccessTokenAsync(ApplicationUser user)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var expiry = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes);
 
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email!),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim("firstName", user.FirstName ?? string.Empty),
-            new Claim("lastName", user.LastName ?? string.Empty)
-        };
+        var roles = await _userManager.GetRolesAsync(user);
+
+        var claims = new List<Claim>
+    {
+        new(JwtRegisteredClaimNames.Sub,   user.Id),
+        new(JwtRegisteredClaimNames.Email, user.Email!),
+        new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
+        new("firstName", user.FirstName ?? string.Empty),
+        new("lastName",  user.LastName  ?? string.Empty)
+    };
+
+        // Add role claims — enables [Authorize(Roles="Admin")] in Blazor
+        foreach (var role in roles)
+            claims.Add(new Claim(ClaimTypes.Role, role));
 
         var token = new JwtSecurityToken(
             issuer: _jwtSettings.Issuer,

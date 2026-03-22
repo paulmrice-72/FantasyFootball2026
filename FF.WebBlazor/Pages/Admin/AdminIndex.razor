@@ -1,0 +1,52 @@
+﻿@page "/admin"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+
+<PageTitle>Admin — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings"
+                 Class="mr-2" Style="vertical-align:middle;" />
+        Admin Console
+    </MudText>
+</div>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="fc-admin-stat-card" Elevation="0"
+                  @onclick='@(() => Nav.NavigateTo("/admin/users"))'>
+            <MudIcon Icon="@Icons.Material.Filled.People" Class="fc-admin-stat-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Users</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Manage accounts</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="fc-admin-stat-card" Elevation="0"
+                  @onclick='@(() => Nav.NavigateTo("/admin/jobs"))'>
+            <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="fc-admin-stat-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Jobs</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Monitor & trigger</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="fc-admin-stat-card" Elevation="0"
+                  @onclick='@(() => Nav.NavigateTo("/admin/logs"))'>
+            <MudIcon Icon="@Icons.Material.Filled.Terminal" Class="fc-admin-stat-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Logs</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Live Seq feed</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="fc-admin-stat-card" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.Article" Class="fc-admin-stat-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Articles</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Coming soon</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Inject] NavigationManager Nav { get; set; } = default!;
+}

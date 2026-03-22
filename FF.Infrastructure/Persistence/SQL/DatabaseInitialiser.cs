@@ -23,12 +23,14 @@ public static class DatabaseInitialiser
             Console.WriteLine(ex.GetType().FullName);
             Console.WriteLine(ex.Message);
             if (ex.InnerException != null)
-            {
                 Console.WriteLine("Inner: " + ex.InnerException.Message);
-            }
             Console.WriteLine(ex.StackTrace);
             Log.Error(ex, "An error occurred during database migration or seeding");
             throw;
         }
+
+        // Seed identity roles — requires full service provider for RoleManager
+        await DataSeeder.SeedIdentityAsync(services);
+        Log.Information("Identity roles seeded successfully");
     }
 }

@@ -1,0 +1,106 @@
+﻿@* FF.WebBlazor/Shared/AdminLayout.razor *@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+
+<MudThemeProvider Theme="_adminTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    @* Amber top stripe — signals admin mode *@
+    <div class="fc-admin-stripe">
+        <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings"
+                 Size="Size.Small" Class="mr-1" />
+        ADMIN MODE
+    </div>
+
+    <MudAppBar Elevation="0" Dense="true" Class="fc-admin-appbar">
+        <MudText Typo="Typo.h6" Class="fc-admin-logo">
+            FantasyCombine<span class="fc-admin-logo-accent">.AI</span>
+            <MudChip T="string" Size="Size.Small" Class="fc-admin-badge ml-2">ADMIN</MudChip>
+        </MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.ExitToApp"
+                   Style="color: var(--fc-amber);"
+                   OnClick='@(() => Nav.NavigateTo("/"))'>
+            Exit Admin
+        </MudButton>
+    </MudAppBar>
+
+    <MudDrawer Open="true"
+               Variant="DrawerVariant.Persistent"
+               Elevation="0"
+               ClipMode="DrawerClipMode.Always"
+               Class="fc-admin-drawer"
+               Width="220px">
+        <MudDrawerHeader Class="fc-admin-drawer-header">
+            <MudText Typo="Typo.caption" Class="fc-admin-section-label">ADMIN CONSOLE</MudText>
+        </MudDrawerHeader>
+        <MudNavMenu Class="fc-navmenu pt-2">
+            <MudNavLink Href="admin"
+                        Match="NavLinkMatch.All"
+                        Icon="@Icons.Material.Filled.Dashboard"
+                        IconColor="Color.Warning">
+                Dashboard
+            </MudNavLink>
+            <MudNavLink Href="admin/users"
+                        Icon="@Icons.Material.Filled.People"
+                        IconColor="Color.Warning">
+                Users
+            </MudNavLink>
+            <MudNavLink Href="admin/jobs"
+                        Icon="@Icons.Material.Filled.Schedule"
+                        IconColor="Color.Warning">
+                Job Monitor
+            </MudNavLink>
+            <MudNavLink Href="admin/logs"
+                        Icon="@Icons.Material.Filled.Terminal"
+                        IconColor="Color.Warning">
+                Live Logs
+            </MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="fc-admin-main">
+        <div class="fc-admin-stripe-spacer" />
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private readonly MudTheme _adminTheme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Background = "#0A0F1E",
+            Surface = "#111827",
+            DrawerBackground = "#1A0F00",
+            AppbarBackground = "#1A0F00",
+            Primary = "#F59E0B",
+            PrimaryContrastText = "#0A0F1E",
+            TextPrimary = "#E8EAF0",
+            TextSecondary = "#6B7280",
+            ActionDefault = "#F59E0B",
+            Divider = "#2D1F00",
+        },
+        PaletteDark = new PaletteDark
+        {
+            Background = "#0A0F1E",
+            Surface = "#111827",
+            DrawerBackground = "#1A0F00",
+            AppbarBackground = "#1A0F00",
+            Primary = "#F59E0B",
+            PrimaryContrastText = "#0A0F1E",
+            TextPrimary = "#E8EAF0",
+            TextSecondary = "#6B7280",
+            ActionDefault = "#F59E0B",
+            Divider = "#2D1F00",
+        }
+    };
+}
