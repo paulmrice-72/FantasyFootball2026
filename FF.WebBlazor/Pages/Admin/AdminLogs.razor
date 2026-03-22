@@ -1,0 +1,36 @@
+﻿@page "/admin/logs"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+
+<PageTitle>Logs — Admin — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.Terminal" Class="mr-2" Style="vertical-align:middle;" />
+        Live Logs
+    </MudText>
+</div>
+
+<MudPaper Class="fc-card pa-4" Elevation="0">
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Seq log viewer — full structured log search and filtering.
+    </MudText>
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Warning"
+               StartIcon="@Icons.Material.Filled.OpenInNew"
+               Href="http://192.168.6.17:8081"
+               Target="_blank"
+               Class="mb-4">
+        Open Seq Dashboard
+    </MudButton>
+
+    <MudDivider Class="my-3" />
+
+    @* Embedded Seq iframe — works on local network *@
+    <div style="width:100%; height:600px; border-radius:8px; overflow:hidden; border: 1px solid var(--fc-border);">
+        <iframe src="http://192.168.6.17:8081/#/events?filter=@System.Uri.EscapeDataString("@Level in ['Error','Warning']")"
+                style="width:100%; height:100%; border:none;"
+                title="Seq Live Logs" />
+    </div>
+</MudPaper>
