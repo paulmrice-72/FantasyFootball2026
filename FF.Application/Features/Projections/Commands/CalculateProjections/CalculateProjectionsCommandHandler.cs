@@ -19,6 +19,7 @@ public class CalculateProjectionsCommandHandler(
     ProjectionInputBuilder inputBuilder,
     IVegasLineRepository vegasLineRepository,
     ILogger<CalculateProjectionsCommandHandler> logger)
+    : IRequestHandler<CalculateProjectionsCommand, Result<CalculateProjectionsResult>>
 {
     private static readonly string[] SupportedPositions = ["QB", "RB", "WR", "TE"];
 

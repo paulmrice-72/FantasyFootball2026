@@ -15,9 +15,9 @@ namespace FF.Infrastructure.Jobs
         private readonly IPlayerIdResolutionService _resolutionService = resolutionService;
         private readonly ILogger<HistoricalStatsSyncJob> _logger = logger;
 
-        public async Task SyncCurrentSeasonAsync()
+        public async Task SyncCurrentSeasonAsync(int? season = null)
         {
-            var currentSeason = GetCurrentNflSeason();
+            var currentSeason = season ?? GetCurrentNflSeason();
             _logger.LogInformation(
                 "Hangfire weekly sync starting for season {Season}", currentSeason);
 
