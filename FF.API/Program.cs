@@ -80,7 +80,32 @@ try
             new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
     builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen();
+    builder.Services.AddSwaggerGen(c =>
+    {
+        c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+            Description = "Enter your JWT token. Example: eyJhbGci..."
+        });
+        c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+        {
+            {
+                new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                    {
+                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                        Id   = "Bearer"
+                    }
+                },
+                Array.Empty<string>()
+            }
+        });
+    });
 
     // ── CORS (for Blazor WASM) ────────────────────────────
     builder.Services.AddCors(options =>
@@ -243,6 +268,11 @@ try
         "0 23 * * 1",   // Monday 11pm UTC = 6pm ET
         utcOptions);
 
+    RecurringJob.AddOrUpdate<WarRoomBriefJob>(
+        "war-room-brief-sunday",
+        job => job.RunAsync(CancellationToken.None),
+        "0 8 * * 0",   // Sunday 8am UTC = 3am ET
+    utcOptions);
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",
     //methodCall: job => job.SyncWaiversAsync(),

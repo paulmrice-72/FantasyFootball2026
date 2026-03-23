@@ -1,5 +1,6 @@
 ﻿using FF.Application.Common.Behaviors;
 using FF.Application.Features.Projections.Commands.CalculateProjections;
+using FF.Application.Services;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,7 @@ public static class DependencyInjection
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
+        services.AddScoped<WarRoomBriefService>();
 
         return services;
     }

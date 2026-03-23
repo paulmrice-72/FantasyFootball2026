@@ -1,9 +1,12 @@
 ﻿@using Microsoft.JSInterop
+@using System.Net.Http.Json
+@using static System.Net.WebRequestMethods
 @inject AuthenticationStateProvider AuthStateProvider
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 @inherits LayoutComponentBase
 @inject IJSRuntime JS
+@inject IHttpClientFactory HttpClientFactory
 
 <MudThemeProvider Theme="_theme" />
 <MudPopoverProvider />
@@ -52,6 +55,26 @@
     </MudDrawer>
 
     <MudMainContent Class="fc-main-content">
+        @if (_leagues.Count > 0)
+        {
+            <div class="fc-league-bar">
+                <MudSelect T="string"
+                           Value="_activeLeagueId"
+                           ValueChanged="OnLeagueChanged"
+                           Dense="true"
+                           Margin="Margin.Dense"
+                           Variant="Variant.Outlined"
+                           Class="fc-league-selector"
+                           AdornmentIcon="@Icons.Material.Filled.SportsSoccer"
+                           Adornment="Adornment.Start"
+                           AdornmentColor="Color.Primary">
+                    @foreach (var league in _leagues)
+                    {
+                        <MudSelectItem Value="@league.LeagueId">@league.LeagueName</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+        }
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-4 pb-16 pb-md-4">
             @Body
         </MudContainer>
@@ -161,4 +184,38 @@
         ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsLoggedOut();
         Navigation.NavigateTo("/login");
     }
+    private List<LeagueItem> _leagues = [];
+    private string? _activeLeagueId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var http = HttpClientFactory.CreateClient("AuthAPI");
+            var context = await http.GetFromJsonAsync<UserContextResponse>(
+                "api/v1/identity/context");
+            if (context is not null)
+            {
+                _leagues = context.Leagues ?? [];
+                _activeLeagueId = context.ActiveLeagueId;
+            }
+        }
+        catch { }
+    }
+
+    private void OnLeagueChanged(string leagueId)
+    {
+        _activeLeagueId = leagueId;
+    }
+
+    private record UserContextResponse(
+        bool IsSleeperLinked,
+        List<LeagueItem>? Leagues,
+        string? ActiveLeagueId);
+
+    private record LeagueItem(
+        string LeagueId,
+        string LeagueName,
+        int Season,
+        string Role);
 }
