@@ -1,0 +1,364 @@
+﻿@page "/settings/brief"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Brief Preferences — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.NotificationsActive"
+                 Class="mr-2" Style="vertical-align:middle;" />
+        War Room Brief Preferences
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Control how and when your War Room Brief is delivered
+    </MudText>
+</div>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6">
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+        }
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+        }
+
+        @* EMAIL DELIVERY *@
+        <MudPaper Class="fc-card pa-4 mb-3" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">
+                EMAIL DELIVERY
+            </MudText>
+
+            <MudSwitch @bind-Value="_emailEnabled"
+                       Color="Color.Primary"
+                       Label="@(_emailEnabled ? "Email delivery enabled" : "Email delivery disabled")"
+                       Class="mb-3" />
+
+            <MudSelect T="string"
+                       @bind-Value="_timeZoneId"
+                       Label="Your Time Zone"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Class="mb-3"
+                       Disabled="!_emailEnabled">
+                @foreach (var tz in _timeZones)
+                {
+                    <MudSelectItem Value="@tz.Id">@tz.DisplayName</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int"
+                       @bind-Value="_deliveryDayOfWeek"
+                       Label="Delivery Day"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Disabled="!_emailEnabled"
+                       Class="mb-3">
+                <MudSelectItem Value="0">Sunday</MudSelectItem>
+                <MudSelectItem Value="1">Monday</MudSelectItem>
+                <MudSelectItem Value="2">Tuesday</MudSelectItem>
+                <MudSelectItem Value="3">Wednesday</MudSelectItem>
+                <MudSelectItem Value="4">Thursday</MudSelectItem>
+                <MudSelectItem Value="5">Friday</MudSelectItem>
+                <MudSelectItem Value="6">Saturday</MudSelectItem>
+            </MudSelect>
+
+            <MudSelect T="int"
+                       @bind-Value="_deliveryHourLocal"
+                       Label="@($"Delivery Time ({LocalTzAbbr})")"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Disabled="!_emailEnabled"
+                       Class="mb-1">
+                @for (var h = 0; h < 24; h++)
+                {
+                    var hour = h;
+                    var label = DateTime.Today.AddHours(hour).ToString("h:mm tt");
+                    <MudSelectItem Value="@hour">@label</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Stored as @($"{LocalToUtc(_deliveryHourLocal):D2}:00 UTC")
+            </MudText>
+        </MudPaper>
+
+        @* BRIEF CONTENT *@
+        <MudPaper Class="fc-card pa-4 mb-3" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">
+                BRIEF CONTENT
+            </MudText>
+
+            <MudSwitch @bind-Value="_includeBoomCandidates"
+                       Color="Color.Primary"
+                       Label="Include Boom Candidates"
+                       Class="mb-2" />
+
+            <MudSwitch @bind-Value="_includeBustRisks"
+                       Color="Color.Primary"
+                       Label="Include Bust Risks"
+                       Class="mb-2" />
+
+            <MudSwitch @bind-Value="_includeLeagueSections"
+                       Color="Color.Primary"
+                       Label="Include League Sections"
+                       Class="mb-2" />
+
+            <MudSwitch @bind-Value="_includeCoachRiley"
+                       Color="Color.Primary"
+                       Label="Include Coach Riley Narrative"
+                       Class="mb-2" />
+        </MudPaper>
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
+                   Style="height:44px;"
+                   Disabled="_saving || _loading"
+                   OnClick="SavePreferences">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true"
+                                     Class="mr-2" Color="Color.Surface" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Save" Class="mr-2" />
+                <span>Save Preferences</span>
+            }
+        </MudButton>
+
+    </MudItem>
+
+    @* INFO PANEL *@
+    <MudItem xs="12" md="6">
+        <MudPaper Class="fc-card pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">
+                ABOUT WAR ROOM BRIEFS
+            </MudText>
+            <div class="fc-step-list">
+                <div class="fc-step">
+                    <div class="fc-step-num">1</div>
+                    <span style="font-size:0.875rem;color:var(--fc-text);">
+                        Generated automatically every Sunday at 3am ET
+                    </span>
+                </div>
+                <div class="fc-step">
+                    <div class="fc-step-num">2</div>
+                    <span style="font-size:0.875rem;color:var(--fc-text);">
+                        Covers all your active leagues and lineups
+                    </span>
+                </div>
+                <div class="fc-step">
+                    <div class="fc-step-num">3</div>
+                    <span style="font-size:0.875rem;color:var(--fc-text);">
+                        Highlights boom candidates and bust risks from your starters
+                    </span>
+                </div>
+                <div class="fc-step">
+                    <div class="fc-step-num">4</div>
+                    <span style="font-size:0.875rem;color:var(--fc-text);">
+                        Coach Riley provides an AI narrative for your matchups
+                    </span>
+                </div>
+            </div>
+
+            <MudDivider Class="my-3" />
+
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Generate a brief on demand from the
+                <MudLink Href="/my-brief" Typo="Typo.caption"
+                         Style="color:var(--fc-cyan);">
+                    War Room Brief
+                </MudLink>
+                page.
+            </MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+
+    private bool _emailEnabled = true;
+    private int _deliveryDayOfWeek = 0;
+    private int _deliveryHourLocal = 3;   // 3am local = 8am UTC for Central
+    private string _timeZoneId = "America/Chicago";
+
+    private bool _includeBoomCandidates = true;
+    private bool _includeBustRisks = true;
+    private bool _includeLeagueSections = true;
+    private bool _includeCoachRiley = true;
+
+    // ── Timezone list ────────────────────────────────────────
+    private static readonly List<TzOption> _timeZones =
+    [
+        new("America/New_York",    "Eastern Time (ET)"),
+        new("America/Chicago",     "Central Time (CT)"),
+        new("America/Denver",      "Mountain Time (MT)"),
+        new("America/Phoenix",     "Arizona (MST, no DST)"),
+        new("America/Los_Angeles", "Pacific Time (PT)"),
+        new("America/Anchorage",   "Alaska Time (AKT)"),
+        new("Pacific/Honolulu",    "Hawaii Time (HT)"),
+        new("UTC",                 "UTC"),
+    ];
+
+    private string LocalTzAbbr => _timeZoneId switch
+    {
+        "America/New_York" => "ET",
+        "America/Chicago" => "CT",
+        "America/Denver" => "MT",
+        "America/Phoenix" => "MST",
+        "America/Los_Angeles" => "PT",
+        "America/Anchorage" => "AKT",
+        "Pacific/Honolulu" => "HT",
+        _ => "UTC"
+    };
+
+    // Convert local hour → UTC hour for storage
+    private int LocalToUtc(int localHour)
+    {
+        try
+        {
+            var tz = FindTimeZone(_timeZoneId);
+            var dt = DateTime.Today.AddHours(localHour);
+            var offset = tz.GetUtcOffset(dt);
+            return ((localHour - (int)offset.TotalHours) + 24) % 24;
+        }
+        catch { return localHour; }
+    }
+
+    private int UtcToLocal(int utcHour)
+    {
+        try
+        {
+            var tz = FindTimeZone(_timeZoneId);
+            var utc = DateTime.SpecifyKind(DateTime.Today.AddHours(utcHour), DateTimeKind.Utc);
+            return TimeZoneInfo.ConvertTimeFromUtc(utc, tz).Hour;
+        }
+        catch { return utcHour; }
+    }
+
+    private static TimeZoneInfo FindTimeZone(string id)
+    {
+        // Try IANA first (Linux), fall back to Windows ID mapping
+        try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+        catch
+        {
+            var windowsMap = new Dictionary<string, string>
+            {
+                ["America/New_York"] = "Eastern Standard Time",
+                ["America/Chicago"] = "Central Standard Time",
+                ["America/Denver"] = "Mountain Standard Time",
+                ["America/Phoenix"] = "US Mountain Standard Time",
+                ["America/Los_Angeles"] = "Pacific Standard Time",
+                ["America/Anchorage"] = "Alaskan Standard Time",
+                ["Pacific/Honolulu"] = "Hawaiian Standard Time",
+            };
+            return windowsMap.TryGetValue(id, out var winId)
+                ? TimeZoneInfo.FindSystemTimeZoneById(winId)
+                : TimeZoneInfo.Utc;
+        }
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreferences();
+    }
+
+    private async Task LoadPreferences()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var prefs = await Http.GetFromJsonAsync<PreferencesModel>(
+                "api/v1/brief/preferences");
+
+            if (prefs is not null)
+            {
+                _emailEnabled = prefs.EmailEnabled;
+                _deliveryDayOfWeek = prefs.DeliveryDayOfWeek;
+                _timeZoneId = prefs.TimeZoneId;
+                _includeBoomCandidates = prefs.IncludeBoomCandidates;
+                _includeBustRisks = prefs.IncludeBustRisks;
+                _includeLeagueSections = prefs.IncludeLeagueSections;
+                _includeCoachRiley = prefs.IncludeCoachRiley;
+                // Convert stored UTC hour → local for display
+                _deliveryHourLocal = UtcToLocal(prefs.DeliveryHourUtc);
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load preferences: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SavePreferences()
+    {
+        _saving = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                "api/v1/brief/preferences",
+                new
+                {
+                    EmailEnabled = _emailEnabled,
+                    DeliveryDayOfWeek = _deliveryDayOfWeek,
+                    DeliveryHourUtc = LocalToUtc(_deliveryHourLocal),
+                    TimeZoneId = _timeZoneId,
+                    IncludeBoomCandidates = _includeBoomCandidates,
+                    IncludeBustRisks = _includeBustRisks,
+                    IncludeLeagueSections = _includeLeagueSections,
+                    IncludeCoachRiley = _includeCoachRiley
+                });
+
+            if (response.IsSuccessStatusCode)
+                Snackbar.Add("Preferences saved.", Severity.Success);
+            else
+                Snackbar.Add("Failed to save preferences.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+            StateHasChanged();
+        }
+    }
+
+    private record TzOption(string Id, string DisplayName);
+
+    private class PreferencesModel
+    {
+        public bool EmailEnabled { get; set; }
+        public int DeliveryDayOfWeek { get; set; }
+        public int DeliveryHourUtc { get; set; }
+        public string TimeZoneId { get; set; } = "America/Chicago";
+        public bool IncludeBoomCandidates { get; set; }
+        public bool IncludeBustRisks { get; set; }
+        public bool IncludeLeagueSections { get; set; }
+        public bool IncludeCoachRiley { get; set; }
+    }
+}

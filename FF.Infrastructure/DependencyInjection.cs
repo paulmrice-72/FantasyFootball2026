@@ -114,6 +114,7 @@ public static class DependencyInjection
         services.AddScoped<IPlayerProjectionRepository, PlayerProjectionRepository>();
         services.AddScoped<ProjectionInputBuilder>();
         services.AddScoped<PlayerProjectionService>();
+        services.AddScoped<IBriefDeliveryPreferenceRepository, BriefDeliveryPreferenceRepository>();
         services.AddSleeperApiClient();
 
         // Identity

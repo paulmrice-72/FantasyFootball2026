@@ -77,6 +77,13 @@
         @(_sleeperLinked == true ? "Sleeper Account" : "Link Sleeper Account")
     </MudNavLink>
 
+    <MudNavLink Href="settings/brief"
+                Icon="@Icons.Material.Filled.NotificationsActive"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
+        Brief Preferences
+    </MudNavLink>
+
 </MudNavMenu>
 
 @code {
