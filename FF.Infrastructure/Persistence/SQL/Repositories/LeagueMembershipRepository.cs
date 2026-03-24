@@ -54,4 +54,11 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<LeagueMembership>> GetMembershipsForUserAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        return await dbContext.LeagueMemberships
+            .Where(m => m.UserId == userId && m.IsActive)
+            .ToListAsync(cancellationToken);
+    }
 }

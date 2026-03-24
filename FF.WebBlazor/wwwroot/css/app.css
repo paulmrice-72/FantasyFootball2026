@@ -619,3 +619,45 @@ td.numeric,
     border-radius: 8px !important;
     overflow: hidden;
 }
+
+/* ── Sleeper Link Steps ──────────────────────────────────── */
+.fc-step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.fc-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.fc-step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0,200,240,0.15);
+    border: 1px solid var(--fc-cyan);
+    color: var(--fc-cyan);
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* ── League Bar ─────────────────────────────────────────── */
+.fc-league-bar {
+    background: var(--fc-surface);
+    border-bottom: 1px solid var(--fc-border);
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+}
+
+.fc-league-selector {
+    width: 100%;
+    max-width: 480px;
+}
