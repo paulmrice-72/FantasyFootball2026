@@ -15,7 +15,8 @@ namespace FF.API.Controllers;
 [Authorize]
 public class BriefController(
     IWarRoomBriefRepository briefRepository,
-    WarRoomBriefService briefService) : ControllerBase
+    WarRoomBriefService briefService,
+    ICoachRileyService coachRileyService) : ControllerBase
 {
     [HttpGet("latest")]
     public async Task<IActionResult> GetLatest(
@@ -47,4 +48,33 @@ public class BriefController(
         return Ok(brief);
     }
 
+    // DEV ONLY — delete before commit
+    [HttpPost("test-riley")]
+    public async Task<IActionResult> TestRiley(CancellationToken ct)
+    {
+        var brief = new WarRoomBriefDocument
+        {
+            Season = 2025,
+            Week = 10,
+            TopBoomCandidates =
+            [
+                new() { PlayerName = "Justin Jefferson", Position = "WR",
+                    NflTeam = "MIN", OpponentTeam = "LAR",
+                    BoomProbability = 0.42m, HighlightReason = "Soft CB matchup, target hog" }
+            ],
+            BustRisks =
+            [
+                new() { PlayerName = "Davante Adams", Position = "WR",
+                    NflTeam = "NYJ", OpponentTeam = "KC",
+                    BustProbability = 0.38m, HighlightReason = "Shadow coverage from Sauce Gardner" }
+            ],
+            Leagues =
+            [
+                new() { LeagueName = "Bizarro League", TeamName = "Paul's Squad" }
+            ]
+        };
+
+        var narrative = await coachRileyService.GenerateNarrativeAsync(brief, ct);
+        return Ok(new { narrative });
+    }
 }

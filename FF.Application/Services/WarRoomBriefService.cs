@@ -23,6 +23,7 @@ public class WarRoomBriefService(
     ISimulationResultRepository simulationResultRepository,
     IPlayerRepository playerRepository,
     IEmailService emailService,
+    ICoachRileyService coachRileyService,
     ILogger<WarRoomBriefService> logger)
 {
     private const decimal BoomThreshold = 0.30m;
@@ -100,6 +101,11 @@ public class WarRoomBriefService(
             .DistinctBy(p => p.PlayerId)
             .Take(MaxHighlights)];
 
+        // Generate Coach Riley narrative
+        brief.CoachRileyNarrative = await coachRileyService
+            .GenerateNarrativeAsync(brief, ct);
+
+        await briefRepository.UpsertAsync(brief, ct);
         await briefRepository.UpsertAsync(brief, ct);
 
         await briefRepository.UpsertAsync(brief, ct);

@@ -77,6 +77,12 @@ public static class DependencyInjection
         services.AddScoped<SundayRefreshJob>();
         services.AddScoped<MnfRefreshJob>();
         services.AddScoped<IEmailService, SendGridEmailService>();
+        services.AddScoped<ICoachRileyService, CoachRileyService>();
+        services.AddHttpClient<CoachRileyService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
+        });
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
