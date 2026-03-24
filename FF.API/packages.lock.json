@@ -898,8 +898,8 @@
       },
       "Newtonsoft.Json": {
         "type": "Transitive",
-        "resolved": "11.0.1",
-        "contentHash": "pNN4l+J6LlpIvHOeNdXlwxv39NPJ2B5klz+Rd2UQZIx30Squ5oND1Yy3wEAUoKn0GPUj6Yxt9lxlYWQqfZcvKg=="
+        "resolved": "13.0.1",
+        "contentHash": "ppPFpBcvxdsfUonNcvITKqLl3bqxWbDCZIzDWHzjpdAHRFfZe0Dw9HmA0+za13IdyrgJwpkDTDA9fHaxOrt20A=="
       },
       "NSubstitute": {
         "type": "Transitive",
@@ -934,6 +934,15 @@
         "dependencies": {
           "Microsoft.Extensions.Http": "9.0.3",
           "Refit": "9.0.2"
+        }
+      },
+      "SendGrid": {
+        "type": "Transitive",
+        "resolved": "9.29.3",
+        "contentHash": "nb/zHePecN9U4/Bmct+O+lpgK994JklbCCNMIgGPOone/DngjQoMCHeTvkl+m0Nglvm0dqMEshmvB4fO8eF3dA==",
+        "dependencies": {
+          "Newtonsoft.Json": "13.0.1",
+          "starkbank-ecdsa": "[1.3.3, 2.0.0)"
         }
       },
       "Serilog.Extensions.Hosting": {
@@ -1000,6 +1009,11 @@
         "type": "Transitive",
         "resolved": "1.0.0",
         "contentHash": "rFtK2KEI9hIe8gtx3a0YDXdHOpedIf9wYCEYtBEmtlyiWVX3XlCNV03JrmmAi/Cdfn7dxK+k0sjjcLv4fpHnqA=="
+      },
+      "starkbank-ecdsa": {
+        "type": "Transitive",
+        "resolved": "1.3.3",
+        "contentHash": "OblOaKb1enXn+dSp7tsx9yjwV+/BEKM9jFhshIkZTwCk7LuTFTp+wSon6rFzuPiIiTGtvVWQNUw2slHjGktJog=="
       },
       "Swashbuckle.AspNetCore.Swagger": {
         "type": "Transitive",
@@ -1286,6 +1300,7 @@
           "Polly.Extensions.Http": "[3.0.0, )",
           "Refit": "[9.0.2, )",
           "Refit.HttpClientFactory": "[9.0.2, )",
+          "SendGrid": "[9.29.3, )",
           "System.IdentityModel.Tokens.Jwt": "[8.4.0, )"
         }
       },
