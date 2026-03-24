@@ -1,22 +1,18 @@
-// FF.API/Controllers/LeaguesController.cs
-
+using FF.Application.Leagues.Commands.SyncUserLeagues;
 using FF.Application.Leagues.Commands.ImportLeague;
 using FF.Application.Leagues.Queries.GetAllLeagues;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace FF.API.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
-public class LeaguesController : ControllerBase
+public class LeaguesController(IMediator mediator) : ControllerBase
 {
-    private readonly IMediator _mediator;
-
-    public LeaguesController(IMediator mediator)
-    {
-        _mediator = mediator;
-    }
+    private readonly IMediator _mediator = mediator;
 
     /// <summary>
     /// Imports a Sleeper league by its league ID.
@@ -54,5 +50,25 @@ public class LeaguesController : ControllerBase
     {
         var result = await _mediator.Send(new GetAllLeaguesQuery(), cancellationToken);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Syncs all leagues for the currently authenticated user.
+    /// Called automatically after Sleeper account linking.
+    /// </summary>
+    [HttpPost("sync")]
+    [Authorize]
+    public async Task<IActionResult> SyncMyLeagues(CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new SyncUserLeaguesCommand(userId), cancellationToken);
+
+        if (!result.IsSuccess)
+            return StatusCode(500, result.Error?.Message);
+
+        return Ok(result.Value);
     }
 }

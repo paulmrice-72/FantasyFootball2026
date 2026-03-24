@@ -5,7 +5,8 @@ namespace FF.Application.Identity.Commands.LinkSleeperAccount;
 
 public class LinkSleeperAccountCommandHandler(
     ISleeperIdentityService sleeperIdentityService,
-    IUserRepository userRepository
+    IUserRepository userRepository,
+    ILeagueMembershipRepository leagueMembershipRepository
 ) : IRequestHandler<LinkSleeperAccountCommand, LinkSleeperAccountResult>
 {
     public async Task<LinkSleeperAccountResult> Handle(
@@ -38,6 +39,33 @@ public class LinkSleeperAccountCommandHandler(
             sleeperUser.SleeperUserId,
             sleeperUser.Username,
             cancellationToken);
+
+        // 4. Fetch user's leagues from Sleeper and create memberships
+        // Fetch both current and previous season to catch active leagues
+        var currentSeason = DateTime.UtcNow.Month >= 3
+            ? DateTime.UtcNow.Year
+            : DateTime.UtcNow.Year - 1;
+
+        var previousSeason = currentSeason - 1;
+        var seasons = new[] { currentSeason, previousSeason };
+
+        foreach (var season in seasons)
+        {
+            var leagues = await sleeperIdentityService.GetUserLeaguesAsync(
+                sleeperUser.SleeperUserId, season, cancellationToken);
+
+            foreach (var league in leagues)
+            {
+                await leagueMembershipRepository.AddMembershipAsync(
+                    userId: request.UserId,
+                    sleeperUserId: sleeperUser.SleeperUserId,
+                    leagueId: league.LeagueId,
+                    leagueName: $"{league.Name} ({league.LeagueType} {league.Season})",
+                    season: league.Season,
+                    role: "member",
+                    cancellationToken: cancellationToken);
+            }
+        }
 
         return new LinkSleeperAccountResult(true, sleeperUser.SleeperUserId, null);
     }

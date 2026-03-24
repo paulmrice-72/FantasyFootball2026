@@ -1,0 +1,203 @@
+﻿@page "/settings/sleeper"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Link Sleeper Account — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.Link" Class="mr-2" Style="vertical-align:middle;" />
+        Link Sleeper Account
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Connect your Sleeper account to enable War Room Briefs and roster analysis
+    </MudText>
+</div>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6">
+
+        @* Current status *@
+        <MudPaper Class="fc-card pa-4 mb-3" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">ACCOUNT STATUS</MudText>
+
+            @if (_context is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_context.IsSleeperLinked)
+            {
+                <div class="d-flex align-center gap-3">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                             Style="color: #34D399; font-size: 2rem;" />
+                    <div>
+                        <MudText Typo="Typo.body1" Style="font-weight:600;">
+                            Sleeper account linked
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @_context.SleeperUsername · ID: @_context.SleeperUserId
+                        </MudText>
+                    </div>
+                </div>
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                    Want to link a different account?
+                </MudText>
+            }
+            else
+            {
+                <div class="d-flex align-center gap-3">
+                    <MudIcon Icon="@Icons.Material.Filled.LinkOff"
+                             Style="color: #F59E0B; font-size: 2rem;" />
+                    <div>
+                        <MudText Typo="Typo.body1" Style="font-weight:600;">
+                            No Sleeper account linked
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            Link your account to enable league sync and War Room Briefs
+                        </MudText>
+                    </div>
+                </div>
+                <MudDivider Class="my-3" />
+            }
+
+            @* Link form *@
+            <MudTextField @bind-Value="_sleeperUsername"
+                          Label="Sleeper Username"
+                          Placeholder="Enter your Sleeper username"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Person"
+                          FullWidth="true"
+                          Class="mb-3"
+                          Disabled="_linking" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Style="height:44px;"
+                       Disabled="@(_linking || string.IsNullOrWhiteSpace(_sleeperUsername))"
+                       OnClick="LinkAccount">
+                @if (_linking)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true"
+                                         Class="mr-2" Color="Color.Surface" />
+                    <span>Linking...</span>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Link" Class="mr-2" />
+                    <span>Link Sleeper Account</span>
+                }
+            </MudButton>
+        </MudPaper>
+
+        @* What happens next *@
+        <MudPaper Class="fc-card pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">WHAT HAPPENS NEXT</MudText>
+            <div class="fc-step-list">
+                <div class="fc-step">
+                    <div class="fc-step-num">1</div>
+                    <MudText Typo="Typo.body2">
+                        Your Sleeper username is resolved to your Sleeper user ID
+                    </MudText>
+                </div>
+                <div class="fc-step">
+                    <div class="fc-step-num">2</div>
+                    <MudText Typo="Typo.body2">
+                        Your leagues are synced from Sleeper automatically
+                    </MudText>
+                </div>
+                <div class="fc-step">
+                    <div class="fc-step-num">3</div>
+                    <MudText Typo="Typo.body2">
+                        Your rosters are loaded and matched to your user
+                    </MudText>
+                </div>
+                <div class="fc-step">
+                    <div class="fc-step-num">4</div>
+                    <MudText Typo="Typo.body2">
+                        Sunday morning War Room Briefs are generated for your lineups
+                    </MudText>
+                </div>
+            </div>
+        </MudPaper>
+
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string _sleeperUsername = string.Empty;
+    private bool _linking;
+    private UserContextDto? _context;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _context = await Http.GetFromJsonAsync<UserContextDto>(
+                "api/v1/identity/context");
+            if (_context?.SleeperUsername is not null)
+                _sleeperUsername = _context.SleeperUsername;
+        }
+        catch { /* not linked yet */ }
+    }
+
+    private async Task LinkAccount()
+    {
+        if (string.IsNullOrWhiteSpace(_sleeperUsername)) return;
+
+        _linking = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                "api/v1/identity/sleeper/link",
+                new { SleeperUsername = _sleeperUsername.Trim() });
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Sleeper account linked! Syncing your leagues...",
+                    Severity.Success);
+
+                // Trigger league sync for this user's leagues
+                await Http.PostAsync("api/v1/leagues/sync", null);
+
+                Snackbar.Add("League sync triggered. Redirecting to home...",
+                    Severity.Info);
+
+                await Task.Delay(1500);
+                Nav.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                Snackbar.Add(error?.ErrorMessage ?? "Failed to link account.",
+                    Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _linking = false;
+        }
+    }
+
+    private record UserContextDto(
+        string UserId,
+        string? SleeperUserId,
+        string? SleeperUsername,
+        bool IsSleeperLinked,
+        string? ActiveLeagueId);
+
+    private record ErrorResponse(string ErrorMessage);
+}

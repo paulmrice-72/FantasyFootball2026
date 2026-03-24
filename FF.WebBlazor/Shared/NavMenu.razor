@@ -61,32 +61,14 @@
             </MudNavLink>
         </Authorized>
     </AuthorizeView>
-    @if (_leagues.Any())
-    {
-        <MudText Typo="Typo.overline" Class="px-4 mud-text-secondary">MY LEAGUE</MudText>
-        <MudSelect T="string"
-                   Value="_activeLeagueId"
-                   ValueChanged="OnLeagueChanged"
-                   Dense="true"
-                   Margin="Margin.Dense"
-                   Class="px-3 mt-1"
-                   Variant="Variant.Outlined">
-            @foreach (var league in _leagues)
-            {
-                <MudSelectItem Value="@league.LeagueId">@league.LeagueName</MudSelectItem>
-            }
-        </MudSelect>
-    }
 
-    @if (_sleeperLinked == false && !_leagues.Any())
-    {
-        <MudNavLink Href="settings/sleeper"
-                    Icon="@Icons.Material.Filled.LinkOff"
-                    IconColor="Color.Warning"
-                    OnClick="NotifyNavClicked">
-            Link Sleeper Account
-        </MudNavLink>
-    }
+    <MudDivider Class="my-2" />
+    <MudNavLink Href="settings/sleeper"
+                Icon="@(_sleeperLinked == true ? Icons.Material.Filled.Link : Icons.Material.Filled.LinkOff)"
+                IconColor="@(_sleeperLinked == true ? Color.Success : Color.Warning)"
+                OnClick="NotifyNavClicked">
+        @(_sleeperLinked == true ? "Sleeper Account" : "Link Sleeper Account")
+    </MudNavLink>
 
 </MudNavMenu>
 
