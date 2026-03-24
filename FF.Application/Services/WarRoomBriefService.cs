@@ -50,6 +50,14 @@ public class WarRoomBriefService(
         var memberships = await leagueMembershipRepository
             .GetMembershipsForUserAsync(userId, ct);
 
+
+        // Temporary debug
+        logger.LogInformation(
+            "Found {Total} memberships, {Active} active for season {Season}",
+            memberships.Count,
+            memberships.Count(m => m.Season == season && m.IsActive),
+            season);
+
         var activeMemberships = memberships
             .Where(m => m.Season == season && m.IsActive)
             .ToList();

@@ -229,7 +229,7 @@ public class SleeperLeagueUserDto
     public SleeperLeagueUserMetadataDto? Metadata { get; set; }
 
     [JsonPropertyName("is_owner")]
-    public bool IsOwner { get; set; }
+    public bool? IsOwner { get; set; }
 }
 
 public class SleeperLeagueUserMetadataDto
