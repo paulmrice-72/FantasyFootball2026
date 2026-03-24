@@ -1,6 +1,9 @@
 ﻿// FF.Infrastructure/Jobs/WarRoomBriefJob.cs
+using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Application.Services;
 using FF.Infrastructure.Persistence.SQL;
+using FF.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;

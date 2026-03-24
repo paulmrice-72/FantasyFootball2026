@@ -1,6 +1,9 @@
 ﻿// FF.API/Controllers/BriefController.cs
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Application.Services;
+using FF.Domain.Documents;
+using FF.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -43,4 +46,5 @@ public class BriefController(
 
         return Ok(brief);
     }
+
 }

@@ -76,6 +76,7 @@ public static class DependencyInjection
         services.AddScoped<TnfRefreshJob>();
         services.AddScoped<SundayRefreshJob>();
         services.AddScoped<MnfRefreshJob>();
+        services.AddScoped<IEmailService, SendGridEmailService>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
