@@ -1,8 +1,10 @@
 ﻿// FF.Application/Services/WarRoomBriefService.cs
 using FF.Application.Identity.Interfaces;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
+using FF.Infrastructure.Services;
 
 namespace FF.Application.Services;
 
@@ -15,11 +17,12 @@ namespace FF.Application.Services;
 /// 5. Identify boom/bust candidates and key decisions
 /// </summary>
 public class WarRoomBriefService(
+    IWarRoomBriefRepository briefRepository,
     ILeagueMembershipRepository leagueMembershipRepository,
     IRosterPlayerRepository rosterPlayerRepository,
-    ISimulationResultRepository simulationRepository,
+    ISimulationResultRepository simulationResultRepository,
     IPlayerRepository playerRepository,
-    IWarRoomBriefRepository briefRepository,
+    IEmailService emailService,
     ILogger<WarRoomBriefService> logger)
 {
     private const decimal BoomThreshold = 0.30m;
@@ -99,6 +102,8 @@ public class WarRoomBriefService(
 
         await briefRepository.UpsertAsync(brief, ct);
 
+        await briefRepository.UpsertAsync(brief, ct);
+
         logger.LogInformation(
             "War Room Brief generated — {Leagues} leagues, " +
             "{Boom} boom candidates, {Bust} bust risks",
@@ -106,8 +111,33 @@ public class WarRoomBriefService(
             brief.TopBoomCandidates.Count,
             brief.BustRisks.Count);
 
+        // Send email if user has an email address
+        if (!string.IsNullOrWhiteSpace(userEmail))
+        {
+            try
+            {
+                var subject = $"⚡ Your Week {week} War Room Brief is ready";
+                var html = EmailTemplateRenderer.RenderWarRoomBrief(brief);
+                await emailService.SendWarRoomBriefAsync(userEmail, subject, html, ct);
+
+                brief.EmailSent = true;
+                brief.EmailSentAt = DateTime.UtcNow;
+                await briefRepository.UpsertAsync(brief, ct);
+
+                logger.LogInformation(
+                    "War Room Brief email sent to {Email}", userEmail);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Failed to send War Room Brief email to {Email}", userEmail);
+                // Don't rethrow — brief generation succeeded, email failure is non-fatal
+            }
+        }
+
         return brief;
     }
+
 
     private async Task<LeagueBriefSection?> BuildLeagueSectionAsync(
         FF.Domain.Entities.LeagueMembership membership,
@@ -148,7 +178,7 @@ public class WarRoomBriefService(
 
             if (player?.GsisId is null) continue;
 
-            var sim = await simulationRepository
+            var sim = await simulationResultRepository
                 .GetByPlayerAsync(player.GsisId, season, week, ct);
 
             if (sim is not null)
