@@ -1,0 +1,515 @@
+﻿@* FF.WebBlazor/Pages/Brief/MyBrief.razor *@
+@page "/my-brief"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>War Room Brief — FantasyCombine.AI</PageTitle>
+
+@* ── HEADER ─────────────────────────────────────────────── *@
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.MilitaryTech" Class="mr-2" Style="vertical-align:middle;" />
+        War Room Brief
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        @if (_brief is not null)
+        {
+            @($"Season {_brief.Season} · Week {_brief.Week} · Generated {_brief.GeneratedAt:MMM d, yyyy h:mm tt} UTC")
+        }
+        else
+        {
+            @($"Season {_season}")
+        }
+    </MudText>
+</div>
+
+@* ── CONTROLS BAR ────────────────────────────────────────── *@
+<MudPaper Class="fc-controls-bar mb-4 pa-3" Elevation="0">
+    <MudGrid Spacing="2">
+        <MudItem xs="6" sm="3" md="2">
+            <MudNumericField @bind-Value="_season"
+                             Label="Season"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="2022" Max="2030" />
+        </MudItem>
+        <MudItem xs="6" sm="3" md="2">
+            <MudNumericField @bind-Value="_week"
+                             Label="Week"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="1" Max="18" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" Class="d-flex align-end gap-2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       Disabled="_loading"
+                       OnClick="LoadBrief"
+                       Style="height:40px;">
+                Load
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.AutoAwesome"
+                       Disabled="_generating"
+                       OnClick="GenerateBrief"
+                       Style="height:40px;">
+                @(_generating ? "Generating..." : "Generate Brief")
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@* ── LOADING ─────────────────────────────────────────────── *@
+@if (_loading || _generating)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+
+@* ── ERROR ───────────────────────────────────────────────── *@
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+}
+
+@* ── EMPTY STATE ─────────────────────────────────────────── *@
+@if (!_loading && !_generating && _brief is null && _error is null)
+{
+    <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="0"
+              Style="background:var(--fc-surface);border:1px dashed var(--fc-border);border-radius:8px;">
+        <MudIcon Icon="@Icons.Material.Filled.MilitaryTech"
+                 Style="font-size:64px;color:var(--fc-cyan);opacity:0.4;" Class="mb-4" />
+        <MudText Typo="Typo.h6" Class="mb-2" Style="color:var(--fc-cyan);">No Brief Available</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4" Align="Align.Center">
+            Your War Room Brief is generated every Sunday at 3am ET.<br />
+            Click Generate to create one now.
+        </MudText>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.AutoAwesome"
+                   Disabled="_generating"
+                   OnClick="GenerateBrief">
+            Generate Brief
+        </MudButton>
+    </MudPaper>
+}
+
+@* ── BRIEF CONTENT ───────────────────────────────────────── *@
+@if (_brief is not null)
+{
+    @* ── COACH RILEY ──────────────────────────────────────── *@
+    @if (!string.IsNullOrWhiteSpace(_brief.CoachRileyNarrative))
+    {
+        <MudPaper Class="pa-4 mb-4" Elevation="0"
+                  Style="background:var(--fc-surface);border-left:3px solid var(--fc-cyan);border-radius:0 8px 8px 0;">
+            <MudText Typo="Typo.overline" Style="color:var(--fc-cyan);">Coach Riley</MudText>
+            <MudText Typo="Typo.body1" Class="mt-1" Style="line-height:1.7;">
+                @_brief.CoachRileyNarrative
+            </MudText>
+        </MudPaper>
+    }
+
+    @* ── BOOM / BUST ROW ──────────────────────────────────── *@
+    <MudGrid Spacing="3" Class="mb-4">
+
+        @* BOOM CANDIDATES *@
+        @if (_brief.TopBoomCandidates.Any())
+        {
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="0" Style="background:var(--fc-surface);border-radius:8px;height:100%;">
+                    <div class="d-flex align-center mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.RocketLaunch"
+                                 Style="color:#22C55E;" Class="mr-2" />
+                        <MudText Typo="Typo.overline" Style="color:#22C55E;">Boom Candidates</MudText>
+                    </div>
+                    @foreach (var p in _brief.TopBoomCandidates)
+                    {
+                        <div class="mb-3" style="border-bottom:1px solid var(--fc-border);padding-bottom:10px;">
+                            <div class="d-flex justify-space-between align-center mb-1">
+                                <div class="d-flex align-center gap-2">
+                                    <MudChip T="string" Size="Size.Small" Class="@PositionClass(p.Position)">
+                                        @p.Position
+                                    </MudChip>
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--fc-cyan);">
+                                        @p.PlayerName
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @p.NflTeam vs @p.OpponentTeam
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Style="color:#22C55E;font-weight:700;">
+                                    @((p.BoomProbability * 100).ToString("F0"))% boom
+                                </MudText>
+                            </div>
+                            <div class="d-flex gap-3 mb-1">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Floor <span style="color:#E2E8F0;">@p.Floor.ToString("F1")</span>
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Med <span style="color:var(--fc-cyan);">@p.Median.ToString("F1")</span>
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Ceil <span style="color:#22C55E;">@p.Ceiling.ToString("F1")</span>
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Spread <span style="color:#E2E8F0;">@FormatSpread(p.Spread)</span>
+                                </MudText>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(p.HighlightReason))
+                            {
+                                <MudText Typo="Typo.caption" Style="color:#94A3B8;font-style:italic;">
+                                    @p.HighlightReason
+                                </MudText>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+
+        @* BUST RISKS *@
+        @if (_brief.BustRisks.Any())
+        {
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="0" Style="background:var(--fc-surface);border-radius:8px;height:100%;">
+                    <div class="d-flex align-center mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning"
+                                 Style="color:#EF4444;" Class="mr-2" />
+                        <MudText Typo="Typo.overline" Style="color:#EF4444;">Bust Risks</MudText>
+                    </div>
+                    @foreach (var p in _brief.BustRisks)
+                    {
+                        <div class="mb-3" style="border-bottom:1px solid var(--fc-border);padding-bottom:10px;">
+                            <div class="d-flex justify-space-between align-center mb-1">
+                                <div class="d-flex align-center gap-2">
+                                    <MudChip T="string" Size="Size.Small" Class="@PositionClass(p.Position)">
+                                        @p.Position
+                                    </MudChip>
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--fc-cyan);">
+                                        @p.PlayerName
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @p.NflTeam vs @p.OpponentTeam
+                                    </MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Style="color:#EF4444;font-weight:700;">
+                                    @((p.BustProbability * 100).ToString("F0"))% bust
+                                </MudText>
+                            </div>
+                            <div class="d-flex gap-3 mb-1">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Floor <span style="color:#EF4444;">@p.Floor.ToString("F1")</span>
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Med <span style="color:var(--fc-cyan);">@p.Median.ToString("F1")</span>
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Ceil <span style="color:#E2E8F0;">@p.Ceiling.ToString("F1")</span>
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Spread <span style="color:#E2E8F0;">@FormatSpread(p.Spread)</span>
+                                </MudText>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(p.HighlightReason))
+                            {
+                                <MudText Typo="Typo.caption" Style="color:#94A3B8;font-style:italic;">
+                                    @p.HighlightReason
+                                </MudText>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @* ── LEAGUE SECTIONS ──────────────────────────────────── *@
+    @if (_brief.Leagues.Any())
+    {
+        <MudText Typo="Typo.overline" Style="color:var(--fc-cyan);" Class="mb-2">Your Leagues</MudText>
+        @foreach (var league in _brief.Leagues)
+        {
+            <MudPaper Class="pa-4 mb-3" Elevation="0"
+                      Style="background:var(--fc-surface);border-radius:8px;border:1px solid var(--fc-border);">
+                <div class="d-flex justify-space-between align-center mb-2">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;color:var(--fc-cyan);">
+                        @league.LeagueName
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @league.TeamName
+                    </MudText>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(league.LeagueNarrative))
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3"
+                             Style="font-style:italic;">
+                        @league.LeagueNarrative
+                    </MudText>
+                }
+
+                @if (league.Starters.Any())
+                {
+                    <MudText Typo="Typo.overline" Class="mud-text-secondary mb-1">Starters</MudText>
+                    <MudTable Items="@league.Starters" Dense="true" Hover="true"
+                              Elevation="0" Class="fc-table mb-2"
+                              Style="background:transparent;">
+                        <HeaderContent>
+                            <MudTh>Player</MudTh>
+                            <MudTh>Pos</MudTh>
+                            <MudTh>Floor</MudTh>
+                            <MudTh>Med</MudTh>
+                            <MudTh>Ceil</MudTh>
+                            <MudTh>Boom%</MudTh>
+                            <MudTh>Bust%</MudTh>
+                            <MudTh>Note</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudText Typo="Typo.body2"
+                                         Style="font-weight:600;color:var(--fc-cyan);">
+                                    @context.PlayerName
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small"
+                                         Class="@PositionClass(context.Position)">
+                                    @context.Position
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Class="fc-stat">
+                                    @context.Floor.ToString("F1")
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
+                                    @context.Median.ToString("F1")
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Class="fc-stat fc-ceiling">
+                                    @context.Ceiling.ToString("F1")
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2"
+                                         Class="@((context.BoomProbability >= 0.30m) ? "fc-stat fc-boom" : "fc-stat")">
+                                    @((context.BoomProbability * 100).ToString("F0"))%
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2"
+                                         Class="@((context.BustProbability >= 0.25m) ? "fc-stat fc-bust" : "fc-stat")">
+                                    @((context.BustProbability * 100).ToString("F0"))%
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @context.HighlightReason
+                                </MudText>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+
+                @if (league.KeyDecisions.Any())
+                {
+                    <MudText Typo="Typo.overline" Class="mud-text-secondary mb-1 mt-2">
+                        Key Decisions
+                    </MudText>
+                    @foreach (var p in league.KeyDecisions)
+                    {
+                        <div class="d-flex align-center gap-2 mb-1">
+                            <MudChip T="string" Size="Size.Small" Class="@PositionClass(p.Position)">
+                                @p.Position
+                            </MudChip>
+                            <MudText Typo="Typo.body2" Style="color:var(--fc-cyan);">
+                                @p.PlayerName
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @p.HighlightReason
+                            </MudText>
+                        </div>
+                    }
+                }
+            </MudPaper>
+        }
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-2">
+            No league data available yet — brief will populate once 2025 nflverse data is published
+            and leagues are synced.
+        </MudAlert>
+    }
+
+    @* ── EMAIL STATUS ─────────────────────────────────────── *@
+    <MudPaper Class="pa-3 mt-4" Elevation="0"
+              Style="background:var(--fc-surface);border-radius:8px;border:1px solid var(--fc-border);">
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@(_brief.EmailSent? Icons.Material.Filled.MarkEmailRead : Icons.Material.Filled.Email)"
+                     Style="@(_brief.EmailSent ? "color:#22C55E;" : "color:#94A3B8;")"
+                     Size="Size.Small" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                @if (_brief.EmailSent && _brief.EmailSentAt.HasValue)
+                {
+                    @($"Email delivered to {_brief.UserEmail} at {_brief.EmailSentAt.Value:MMM d, h:mm tt} UTC")
+                }
+                else
+                {
+                    @("Email not yet sent for this brief.")
+                }
+            </MudText>
+        </div>
+    </MudPaper>
+}
+
+@code {
+    private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+    private int _week = GetCurrentNflWeek();
+    private bool _loading;
+    private bool _generating;
+    private string? _error;
+    private BriefModel? _brief;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBrief();
+    }
+
+    private async Task LoadBrief()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            _brief = await Http.GetFromJsonAsync<BriefModel>(
+                $"api/v1/brief/latest?season={_season}");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _brief = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load brief: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GenerateBrief()
+    {
+        _generating = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.PostAsync(
+                $"api/v1/brief/generate?season={_season}&week={_week}", null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Brief generated successfully!", Severity.Success);
+                await LoadBrief();
+            }
+            else
+            {
+                _error = $"Generation failed: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to generate brief: {ex.Message}";
+        }
+        finally
+        {
+            _generating = false;
+            StateHasChanged();
+        }
+    }
+
+    private static int GetCurrentNflWeek()
+    {
+        var now = DateTime.UtcNow;
+        var season = now.Month >= 3 ? now.Year : now.Year - 1;
+        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+        var seasonStart = sept1.AddDays(daysUntilThursday);
+        if (now < seasonStart) return 18;
+        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
+        return Math.Clamp(week, 1, 18);
+    }
+
+    private static string FormatSpread(decimal spread) => spread switch
+    {
+        0 => "—",
+        > 0 => $"+{spread:F1}",
+        _ => $"{spread:F1}"
+    };
+
+    private static string PositionClass(string pos) => pos switch
+    {
+        "QB" => "fc-chip-qb",
+        "RB" => "fc-chip-rb",
+        "WR" => "fc-chip-wr",
+        "TE" => "fc-chip-te",
+        _ => ""
+    };
+
+    // ── DTOs ─────────────────────────────────────────────────
+    private class BriefModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
+        public string UserEmail { get; set; } = string.Empty;
+        public int Season { get; set; }
+        public int Week { get; set; }
+        public DateTime GeneratedAt { get; set; }
+        public bool EmailSent { get; set; }
+        public DateTime? EmailSentAt { get; set; }
+        public string? CoachRileyNarrative { get; set; }
+        public List<LeagueSectionModel> Leagues { get; set; } = [];
+        public List<PlayerHighlightModel> TopBoomCandidates { get; set; } = [];
+        public List<PlayerHighlightModel> BustRisks { get; set; } = [];
+    }
+
+    private class LeagueSectionModel
+    {
+        public string LeagueName { get; set; } = string.Empty;
+        public string SleeperLeagueId { get; set; } = string.Empty;
+        public string TeamName { get; set; } = string.Empty;
+        public string? LeagueNarrative { get; set; }
+        public List<PlayerHighlightModel> Starters { get; set; } = [];
+        public List<PlayerHighlightModel> KeyDecisions { get; set; } = [];
+    }
+
+    private class PlayerHighlightModel
+    {
+        public string PlayerId { get; set; } = string.Empty;
+        public string PlayerName { get; set; } = string.Empty;
+        public string Position { get; set; } = string.Empty;
+        public string NflTeam { get; set; } = string.Empty;
+        public string OpponentTeam { get; set; } = string.Empty;
+        public decimal Median { get; set; }
+        public decimal Floor { get; set; }
+        public decimal Ceiling { get; set; }
+        public decimal BoomProbability { get; set; }
+        public decimal BustProbability { get; set; }
+        public string GameScript { get; set; } = string.Empty;
+        public decimal Spread { get; set; }
+        public string PlayerRole { get; set; } = string.Empty;
+        public string HighlightReason { get; set; } = string.Empty;
+    }
+}
