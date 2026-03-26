@@ -1,0 +1,534 @@
+﻿@page "/dynasty/trade"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Trade Analyzer — FantasyCombine.AI</PageTitle>
+
+@* ── HEADER ─────────────────────────────────────────────── *@
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.SwapHoriz" Class="mr-2" Style="vertical-align:middle;" />
+        Trade Analyzer
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Dynasty trade value comparison · Powered by DFV model
+    </MudText>
+</div>
+
+@* ── TRADE BUILDER ───────────────────────────────────────── *@
+<MudGrid Spacing="3" Class="mb-4">
+
+    @* ── MY SIDE ──────────────────────────────────────────── *@
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4 fc-controls-bar" Elevation="0">
+            <MudText Typo="Typo.subtitle1" Class="mb-3" Style="color:var(--fc-cyan);">
+                <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Class="mr-1" />
+                I Give Up
+            </MudText>
+
+            <MudAutocomplete T="PlayerSearchResult"
+                             @bind-Value="_mySearchResult"
+                             SearchFunc="SearchPlayers"
+                             ToStringFunc="@(p => p?.PlayerName ?? string.Empty)"
+                             Label="Add player..."
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Clearable="true"
+                             Class="mb-2"
+                             AdornmentIcon="@Icons.Material.Filled.PersonAdd"
+                             Adornment="Adornment.End"
+                             MinCharacters="2"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="false" />
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Disabled="@(_mySearchResult is null)"
+                       OnClick="AddToMySide"
+                       Class="mb-3">
+                Add
+            </MudButton>
+
+            @if (_mySide.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">No players added yet.</MudText>
+            }
+            else
+            {
+                @foreach (var player in _mySide)
+                {
+                    <MudPaper Class="pa-2 mb-2 d-flex align-center justify-space-between"
+                              Elevation="1"
+                              Style="background:rgba(255,255,255,0.03);">
+                        <div>
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">@player.PlayerName</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @player.Position · Age @player.Age ·
+                                <span style="color:var(--fc-cyan);">Val @player.TradeValue.ToString("F1")</span>
+                            </MudText>
+                        </div>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                       Size="Size.Small"
+                                       Color="Color.Error"
+                                       OnClick="@(() => RemoveFromMySide(player))" />
+                    </MudPaper>
+                }
+                <MudDivider Class="my-2" />
+                <div class="d-flex justify-space-between">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Total Value</MudText>
+                    <MudText Typo="Typo.subtitle2" Style="color:var(--fc-cyan);">
+                        @_mySide.Sum(p => p.TradeValue).ToString("F1")
+                    </MudText>
+                </div>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* ── CENTRE ────────────────────────────────────────────── *@
+    <MudItem xs="12" md="2" Class="d-flex flex-column align-center justify-center">
+        <MudIcon Icon="@Icons.Material.Filled.SwapHoriz"
+                 Style="font-size:2.5rem;color:var(--fc-cyan);opacity:0.4;"
+                 Class="mb-3" />
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Calculate"
+                   FullWidth="true"
+                   Disabled="@(_analyzing || _mySide.Count == 0 || _theirSide.Count == 0)"
+                   OnClick="AnalyzeTrade">
+            @(_analyzing ? "Analyzing..." : "Analyze")
+        </MudButton>
+        @if (_mySide.Count > 0 || _theirSide.Count > 0)
+        {
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Default"
+                       Size="Size.Small"
+                       Class="mt-2"
+                       OnClick="ClearAll">
+                Clear
+            </MudButton>
+        }
+    </MudItem>
+
+    @* ── THEIR SIDE ────────────────────────────────────────── *@
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4 fc-controls-bar" Elevation="0">
+            <MudText Typo="Typo.subtitle1" Class="mb-3" Style="color:var(--fc-cyan);">
+                <MudIcon Icon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" Class="mr-1" />
+                I Receive
+            </MudText>
+
+            <MudAutocomplete T="PlayerSearchResult"
+                             @bind-Value="_theirSearchResult"
+                             SearchFunc="SearchPlayers"
+                             ToStringFunc="@(p => p?.PlayerName ?? string.Empty)"
+                             Label="Add player..."
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Clearable="true"
+                             Class="mb-2"
+                             AdornmentIcon="@Icons.Material.Filled.PersonAdd"
+                             Adornment="Adornment.End"
+                             MinCharacters="2"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="false" />
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Disabled="@(_theirSearchResult is null)"
+                       OnClick="AddToTheirSide"
+                       Class="mb-3">
+                Add
+            </MudButton>
+
+            @if (_theirSide.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">No players added yet.</MudText>
+            }
+            else
+            {
+                @foreach (var player in _theirSide)
+                {
+                    <MudPaper Class="pa-2 mb-2 d-flex align-center justify-space-between"
+                              Elevation="1"
+                              Style="background:rgba(255,255,255,0.03);">
+                        <div>
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">@player.PlayerName</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @player.Position · Age @player.Age ·
+                                <span style="color:var(--fc-cyan);">Val @player.TradeValue.ToString("F1")</span>
+                            </MudText>
+                        </div>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                       Size="Size.Small"
+                                       Color="Color.Error"
+                                       OnClick="@(() => RemoveFromTheirSide(player))" />
+                    </MudPaper>
+                }
+                <MudDivider Class="my-2" />
+                <div class="d-flex justify-space-between">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Total Value</MudText>
+                    <MudText Typo="Typo.subtitle2" Style="color:var(--fc-cyan);">
+                        @_theirSide.Sum(p => p.TradeValue).ToString("F1")
+                    </MudText>
+                </div>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@* ── LOADING ─────────────────────────────────────────────── *@
+@if (_analyzing)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+
+@* ── RESULT PANEL ────────────────────────────────────────── *@
+@if (_result is not null)
+{
+    var gc = GradeColor(_result.Grade);
+    <MudPaper Class="pa-4 mb-4" Elevation="2" Style="@("border-left:4px solid " + gc + ";")">
+        <MudGrid Spacing="3">
+
+            @* Grade *@
+            <MudItem xs="12" sm="3" Class="d-flex flex-column align-center justify-center">
+                <MudText Typo="Typo.h2" Style="@("font-weight:900;color:" + gc + ";font-family:'JetBrains Mono',monospace;")">
+                    @_result.Grade
+                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Trade Grade</MudText>
+            </MudItem>
+
+            @* Value comparison *@
+            <MudItem xs="12" sm="5">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Value Comparison</MudText>
+                <div class="d-flex align-center gap-3 mb-1">
+                    <MudText Typo="Typo.body2" Style="min-width:80px;">You Give</MudText>
+                    <MudProgressLinear Value="@ValueBarPct(_result.MySideValue)"
+                                       Color="Color.Error"
+                                       Rounded="true"
+                                       Size="Size.Medium"
+                                       Style="flex:1;" />
+                    <MudText Typo="Typo.body2" Class="fc-stat"
+                             Style="min-width:40px;font-family:'JetBrains Mono',monospace;">
+                        @_result.MySideValue.ToString("F1")
+                    </MudText>
+                </div>
+                <div class="d-flex align-center gap-3">
+                    <MudText Typo="Typo.body2" Style="min-width:80px;">You Get</MudText>
+                    <MudProgressLinear Value="@ValueBarPct(_result.TheirSideValue)"
+                                       Color="Color.Success"
+                                       Rounded="true"
+                                       Size="Size.Medium"
+                                       Style="flex:1;" />
+                    <MudText Typo="Typo.body2" Class="fc-stat"
+                             Style="min-width:40px;font-family:'JetBrains Mono',monospace;">
+                        @_result.TheirSideValue.ToString("F1")
+                    </MudText>
+                </div>
+                <MudText Typo="Typo.caption" Class="mt-2" Style="@("color:" + gc + ";")">
+                    @_result.Recommendation
+                </MudText>
+            </MudItem>
+
+            @* Insights *@
+            <MudItem xs="12" sm="4">
+                @if (_result.KeyInsights.Count > 0)
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Key Insights</MudText>
+                    @foreach (var insight in _result.KeyInsights)
+                    {
+                        <div class="d-flex align-start mb-1">
+                            <MudIcon Icon="@Icons.Material.Filled.Lightbulb"
+                                     Size="Size.Small"
+                                     Style="color:var(--fc-cyan);margin-right:6px;margin-top:2px;" />
+                            <MudText Typo="Typo.body2">@insight</MudText>
+                        </div>
+                    }
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+}
+
+@* ── TRADE HISTORY ───────────────────────────────────────── *@
+@if (_history.Count > 0)
+{
+    <MudText Typo="Typo.subtitle1" Class="mb-2">Recent Trades</MudText>
+    <MudPaper Elevation="0" Class="fc-table-paper">
+        <MudTable Items="@_history"
+                  Dense="true"
+                  Hover="true"
+                  Class="fc-table">
+            <HeaderContent>
+                <MudTh>Date</MudTh>
+                <MudTh>I Gave</MudTh>
+                <MudTh>I Got</MudTh>
+                <MudTh>My Value</MudTh>
+                <MudTh>Their Value</MudTh>
+                <MudTh>Grade</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @context.AnalyzedAt.ToLocalTime().ToString("MMM d, h:mm tt")
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2">
+                        @string.Join(", ", context.MySide.Select(p => p.PlayerName))
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2">
+                        @string.Join(", ", context.TheirSide.Select(p => p.PlayerName))
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Class="fc-stat"
+                             Style="font-family:'JetBrains Mono',monospace;">
+                        @context.MySideValue.ToString("F1")
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Class="fc-stat"
+                             Style="font-family:'JetBrains Mono',monospace;">
+                        @context.TheirSideValue.ToString("F1")
+                    </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2"
+                             Style="@("font-weight:900;color:" + GradeColor(context.Grade) + ";font-family:'JetBrains Mono',monospace;")">
+                        @context.Grade
+                    </MudText>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    // ── State ─────────────────────────────────────────────────
+    private List<TradePlayerItem> _mySide = [];
+    private List<TradePlayerItem> _theirSide = [];
+
+    private PlayerSearchResult? _mySearchResult;
+    private PlayerSearchResult? _theirSearchResult;
+
+    private bool _analyzing;
+    private TradeResultModel? _result;
+    private List<TradeHistoryItem> _history = [];
+
+    private List<PlayerSearchResult> _allPlayers = [];
+    private bool _playersLoaded;
+
+    // ── Lifecycle ─────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPlayersForSearch();
+        await LoadHistory();
+    }
+
+    private async Task LoadPlayersForSearch()
+    {
+        try
+        {
+            var rows = await Http.GetFromJsonAsync<List<PlayerSearchResult>>(
+                "api/v1/dynasty/valuations?top=500");
+            _allPlayers = rows ?? [];
+            _playersLoaded = true;
+        }
+        catch
+        {
+            _playersLoaded = false;
+        }
+    }
+
+    private async Task LoadHistory()
+    {
+        try
+        {
+            var history = await Http.GetFromJsonAsync<List<TradeHistoryItem>>(
+                "api/v1/dynasty/trade/history");
+            _history = history ?? [];
+        }
+        catch
+        {
+            // non-fatal
+        }
+    }
+
+    // ── Search ────────────────────────────────────────────────
+    private Task<IEnumerable<PlayerSearchResult>> SearchPlayers(
+        string value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 2)
+            return Task.FromResult(Enumerable.Empty<PlayerSearchResult>());
+
+        var results = _allPlayers
+            .Where(p => p.PlayerName.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .Take(10);
+
+        return Task.FromResult(results);
+    }
+
+    // ── Add / Remove ──────────────────────────────────────────
+    private void AddToMySide()
+    {
+        if (_mySearchResult is null) return;
+        if (_mySide.Any(p => p.SleeperPlayerId == _mySearchResult.SleeperPlayerId))
+        {
+            Snackbar.Add("Player already added.", Severity.Warning);
+            return;
+        }
+        _mySide.Add(new TradePlayerItem(
+            _mySearchResult.SleeperPlayerId,
+            _mySearchResult.PlayerName,
+            _mySearchResult.Position,
+            _mySearchResult.Age,
+            _mySearchResult.TradeValue));
+        _mySearchResult = null;
+        _result = null;
+    }
+
+    private void AddToTheirSide()
+    {
+        if (_theirSearchResult is null) return;
+        if (_theirSide.Any(p => p.SleeperPlayerId == _theirSearchResult.SleeperPlayerId))
+        {
+            Snackbar.Add("Player already added.", Severity.Warning);
+            return;
+        }
+        _theirSide.Add(new TradePlayerItem(
+            _theirSearchResult.SleeperPlayerId,
+            _theirSearchResult.PlayerName,
+            _theirSearchResult.Position,
+            _theirSearchResult.Age,
+            _theirSearchResult.TradeValue));
+        _theirSearchResult = null;
+        _result = null;
+    }
+
+    private void RemoveFromMySide(TradePlayerItem player)
+    {
+        _mySide.Remove(player);
+        _result = null;
+    }
+
+    private void RemoveFromTheirSide(TradePlayerItem player)
+    {
+        _theirSide.Remove(player);
+        _result = null;
+    }
+
+    private void ClearAll()
+    {
+        _mySide.Clear();
+        _theirSide.Clear();
+        _result = null;
+    }
+
+    // ── Analyze ───────────────────────────────────────────────
+    private async Task AnalyzeTrade()
+    {
+        if (_mySide.Count == 0 || _theirSide.Count == 0) return;
+
+        _analyzing = true;
+        _result = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new
+            {
+                MyPlayerIds = _mySide.Select(p => p.SleeperPlayerId).ToList(),
+                TheirPlayerIds = _theirSide.Select(p => p.SleeperPlayerId).ToList(),
+                Season = 2026
+            };
+
+            var response = await Http.PostAsJsonAsync("api/v1/dynasty/trade/analyze", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _result = await response.Content.ReadFromJsonAsync<TradeResultModel>();
+                await LoadHistory();
+            }
+            else
+            {
+                Snackbar.Add("Trade analysis failed — check API.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _analyzing = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────
+    private double MaxSideValue => Math.Max(
+        _result?.MySideValue ?? 0,
+        _result?.TheirSideValue ?? 0);
+
+    private double ValueBarPct(double value) =>
+        MaxSideValue > 0 ? value / MaxSideValue * 100.0 : 0;
+
+    private static string GradeColor(string grade) => grade switch
+    {
+        "A" => "#00C8F0",
+        "B" => "#4CAF50",
+        "C" => "#FFC107",
+        "D" => "#FF9800",
+        "F" => "#F44336",
+        _ => "#888888"
+    };
+
+    // ── DTOs ──────────────────────────────────────────────────
+    private record PlayerSearchResult(
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        int Age,
+        double TradeValue);
+
+    private record TradePlayerItem(
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        int Age,
+        double TradeValue);
+
+    private record TradeResultModel(
+        string Grade,
+        string Recommendation,
+        double MySideValue,
+        double TheirSideValue,
+        double ValueDifferential,
+        List<string> KeyInsights,
+        List<TradeSidePlayerModel> MySide,
+        List<TradeSidePlayerModel> TheirSide);
+
+    private record TradeSidePlayerModel(
+        string PlayerName,
+        string Position,
+        int Age,
+        double TradeValue);
+
+    private record TradeHistoryItem(
+        string Id,
+        DateTime AnalyzedAt,
+        double MySideValue,
+        double TheirSideValue,
+        string Grade,
+        List<TradeSidePlayerModel> MySide,
+        List<TradeSidePlayerModel> TheirSide);
+}
