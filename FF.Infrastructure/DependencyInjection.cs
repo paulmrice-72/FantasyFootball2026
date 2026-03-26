@@ -91,6 +91,8 @@ public static class DependencyInjection
         services.AddScoped<IDynastyValuationRepository, DynastyValuationRepository>();
         services.AddScoped<IBreakoutDetectionService, BreakoutDetectionService>();
         services.AddScoped<IDfvCalculationService, DfvCalculationService>();
+        services.AddScoped<ITradeAnalysisRepository, TradeAnalysisRepository>();
+        services.AddScoped<ITradeAnalyzerService, TradeAnalyzerService>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
@@ -275,6 +277,18 @@ public static class DependencyInjection
             if (!BsonClassMap.IsClassMapRegistered(typeof(DynastyValuationDocument)))
             {
                 BsonClassMap.RegisterClassMap<DynastyValuationDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(TradeAnalysisDocument)))
+            {
+                BsonClassMap.RegisterClassMap<TradeAnalysisDocument>(cm =>
                 {
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);
