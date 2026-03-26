@@ -4,6 +4,7 @@ using FF.Application.Identity.Interfaces;
 using FF.Application.Interfaces.Auth;
 using FF.Application.Interfaces.Jobs;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Application.Interfaces.Services.Usage;
 using FF.Domain.Documents;
@@ -83,6 +84,8 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
         });
+        services.AddScoped<IAgingCurveRepository, AgingCurveRepository>();
+        services.AddScoped<IAgingCurveService, AgingCurveService>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
@@ -247,6 +250,18 @@ public static class DependencyInjection
                 {
                     cm.AutoMap();
                     cm.MapIdMember(x => x.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(AgingCurveDocument)))
+            {
+                BsonClassMap.RegisterClassMap<AgingCurveDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
                       .SetIdGenerator(StringObjectIdGenerator.Instance)
                       .SetSerializer(new StringSerializer(BsonType.ObjectId));
                 });
