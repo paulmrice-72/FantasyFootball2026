@@ -33,9 +33,6 @@ public class BreakoutDetectionService(
                 if (player.SleeperPlayerId is null) continue;
                 if (!player.Age.HasValue) continue;
 
-                // Try to get usage metrics by PlayerId (nflfastR)
-                // PlayerId on Player entity = GsisId or nflfastR — may not match
-                // Use SleeperPlayerId cross-reference via PlayerName as fallback
                 PlayerUsageMetricsDocument? usage = null;
                 if (player.GsisId is not null)
                     metricsMap.TryGetValue(player.GsisId, out usage);
@@ -85,28 +82,26 @@ public class BreakoutDetectionService(
         double score = 0;
 
         // ── Signal 1: Age vs position peak (0-25 pts) ────────────────────
-        // Young players approaching prime = highest upside
         var peakAge = GetPeakAge(pos);
         var ageToGo = peakAge - player.Age.Value;
         var ageScore = ageToGo switch
         {
-            >= 3 and <= 5 => 25.0,   // 3-5 years from peak = maximum upside window
-            >= 1 and < 3 => 20.0,   // approaching peak
-            0 => 15.0,   // at peak
-            < 0 and >= -2 => 8.0,    // just past peak
-            _ => 2.0     // well past peak or very young
+            >= 3 and <= 5 => 25.0,
+            >= 1 and < 3 => 20.0,
+            0 => 15.0,
+            < 0 and >= -2 => 8.0,
+            _ => 2.0
         };
         score += ageScore;
         if (ageToGo is >= 1 and <= 5) signals.Add($"Age {player.Age.Value} — {ageToGo}yr to peak");
 
         // ── Signal 2: Years experience sweet spot (0-20 pts) ─────────────
-        // Year 2-4 players break out most often
         var exp = player.YearsExperience ?? 0;
         var expScore = exp switch
         {
-            2 or 3 => 20.0,   // prime breakout window
+            2 or 3 => 20.0,
             4 => 15.0,
-            1 => 10.0,   // rookie — too early usually
+            1 => 10.0,
             5 => 8.0,
             _ => 2.0
         };
@@ -115,13 +110,11 @@ public class BreakoutDetectionService(
 
         if (metrics is null)
         {
-            // No usage data — classify by age/experience only
             var classification = ClassifyByScore(score, hasMetrics: false);
-            return new BreakoutScoreResult(
-                Math.Round(score, 1), classification, signals);
+            return new BreakoutScoreResult(Math.Round(score, 1), classification, signals);
         }
 
-        // ── Signal 3: Usage trend — target/carry share rising (0-20 pts) ─
+        // ── Signal 3: Usage trend (0-20 pts) ─────────────────────────────
         var usageTrend = GetUsageTrend(metrics, pos);
         if (usageTrend > 0.03m)
         {
@@ -195,9 +188,8 @@ public class BreakoutDetectionService(
 
     // ── Private helpers ───────────────────────────────────────────────────
 
-    private static decimal GetUsageTrend(PlayerUsageMetricsDocument m, string position)
-    {
-        return position switch
+    private static decimal GetUsageTrend(PlayerUsageMetricsDocument m, string position) =>
+        position switch
         {
             "RB" => m.CarryShare3Wk - m.CarryShareSeason,
             "WR" => m.TargetShare3Wk - m.TargetShareSeason,
@@ -205,7 +197,6 @@ public class BreakoutDetectionService(
             "QB" => m.SnapPct3Wk - m.SnapPctSeason,
             _ => 0m
         };
-    }
 
     private static BreakoutClassification ClassifyByScore(double score, bool hasMetrics) =>
         score switch

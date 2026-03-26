@@ -52,6 +52,13 @@ public class DfvCalculationService(
         {
             if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
 
+            // FA QBs = out-of-league backups — zero value, skip DB call
+            if (valuation.Position == "QB" && string.IsNullOrEmpty(valuation.NflTeam))
+            {
+                rawDfvMap[valuation.SleeperPlayerId] = 0;
+                continue;
+            }
+
             var careerSim = await careerSimRepository
                 .GetByPlayerIdAsync(valuation.SleeperPlayerId, ct);
 
@@ -62,8 +69,6 @@ public class DfvCalculationService(
             }
 
             var raw = CalculateRawDfv(careerSim, valuation.Position);
-
-            // Boost by breakout score — high breakout players worth more
             var breakoutBoost = 1.0 + (valuation.BreakoutScore / 100.0) * 0.25;
             rawDfvMap[valuation.SleeperPlayerId] = raw * breakoutBoost;
         }

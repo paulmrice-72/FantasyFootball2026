@@ -144,7 +144,9 @@ else if (_filtered.Count > 0)
                     </MudChip>
                 </MudTd>
                 <MudTd DataLabel="Team">
-                    <MudText Typo="Typo.body2" Class="fc-stat">@context.NflTeam</MudText>
+                    <MudText Typo="Typo.body2" Class="@(string.IsNullOrEmpty(context.NflTeam) ? "fc-stat mud-text-secondary" : "fc-stat")">
+                        @(string.IsNullOrEmpty(context.NflTeam) ? "FA" : context.NflTeam)
+                    </MudText>
                 </MudTd>
                 <MudTd DataLabel="Age">
                     <MudText Typo="Typo.body2" Class="fc-stat">@context.Age</MudText>
@@ -352,7 +354,7 @@ else if (_filtered.Count > 0)
     private async Task RunDfv()
     {
         _computing = true;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
         try
         {
             // Chain: career sims → breakout → DFV
@@ -377,7 +379,7 @@ else if (_filtered.Count > 0)
         finally
         {
             _computing = false;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
