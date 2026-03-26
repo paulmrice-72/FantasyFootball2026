@@ -90,6 +90,7 @@ public static class DependencyInjection
         services.AddScoped<ICareerSimulationService, CareerSimulationService>();
         services.AddScoped<IDynastyValuationRepository, DynastyValuationRepository>();
         services.AddScoped<IBreakoutDetectionService, BreakoutDetectionService>();
+        services.AddScoped<IDfvCalculationService, DfvCalculationService>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
