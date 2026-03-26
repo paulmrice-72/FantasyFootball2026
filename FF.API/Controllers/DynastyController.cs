@@ -65,4 +65,18 @@ public class DynastyController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(new GetDynastyValuationsQuery(position, top), ct);
         return Ok(result);
     }
+
+    [HttpPost("dfv/calculate")]
+    public async Task<IActionResult> CalculateDfv(
+    [FromQuery] int season, CancellationToken ct)
+    {
+        if (season <= 0) season = 2026;
+        var result = await mediator.Send(new CalculateDfvCommand(season), ct);
+        return Ok(new
+        {
+            result.Calculated,
+            result.MaxRawDfv,
+            ElapsedSeconds = result.Elapsed.TotalSeconds
+        });
+    }
 }
