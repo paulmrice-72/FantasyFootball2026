@@ -271,6 +271,13 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<PlayerGameLogDocument>> GetByPositionAsync(
+    string position,
+    CancellationToken ct = default)
+    {
+        var filter = Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Position, position);
+        return await _collection.Find(filter).ToListAsync(ct);
+    }
 
     public async Task<IReadOnlyList<string>> GetDistinctPlayerIdsAsync(
     int season, CancellationToken ct = default)
