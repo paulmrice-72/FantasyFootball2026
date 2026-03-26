@@ -73,7 +73,7 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
     public async Task UpsertBatchAsync(
         IEnumerable<DynastyValuationDocument> documents, CancellationToken ct = default)
     {
-        var tasks = documents.Select(d => UpsertAsync(d, ct));
-        await Task.WhenAll(tasks);
+        foreach (var document in documents)
+            await UpsertAsync(document, ct);
     }
 }

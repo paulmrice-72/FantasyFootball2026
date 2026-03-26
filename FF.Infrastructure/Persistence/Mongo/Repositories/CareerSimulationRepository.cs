@@ -54,7 +54,7 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
     public async Task UpsertBatchAsync(
         IEnumerable<CareerSimulationDocument> documents, CancellationToken ct = default)
     {
-        var tasks = documents.Select(d => UpsertAsync(d, ct));
-        await Task.WhenAll(tasks);
+        foreach (var document in documents)
+            await UpsertAsync(document, ct);
     }
 }
