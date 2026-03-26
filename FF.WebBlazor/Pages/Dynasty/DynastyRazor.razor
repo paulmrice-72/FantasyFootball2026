@@ -113,7 +113,7 @@ else if (_filtered.Count > 0)
                   Height="calc(100vh - 360px)"
                   SortLabel="Sort"
                   Class="fc-table"
-                  OnRowClick="@((TableRowClickEventArgs<DynastyRow> args) => OpenPlayerDetail(args.Item))">
+                  OnRowClick="@((TableRowClickEventArgs<DynastyRow> args) => { if (args.Item is not null) _ = OpenPlayerDetail(args.Item); })">
             <HeaderContent>
                 <MudTh Style="width:40px;">#</MudTh>
                 <MudTh><MudTableSortLabel SortBy="new Func<DynastyRow, object>(x => x.PlayerName)">Player</MudTableSortLabel></MudTh>
@@ -207,7 +207,7 @@ else if (_filtered.Count > 0)
 }
 
 @* ── PLAYER DETAIL DIALOG ────────────────────────────────── *@
-<MudDialog @bind-IsVisible="_detailOpen" Options="_dialogOptions">
+<MudDialog @bind-Visible="_detailOpen" Options="_dialogOptions">
     <TitleContent>
         <MudText Typo="Typo.h6" Style="color: var(--fc-cyan);">
             @_selectedPlayer?.PlayerName
