@@ -56,4 +56,8 @@ public interface IPlayerGameLogRepository
 
     Task<PlayerGameLogDocument?> GetMostRecentAsync(
         string playerId, int season, int beforeWeek, CancellationToken ct = default);
+
+    Task<List<PlayerGameLogDocument>> GetByPositionAsync(
+        string position,
+        CancellationToken ct = default);
 }
