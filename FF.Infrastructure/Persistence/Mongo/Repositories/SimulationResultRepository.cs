@@ -34,6 +34,7 @@ public class SimulationResultRepository(
         else
         {
             var update = Builders<SimulationResultDocument>.Update
+                .Set(x => x.SleeperPlayerId, document.SleeperPlayerId)
                 .Set(x => x.PlayerName, document.PlayerName)
                 .Set(x => x.Position, document.Position)
                 .Set(x => x.NflTeam, document.NflTeam)
@@ -98,5 +99,22 @@ public class SimulationResultRepository(
             .Find(x => x.Season == season && x.Week == week && x.Position == position)
             .SortByDescending(x => x.Median)
             .ToListAsync(ct);
+    }
+
+    public async Task<SimulationResultDocument?> GetMostRecentBySleeperIdAsync(
+    string sleeperPlayerId, int season, CancellationToken ct = default)
+    {
+        // SleeperPlayerId is stored on the game log but NOT on SimulationResultDocument
+        // SimulationResultDocument uses PlayerId (nflfastR). We store SleeperPlayerId
+        // separately — filter by season, sort by week desc, take first match.
+        // NOTE: This requires SleeperPlayerId field — we add it below.
+        var filter = Builders<SimulationResultDocument>.Filter.And(
+            Builders<SimulationResultDocument>.Filter.Eq(x => x.SleeperPlayerId, sleeperPlayerId),
+            Builders<SimulationResultDocument>.Filter.Eq(x => x.Season, season));
+
+        return await _collection
+            .Find(filter)
+            .SortByDescending(x => x.Week)
+            .FirstOrDefaultAsync(ct);
     }
 }
