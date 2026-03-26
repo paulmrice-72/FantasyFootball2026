@@ -88,6 +88,8 @@ public static class DependencyInjection
         services.AddScoped<IAgingCurveService, AgingCurveService>();
         services.AddScoped<ICareerSimulationRepository, CareerSimulationRepository>();
         services.AddScoped<ICareerSimulationService, CareerSimulationService>();
+        services.AddScoped<IDynastyValuationRepository, DynastyValuationRepository>();
+        services.AddScoped<IBreakoutDetectionService, BreakoutDetectionService>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
@@ -260,6 +262,18 @@ public static class DependencyInjection
             if (!BsonClassMap.IsClassMapRegistered(typeof(AgingCurveDocument)))
             {
                 BsonClassMap.RegisterClassMap<AgingCurveDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(DynastyValuationDocument)))
+            {
+                BsonClassMap.RegisterClassMap<DynastyValuationDocument>(cm =>
                 {
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);
