@@ -24,4 +24,26 @@ public class DynastyController(IMediator mediator) : ControllerBase
         var curve = await mediator.Send(new GetAgingCurveQuery(position.ToUpper()), ct);
         return curve is null ? NotFound() : Ok(curve);
     }
+
+    [HttpPost("career-simulations/run")]
+    public async Task<IActionResult> RunCareerSimulations(
+    [FromQuery] int season, CancellationToken ct)
+    {
+        if (season <= 0) season = 2026;
+        var result = await mediator.Send(new RunCareerSimulationsCommand(season), ct);
+        return Ok(new
+        {
+            result.Simulated,
+            result.Failed,
+            ElapsedSeconds = result.Elapsed.TotalSeconds
+        });
+    }
+
+    [HttpGet("career-simulations/{sleeperPlayerId}")]
+    public async Task<IActionResult> GetCareerSimulation(
+        string sleeperPlayerId, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetCareerSimulationQuery(sleeperPlayerId), ct);
+        return result is null ? NotFound() : Ok(result);
+    }
 }
