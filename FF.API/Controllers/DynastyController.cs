@@ -46,4 +46,23 @@ public class DynastyController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(new GetCareerSimulationQuery(sleeperPlayerId), ct);
         return result is null ? NotFound() : Ok(result);
     }
+
+    [HttpPost("breakout/run")]
+    public async Task<IActionResult> RunBreakoutDetection(
+    [FromQuery] int season, CancellationToken ct)
+    {
+        if (season <= 0) season = 2026;
+        var result = await mediator.Send(new RunBreakoutDetectionCommand(season), ct);
+        return Ok(new { result.Scored, ElapsedSeconds = result.Elapsed.TotalSeconds });
+    }
+
+    [HttpGet("valuations")]
+    public async Task<IActionResult> GetValuations(
+        [FromQuery] string? position,
+        [FromQuery] int top = 50,
+        CancellationToken ct = default)
+    {
+        var result = await mediator.Send(new GetDynastyValuationsQuery(position, top), ct);
+        return Ok(result);
+    }
 }
