@@ -60,7 +60,7 @@ public class LinkSleeperAccountCommandHandler(
                     userId: request.UserId,
                     sleeperUserId: sleeperUser.SleeperUserId,
                     leagueId: league.LeagueId,
-                    leagueName: $"{league.Name} ({league.LeagueType} {league.Season})",
+                    leagueName: league.Name,
                     season: league.Season,
                     role: "member",
                     cancellationToken: cancellationToken);

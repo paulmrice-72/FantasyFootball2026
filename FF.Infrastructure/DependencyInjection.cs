@@ -7,6 +7,7 @@ using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Application.Interfaces.Services.Usage;
+using FF.Application.Services;
 using FF.Domain.Documents;
 using FF.Infrastructure.ExternalApis.CsvImport;
 using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
@@ -133,6 +134,7 @@ public static class DependencyInjection
         services.AddScoped<IPlayerProjectionRepository, PlayerProjectionRepository>();
         services.AddScoped<ProjectionInputBuilder>();
         services.AddScoped<PlayerProjectionService>();
+        services.AddScoped<RosterProfileService>();
         services.AddSleeperApiClient();
 
         // Identity

@@ -12,188 +12,295 @@
     VORP rankings for available players and in-season emergence signals.
 </MudText>
 
-<MudTabs Elevation="0" Rounded="true" Class="mb-4">
+@if (_context is null && _contextLoading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_context?.IsSleeperLinked != true)
+{
+    <MudAlert Severity="Severity.Warning">
+        Link your Sleeper account to use waiver wire features.
+    </MudAlert>
+}
+else
+{
+    <!-- League + week selector — shared across tabs -->
+    <MudGrid Class="mb-3">
+        <MudItem xs="12" sm="4">
+            <MudSelect T="string" @bind-Value="_selectedLeagueId"
+                       Label="League"
+                       Variant="Variant.Outlined"
+                       AnchorOrigin="Origin.BottomCenter">
+                @foreach (var league in _context.Leagues)
+                {
+                    <MudSelectItem T="string" Value="@league.LeagueId">
+                        @league.LeagueName
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" sm="2">
+            <MudNumericField @bind-Value="_week"
+                             Label="Week"
+                             Variant="Variant.Outlined"
+                             Min="1" Max="18" />
+        </MudItem>
+        <MudItem xs="6" sm="2" Class="d-flex align-center">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="LoadAllAsync"
+                       Disabled="_vorpLoading"
+                       FullWidth="true">
+                @(_vorpLoading ? "Loading..." : "Load")
+            </MudButton>
+        </MudItem>
+    </MudGrid>
 
-    <!-- ── Tab 1: VORP Recommendations ── -->
-    <MudTabPanel Text="Available Players (VORP)">
+    <MudTabs Elevation="0"
+             Rounded="true"
+             Class="mb-4">
 
-        <MudGrid Class="mb-3 mt-2">
-            <MudItem xs="12" sm="4">
-                <MudTextField @bind-Value="_leagueId"
-                              Label="Sleeper League ID"
-                              Variant="Variant.Outlined"
-                              Adornment="Adornment.End"
-                              AdornmentIcon="@Icons.Material.Filled.Search"
-                              OnAdornmentClick="LoadVorpAsync"
-                              Immediate="false" />
-            </MudItem>
-            <MudItem xs="6" sm="2">
-                <MudNumericField @bind-Value="_week"
-                                 Label="Week"
-                                 Variant="Variant.Outlined"
-                                 Min="1" Max="18" />
-            </MudItem>
-            <MudItem xs="6" sm="2" Class="d-flex align-center">
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           OnClick="LoadVorpAsync"
-                           Disabled="_vorpLoading"
-                           FullWidth="true">
-                    @(_vorpLoading ? "Loading..." : "Load")
-                </MudButton>
-            </MudItem>
-        </MudGrid>
+        <!-- ── Tab 1: VORP Recommendations ── -->
+        <MudTabPanel Text="Available Players (VORP)">
 
-        <MudChipSet T="string" @bind-SelectedValue="_vorpPosition"
-                    Class="mb-3" SelectionMode="SelectionMode.SingleSelection">
-            <MudChip T="string" Value="@("")" Default="true">All</MudChip>
-            <MudChip T="string" Value="@("QB")">QB</MudChip>
-            <MudChip T="string" Value="@("RB")">RB</MudChip>
-            <MudChip T="string" Value="@("WR")">WR</MudChip>
-            <MudChip T="string" Value="@("TE")">TE</MudChip>
-        </MudChipSet>
+            <MudChipSet T="string" @bind-SelectedValue="_vorpPosition"
+                        Class="mb-3 mt-2" SelectionMode="SelectionMode.SingleSelection">
+                <MudChip T="string" Value="@("")" Default="true">All</MudChip>
+                <MudChip T="string" Value="@("QB")">QB</MudChip>
+                <MudChip T="string" Value="@("RB")">RB</MudChip>
+                <MudChip T="string" Value="@("WR")">WR</MudChip>
+                <MudChip T="string" Value="@("TE")">TE</MudChip>
+            </MudChipSet>
 
-        @if (_vorpLoading)
-        {
-            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
-        }
-        else if (_vorpRecs.Count == 0 && _vorpQueried)
-        {
-            <MudAlert Severity="Severity.Info">
-                No available players found. Ensure projections are calculated for this week
-                and the league ID is correct.
-            </MudAlert>
-        }
-        else if (_vorpRecs.Count > 0)
-        {
-            <MudTable Items="@FilteredVorp" Dense="true" Hover="true" Striped="true"
-                      Style="background: var(--fc-navy-card);">
-                <HeaderContent>
-                    <MudTh>Rank</MudTh>
-                    <MudTh>Player</MudTh>
-                    <MudTh>Pos</MudTh>
-                    <MudTh>Team</MudTh>
-                    <MudTh Style="text-align:right">Proj</MudTh>
-                    <MudTh Style="text-align:right">VORP</MudTh>
-                    <MudTh Style="text-align:right">Floor</MudTh>
-                    <MudTh Style="text-align:right">Ceiling</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd>
-                        <MudText Typo="Typo.body2"
-                                 Style="font-family:'JetBrains Mono',monospace; color: var(--mud-palette-text-secondary);">
-                            #@context.VorpRank
-                        </MudText>
-                    </MudTd>
-                    <MudTd>
-                        <MudText Typo="Typo.body2" Style="font-weight:600">
-                            @context.PlayerName
-                        </MudText>
-                    </MudTd>
-                    <MudTd>
-                        <MudChip T="string" Size="Size.Small"
-                                 Style="@GetPositionStyle(context.Position)">
-                            @context.Position
-                        </MudChip>
-                    </MudTd>
-                    <MudTd>@(context.NflTeam ?? "FA")</MudTd>
-                    <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace;">
-                        @context.ProjectedPoints.ToString("F1")
-                    </MudTd>
-                    <MudTd Style="@("text-align:right; font-family:'JetBrains Mono',monospace; color:" + (context.Vorp >= 0 ? "var(--fc-cyan)" : "#f87171") + ";")">
-                        @(context.Vorp >= 0 ? "+" : "")@context.Vorp.ToString("F1")
-                    </MudTd>
-                    <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:#94a3b8;">
-                        @context.FloorPoints.ToString("F1")
-                    </MudTd>
-                    <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:#c084fc;">
-                        @context.CeilingPoints.ToString("F1")
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
-        }
-    </MudTabPanel>
+            @if (_vorpLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+            }
+            else if (_vorpRecs.Count == 0 && _vorpQueried)
+            {
+                <MudAlert Severity="Severity.Info">
+                    No available players found. Ensure projections are calculated for this week.
+                </MudAlert>
+            }
+            else if (_vorpRecs.Count > 0)
+            {
+                <MudTable Items="@FilteredVorp" Dense="true" Hover="true" Striped="true"
+                          Style="background: var(--fc-navy-card);">
+                    <HeaderContent>
+                        <MudTh>Rank</MudTh>
+                        <MudTh>Player</MudTh>
+                        <MudTh>Pos</MudTh>
+                        <MudTh>Team</MudTh>
+                        <MudTh Style="text-align:right">Proj</MudTh>
+                        <MudTh Style="text-align:right">VORP</MudTh>
+                        <MudTh Style="text-align:right">Floor</MudTh>
+                        <MudTh Style="text-align:right">Ceiling</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudText Typo="Typo.body2"
+                                     Style="font-family:'JetBrains Mono',monospace; color: var(--mud-palette-text-secondary);">
+                                #@context.VorpRank
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.body2" Style="font-weight:600">
+                                @context.PlayerName
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Style="@GetPositionStyle(context.Position)">
+                                @context.Position
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>@(context.NflTeam ?? "FA")</MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace;">
+                            @context.ProjectedPoints.ToString("F1")
+                        </MudTd>
+                        <MudTd Style="@("text-align:right; font-family:'JetBrains Mono',monospace; color:" + (context.Vorp >= 0 ? "var(--fc-cyan)" : "#f87171") + ";")">
+                            @(context.Vorp >= 0 ? "+" : "")@context.Vorp.ToString("F1")
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:#94a3b8;">
+                            @context.FloorPoints.ToString("F1")
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:#c084fc;">
+                            @context.CeilingPoints.ToString("F1")
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
 
-    <!-- ── Tab 2: Emerging Roles ── -->
-    <MudTabPanel Text="Emerging Roles">
+        <!-- ── Tab 2: Roster-Aware Recommendations ── -->
+        <MudTabPanel Text="My Roster Fit">
 
-        <MudText Typo="Typo.body2" Class="mb-3 mt-2"
-                 Style="color: var(--mud-palette-text-secondary);">
-            Players whose last 3-week role metrics have surged above their season averages.
-            Updated each Tuesday after usage metrics recalculate.
-        </MudText>
+            <MudText Typo="Typo.body2" Class="mb-3 mt-2"
+                     Style="color: var(--mud-palette-text-secondary);">
+                VORP adjusted for your roster construction — positions where you are thin
+                are boosted, positions where you are stacked are discounted.
+            </MudText>
 
-        <MudChipSet T="string" @bind-SelectedValue="_emergencePosition"
-                    Class="mb-3" SelectionMode="SelectionMode.SingleSelection">
-            <MudChip T="string" Value="@("")" Default="true">All</MudChip>
-            <MudChip T="string" Value="@("WR")">WR</MudChip>
-            <MudChip T="string" Value="@("RB")">RB</MudChip>
-            <MudChip T="string" Value="@("TE")">TE</MudChip>
-            <MudChip T="string" Value="@("QB")">QB</MudChip>
-        </MudChipSet>
+            <MudChipSet T="string" @bind-SelectedValue="_fitPosition"
+                        Class="mb-3" SelectionMode="SelectionMode.SingleSelection">
+                <MudChip T="string" Value="@("")" Default="true">All</MudChip>
+                <MudChip T="string" Value="@("QB")">QB</MudChip>
+                <MudChip T="string" Value="@("RB")">RB</MudChip>
+                <MudChip T="string" Value="@("WR")">WR</MudChip>
+                <MudChip T="string" Value="@("TE")">TE</MudChip>
+            </MudChipSet>
 
-        @if (_emergenceLoading)
-        {
-            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
-        }
-        else if (_alerts.Count == 0)
-        {
-            <MudAlert Severity="Severity.Info">
-                No emergence signals detected for the current week.
-                Signals populate each Tuesday after in-season data is available.
-            </MudAlert>
-        }
-        else
-        {
-            <MudTable Items="@FilteredAlerts" Dense="true" Hover="true" Striped="true"
-                      Style="background: var(--fc-navy-card);">
-                <HeaderContent>
-                    <MudTh>Player</MudTh>
-                    <MudTh>Pos</MudTh>
-                    <MudTh>Team</MudTh>
-                    <MudTh>Signal</MudTh>
-                    <MudTh Style="text-align:right">Delta</MudTh>
-                    <MudTh Style="text-align:right">Week</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd>
-                        <MudText Typo="Typo.body2" Style="font-weight:600">
-                            @context.PlayerName
-                        </MudText>
-                    </MudTd>
-                    <MudTd>
-                        <MudChip T="string" Size="Size.Small"
-                                 Style="@GetPositionStyle(context.Position)">
-                            @context.Position
-                        </MudChip>
-                    </MudTd>
-                    <MudTd>@(context.NflTeam ?? "FA")</MudTd>
-                    <MudTd>
-                        <MudChip T="string" Size="Size.Small"
-                                 Style="@GetSignalStyle(context.TriggerSignal)">
-                            @GetSignalLabel(context.TriggerSignal)
-                        </MudChip>
-                    </MudTd>
-                    <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color: var(--fc-cyan);">
-                        +@context.Delta.ToString("P1")
-                    </MudTd>
-                    <MudTd Style="text-align:right">Wk @context.Week</MudTd>
-                </RowTemplate>
-            </MudTable>
-        }
-    </MudTabPanel>
+            @if (_fitLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+            }
+            else if (_fitRecs.Count == 0 && _fitQueried)
+            {
+                <MudAlert Severity="Severity.Info">
+                    No recommendations found. Load VORP first, then switch to this tab.
+                </MudAlert>
+            }
+            else if (_fitRecs.Count > 0)
+            {
+                <MudTable Items="@FilteredFit" Dense="true" Hover="true" Striped="true"
+                          Style="background: var(--fc-navy-card);">
+                    <HeaderContent>
+                        <MudTh>Fit Rank</MudTh>
+                        <MudTh>Player</MudTh>
+                        <MudTh>Pos</MudTh>
+                        <MudTh>Team</MudTh>
+                        <MudTh>Need</MudTh>
+                        <MudTh Style="text-align:right">VORP</MudTh>
+                        <MudTh Style="text-align:right">Fit Score</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudText Typo="Typo.body2"
+                                     Style="font-family:'JetBrains Mono',monospace; color: var(--mud-palette-text-secondary);">
+                                #@context.FitRank
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.body2" Style="font-weight:600">
+                                @context.Base.PlayerName
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Style="@GetPositionStyle(context.Base.Position)">
+                                @context.Base.Position
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>@(context.Base.NflTeam ?? "FA")</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Style="@GetNeedStyle(context.PositionNeed)">
+                                @context.PositionNeed
+                            </MudChip>
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color: var(--fc-cyan);">
+                            +@context.Base.Vorp.ToString("F1")
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:600; color: var(--fc-cyan);">
+                            @context.FitScore.ToString("F1")
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
 
-</MudTabs>
+        <!-- ── Tab 3: Emerging Roles ── -->
+        <MudTabPanel Text="Emerging Roles">
+
+            <MudText Typo="Typo.body2" Class="mb-3 mt-2"
+                     Style="color: var(--mud-palette-text-secondary);">
+                Players whose last 3-week role metrics have surged above their season averages.
+                Updated each Tuesday after usage metrics recalculate.
+            </MudText>
+
+            <MudChipSet T="string" @bind-SelectedValue="_emergencePosition"
+                        Class="mb-3" SelectionMode="SelectionMode.SingleSelection">
+                <MudChip T="string" Value="@("")" Default="true">All</MudChip>
+                <MudChip T="string" Value="@("WR")">WR</MudChip>
+                <MudChip T="string" Value="@("RB")">RB</MudChip>
+                <MudChip T="string" Value="@("TE")">TE</MudChip>
+                <MudChip T="string" Value="@("QB")">QB</MudChip>
+            </MudChipSet>
+
+            @if (_emergenceLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+            }
+            else if (_alerts.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info">
+                    No emergence signals detected for the current week.
+                    Signals populate each Tuesday after in-season data is available.
+                </MudAlert>
+            }
+            else
+            {
+                <MudTable Items="@FilteredAlerts" Dense="true" Hover="true" Striped="true"
+                          Style="background: var(--fc-navy-card);">
+                    <HeaderContent>
+                        <MudTh>Player</MudTh>
+                        <MudTh>Pos</MudTh>
+                        <MudTh>Team</MudTh>
+                        <MudTh>Signal</MudTh>
+                        <MudTh Style="text-align:right">Delta</MudTh>
+                        <MudTh Style="text-align:right">Week</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudText Typo="Typo.body2" Style="font-weight:600">
+                                @context.PlayerName
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Style="@GetPositionStyle(context.Position)">
+                                @context.Position
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>@(context.NflTeam ?? "FA")</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Style="@GetSignalStyle(context.TriggerSignal)">
+                                @GetSignalLabel(context.TriggerSignal)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color: var(--fc-cyan);">
+                            +@context.Delta.ToString("P1")
+                        </MudTd>
+                        <MudTd Style="text-align:right">Wk @context.Week</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
+
+    </MudTabs>
+}
 
 @code {
+    private UserContext? _context;
+    private bool _contextLoading = true;
+
+    // Shared controls
+    private string _selectedLeagueId = string.Empty;
+    private int _week = 1;
+    private const int CurrentSeason = 2026;
+
     // VORP state
     private List<VorpRecommendationDocument> _vorpRecs = [];
     private bool _vorpLoading;
     private bool _vorpQueried;
-    private string _leagueId = string.Empty;
-    private int _week = 1;
     private string _vorpPosition = string.Empty;
-    private const int CurrentSeason = 2026;
+
+    // Roster fit state
+    private List<RosterAwareRecommendation> _fitRecs = [];
+    private bool _fitLoading;
+    private bool _fitQueried;
+    private string _fitPosition = string.Empty;
 
     // Emergence state
     private List<EmergenceAlertDocument> _alerts = [];
@@ -205,6 +312,11 @@
             ? _vorpRecs
             : _vorpRecs.Where(r => r.Position == _vorpPosition);
 
+    private IEnumerable<RosterAwareRecommendation> FilteredFit =>
+        string.IsNullOrEmpty(_fitPosition)
+            ? _fitRecs
+            : _fitRecs.Where(r => r.Base.Position == _fitPosition);
+
     private IEnumerable<EmergenceAlertDocument> FilteredAlerts =>
         string.IsNullOrEmpty(_emergencePosition)
             ? _alerts
@@ -212,18 +324,45 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadContextAsync();
         await LoadAlertsAsync();
+    }
+
+    private async Task LoadContextAsync()
+    {
+        _contextLoading = true;
+        try
+        {
+            _context = await Http.GetFromJsonAsync<UserContext>(
+                "api/v1/identity/context");
+
+            // Default to active league
+            if (_context?.ActiveLeagueId is not null)
+                _selectedLeagueId = _context.ActiveLeagueId;
+        }
+        catch
+        {
+            // Not logged in or API unavailable
+        }
+        finally
+        {
+            _contextLoading = false;
+        }
+    }
+
+    private async Task LoadAllAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedLeagueId)) return;
+        await Task.WhenAll(LoadVorpAsync(), LoadFitAsync());
     }
 
     private async Task LoadVorpAsync()
     {
-        if (string.IsNullOrWhiteSpace(_leagueId)) return;
-
         _vorpLoading = true;
         _vorpQueried = true;
         try
         {
-            var url = $"api/v1/waiver/recommendations?leagueId={_leagueId}" +
+            var url = $"api/v1/waiver/recommendations?leagueId={_selectedLeagueId}" +
                       $"&season={CurrentSeason}&week={_week}&top=50";
             var result = await Http.GetFromJsonAsync<List<VorpRecommendationDocument>>(url);
             _vorpRecs = result ?? [];
@@ -235,6 +374,30 @@
         finally
         {
             _vorpLoading = false;
+        }
+    }
+
+    private async Task LoadFitAsync()
+    {
+        if (_context?.SleeperUserId is null) return;
+
+        _fitLoading = true;
+        _fitQueried = true;
+        try
+        {
+            var url = $"api/v1/waiver/recommendations/roster-aware" +
+                      $"?leagueId={_selectedLeagueId}&sleeperUserId={_context.SleeperUserId}" +
+                      $"&season={CurrentSeason}&week={_week}&top=30";
+            var result = await Http.GetFromJsonAsync<List<RosterAwareRecommendation>>(url);
+            _fitRecs = result ?? [];
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load roster-aware recommendations", Severity.Error);
+        }
+        finally
+        {
+            _fitLoading = false;
         }
     }
 
@@ -256,6 +419,30 @@
             _emergenceLoading = false;
         }
     }
+
+    // ── Local context record matching API response ────────────────────────
+    private record UserContext(
+        string UserId,
+        string? SleeperUserId,
+        string? SleeperUsername,
+        bool IsSleeperLinked,
+        List<LeagueItem> Leagues,
+        string? ActiveLeagueId);
+
+    private record LeagueItem(
+        string LeagueId,
+        string LeagueName,
+        int Season,
+        string Role,
+        bool IsActive);
+
+    private static string GetNeedStyle(RosterNeed need) => need switch
+    {
+        RosterNeed.Need => "background:#1a3a2a; color:#4ade80;",
+        RosterNeed.Neutral => "background:#1a1a2a; color:#94a3b8;",
+        RosterNeed.Strength => "background:#2a1a1a; color:#f87171;",
+        _ => string.Empty
+    };
 
     private static string GetSignalLabel(EmergenceTriggerSignal signal) => signal switch
     {

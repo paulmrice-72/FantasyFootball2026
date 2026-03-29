@@ -1,4 +1,5 @@
 ﻿// FF.API/Controllers/WaiverController.cs
+using FF.Application.Features.RosterAwareRecommendations.Queries;
 using FF.Application.Features.WaiverRecommendations.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +23,22 @@ public class WaiverController(IMediator mediator) : ControllerBase
     {
         var result = await mediator.Send(
             new GetWaiverRecommendationsQuery(leagueId, season, week, position, top), ct);
+        return Ok(result);
+    }
+
+    [HttpGet("recommendations/roster-aware")]
+    public async Task<IActionResult> GetRosterAwareRecommendations(
+    [FromQuery] string leagueId,
+    [FromQuery] string sleeperUserId,
+    [FromQuery] int season,
+    [FromQuery] int week,
+    [FromQuery] string? position = null,
+    [FromQuery] int top = 30,
+    CancellationToken ct = default)
+    {
+        var result = await mediator.Send(
+            new GetRosterAwareRecommendationsQuery(
+                leagueId, sleeperUserId, season, week, position, top), ct);
         return Ok(result);
     }
 }
