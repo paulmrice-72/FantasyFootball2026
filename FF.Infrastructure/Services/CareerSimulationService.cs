@@ -254,8 +254,8 @@ public class CareerSimulationService(
     };
 
     private static double GetBaselineFppgWithContext(
-        string position, double simulationBaseline,
-        FF.Domain.Entities.Player player)
+    string position, double simulationBaseline,
+    FF.Domain.Entities.Player player)
     {
         // If we got a real simulation result, use it
         if (simulationBaseline > 0) return simulationBaseline;
@@ -266,6 +266,11 @@ public class CareerSimulationService(
         // = almost certainly a backup/practice squad — heavily discount
         if (position == "QB" && (player.YearsExperience ?? 0) > 1)
             return posAvg * 0.25;   // backup QB floor
+
+        // FA skill players (RB/WR/TE) with no simulation result
+        // = unsigned players with lower probability of meaningful production
+        if (position != "QB" && string.IsNullOrEmpty(player.NflTeam))
+            return posAvg * 0.50;   // 50% of position average for unsigned skill players
 
         return posAvg;
     }
