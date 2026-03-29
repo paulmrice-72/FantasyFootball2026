@@ -7,6 +7,7 @@ using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Application.Interfaces.Services.Usage;
+using FF.Application.Services;
 using FF.Domain.Documents;
 using FF.Infrastructure.ExternalApis.CsvImport;
 using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
@@ -95,7 +96,7 @@ public static class DependencyInjection
         services.AddScoped<IDfvCalculationService, DfvCalculationService>();
         services.AddScoped<ITradeAnalysisRepository, TradeAnalysisRepository>();
         services.AddScoped<ITradeAnalyzerService, TradeAnalyzerService>();
-
+        services.AddScoped<IVorpRecommendationRepository, VorpRecommendationRepository>();
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
@@ -133,6 +134,7 @@ public static class DependencyInjection
         services.AddScoped<IPlayerProjectionRepository, PlayerProjectionRepository>();
         services.AddScoped<ProjectionInputBuilder>();
         services.AddScoped<PlayerProjectionService>();
+        services.AddScoped<RosterProfileService>();
         services.AddSleeperApiClient();
 
         // Identity
@@ -303,6 +305,18 @@ public static class DependencyInjection
             if (!BsonClassMap.IsClassMapRegistered(typeof(EmergenceAlertDocument)))
             {
                 BsonClassMap.RegisterClassMap<EmergenceAlertDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(VorpRecommendationDocument)))
+            {
+                BsonClassMap.RegisterClassMap<VorpRecommendationDocument>(cm =>
                 {
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);
