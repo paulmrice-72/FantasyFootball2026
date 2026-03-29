@@ -273,6 +273,12 @@ try
         job => job.RunAsync(CancellationToken.None),
         "0 8 * * 0",   // Sunday 8am UTC = 3am ET
     utcOptions);
+
+    RecurringJob.AddOrUpdate<EmergenceDetectionJob>(
+        "emergence-detection-weekly",
+        job => job.RunAsync(2026, 1),
+        "0 12 * * 2"); // Tuesdays 12:00 UTC — after usage-metrics-aggregation
+
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",
     //methodCall: job => job.SyncWaiversAsync(),

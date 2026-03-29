@@ -84,6 +84,8 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
         });
+        services.AddScoped<IEmergenceAlertRepository, EmergenceAlertRepository>();
+        services.AddScoped<EmergenceDetectionJob>();
         services.AddScoped<IAgingCurveRepository, AgingCurveRepository>();
         services.AddScoped<IAgingCurveService, AgingCurveService>();
         services.AddScoped<ICareerSimulationRepository, CareerSimulationRepository>();
@@ -93,6 +95,7 @@ public static class DependencyInjection
         services.AddScoped<IDfvCalculationService, DfvCalculationService>();
         services.AddScoped<ITradeAnalysisRepository, TradeAnalysisRepository>();
         services.AddScoped<ITradeAnalyzerService, TradeAnalyzerService>();
+
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
@@ -289,6 +292,17 @@ public static class DependencyInjection
             if (!BsonClassMap.IsClassMapRegistered(typeof(TradeAnalysisDocument)))
             {
                 BsonClassMap.RegisterClassMap<TradeAnalysisDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+            if (!BsonClassMap.IsClassMapRegistered(typeof(EmergenceAlertDocument)))
+            {
+                BsonClassMap.RegisterClassMap<EmergenceAlertDocument>(cm =>
                 {
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);
