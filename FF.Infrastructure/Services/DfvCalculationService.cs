@@ -59,6 +59,10 @@ public class DfvCalculationService(
                 continue;
             }
 
+            // FA skill players (RB/WR/TE) may have legitimate value but rank below active players
+            var isFaSkillPlayer = string.IsNullOrEmpty(valuation.NflTeam)
+                && valuation.Position != "QB";
+
             var careerSim = await careerSimRepository
                 .GetByPlayerIdAsync(valuation.SleeperPlayerId, ct);
 
@@ -70,7 +74,8 @@ public class DfvCalculationService(
 
             var raw = CalculateRawDfv(careerSim, valuation.Position);
             var breakoutBoost = 1.0 + (valuation.BreakoutScore / 100.0) * 0.25;
-            rawDfvMap[valuation.SleeperPlayerId] = raw * breakoutBoost;
+            var faPenalty = isFaSkillPlayer ? 0.60 : 1.0;   // 40% discount for unsigned skill players
+            rawDfvMap[valuation.SleeperPlayerId] = raw * breakoutBoost * faPenalty;
         }
 
         // Normalize to 0-100 within each position group
@@ -110,8 +115,8 @@ public class DfvCalculationService(
     // ── Private ───────────────────────────────────────────────────────────────
 
     private static void NormalizeWithinPositions(
-        List<DynastyValuationDocument> valuations,
-        Dictionary<string, double> rawDfvMap)
+    List<DynastyValuationDocument> valuations,
+    Dictionary<string, double> rawDfvMap)
     {
         var positions = new[] { "QB", "RB", "WR", "TE" };
 
@@ -119,20 +124,40 @@ public class DfvCalculationService(
         {
             var posPlayers = valuations
                 .Where(v => v.Position == pos
-                         && rawDfvMap.ContainsKey(v.SleeperPlayerId))
+                         && rawDfvMap.ContainsKey(v.SleeperPlayerId)
+                         && rawDfvMap[v.SleeperPlayerId] > 0)
+                .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
                 .ToList();
 
             if (posPlayers.Count == 0) continue;
 
-            var maxRaw = posPlayers.Max(v => rawDfvMap[v.SleeperPlayerId]);
-            if (maxRaw <= 0) continue;
-
-            foreach (var v in posPlayers)
+            // Rank-based normalization — spreads values across the full range
+            // Rank 1 = 95, rank 10 = 75, rank 25 = 50, remainder scales to floor of 5
+            for (int i = 0; i < posPlayers.Count; i++)
             {
-                // Normalize to 0-100, apply soft cap so top player = ~95
-                var normalized = rawDfvMap[v.SleeperPlayerId] / maxRaw * 95.0;
-                rawDfvMap[v.SleeperPlayerId] = Math.Round(normalized, 2);
+                var rank = i + 1;   // 1-based
+                double normalizedValue;
+
+                if (rank == 1)
+                    normalizedValue = 95.0;
+                else if (rank <= 10)
+                    normalizedValue = 95.0 - ((rank - 1) * (20.0 / 9.0));   // 95 → 75
+                else if (rank <= 25)
+                    normalizedValue = 75.0 - ((rank - 10) * (25.0 / 15.0)); // 75 → 50
+                else
+                    normalizedValue = Math.Max(5.0, 50.0 - ((rank - 25) * 1.5)); // 50 → floor 5
+
+                rawDfvMap[posPlayers[i].SleeperPlayerId] = Math.Round(normalizedValue, 2);
             }
+
+            // Zero out players with no raw value — keep them at 0, not ranked
+            var zeroPlayers = valuations
+                .Where(v => v.Position == pos
+                         && rawDfvMap.ContainsKey(v.SleeperPlayerId)
+                         && rawDfvMap[v.SleeperPlayerId] == 0);
+
+            foreach (var v in zeroPlayers)
+                rawDfvMap[v.SleeperPlayerId] = 0;
         }
 
         // Write normalized values back as TradeValue
