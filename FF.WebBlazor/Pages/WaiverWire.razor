@@ -1,0 +1,135 @@
+﻿@page "/waiver-wire"
+@using FF.Domain.Documents
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h5" Class="mb-4" Style="color: var(--fc-cyan);">
+    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="mr-2" />
+    Waiver Wire — Emerging Roles
+</MudText>
+
+<MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary);">
+    Players whose last 3-week role metrics have surged significantly above their season averages.
+    Updated each Tuesday after usage metrics recalculate.
+</MudText>
+
+<MudChipSet T="string" @bind-SelectedValue="_selectedPosition"
+            Class="mb-4" SelectionMode="SelectionMode.SingleSelection">
+    <MudChip T="string" Value="@("")" Default="true">All</MudChip>
+    <MudChip T="string" Value="@("WR")">WR</MudChip>
+    <MudChip T="string" Value="@("RB")">RB</MudChip>
+    <MudChip T="string" Value="@("TE")">TE</MudChip>
+    <MudChip T="string" Value="@("QB")">QB</MudChip>
+</MudChipSet>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_alerts.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        No emergence signals detected for the current week.
+        Signals populate each Tuesday after in-season data is available.
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="@FilteredAlerts" Dense="true" Hover="true" Striped="true"
+              Style="background: var(--fc-navy-card);">
+        <HeaderContent>
+            <MudTh>Player</MudTh>
+            <MudTh>Pos</MudTh>
+            <MudTh>Team</MudTh>
+            <MudTh>Signal</MudTh>
+            <MudTh Style="text-align:right">Delta</MudTh>
+            <MudTh Style="text-align:right">Week</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <MudText Typo="Typo.body2" Style="font-weight:600">@context.PlayerName</MudText>
+            </MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small"
+                         Style="@GetPositionStyle(context.Position)">
+                    @context.Position
+                </MudChip>
+            </MudTd>
+            <MudTd>@(context.NflTeam ?? "FA")</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small"
+                         Style="@GetSignalStyle(context.TriggerSignal)">
+                    @GetSignalLabel(context.TriggerSignal)
+                </MudChip>
+            </MudTd>
+            <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color: var(--fc-cyan);">
+                +@context.Delta.ToString("P1")
+            </MudTd>
+            <MudTd Style="text-align:right">Wk @context.Week</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<EmergenceAlertDocument> _alerts = [];
+    private bool _loading = true;
+    private string _selectedPosition = string.Empty;
+    private const int CurrentSeason = 2026;
+
+    private IEnumerable<EmergenceAlertDocument> FilteredAlerts =>
+        string.IsNullOrEmpty(_selectedPosition)
+            ? _alerts
+            : _alerts.Where(a => a.Position == _selectedPosition);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAlertsAsync();
+    }
+
+    private async Task LoadAlertsAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<EmergenceAlertDocument>>(
+                $"api/v1/emergence/alerts?season={CurrentSeason}");
+            _alerts = result ?? [];
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load emergence alerts", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetSignalLabel(EmergenceTriggerSignal signal) => signal switch
+    {
+        EmergenceTriggerSignal.SnapShareSurge => "Snap Surge",
+        EmergenceTriggerSignal.TargetShareSurge => "Target Share",
+        EmergenceTriggerSignal.CarryShareSurge => "Carry Surge",
+        EmergenceTriggerSignal.WoprSpike => "WOPR Spike",
+        _ => signal.ToString()
+    };
+
+    private static string GetSignalStyle(EmergenceTriggerSignal signal) => signal switch
+    {
+        EmergenceTriggerSignal.SnapShareSurge => "background:#1a3a2a; color:#4ade80;",
+        EmergenceTriggerSignal.TargetShareSurge => "background:#1a2a3a; color:#60a5fa;",
+        EmergenceTriggerSignal.CarryShareSurge => "background:#2a1a1a; color:#f87171;",
+        EmergenceTriggerSignal.WoprSpike => "background:#2a1a2a; color:#c084fc;",
+        _ => string.Empty
+    };
+
+    private static string GetPositionStyle(string position) => position switch
+    {
+        "QB" => "background:#1a2a3a; color:#60a5fa;",
+        "RB" => "background:#2a1a1a; color:#f87171;",
+        "WR" => "background:#1a3a2a; color:#4ade80;",
+        "TE" => "background:#2a1a2a; color:#c084fc;",
+        _ => string.Empty
+    };
+}
