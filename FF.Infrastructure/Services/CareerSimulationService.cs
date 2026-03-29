@@ -107,7 +107,8 @@ public class CareerSimulationService(
         var currentAge = player.Age!.Value;
 
         // Get baseline FPPG from most recent simulation results
-        var baseFppg = await GetBaselineFppgAsync(player.SleeperPlayerId!, season, ct);
+        var simBaseline = await GetBaselineFppgAsync(player.SleeperPlayerId!, season, ct);
+        var baseFppg = GetBaselineFppgWithContext(position, simBaseline, player);
 
         // If no simulation result exists, estimate from position average
         if (baseFppg <= 0)
@@ -245,12 +246,29 @@ public class CareerSimulationService(
 
     private static double GetPositionAverageFppg(string position) => position switch
     {
-        "QB" => 18.0,
+        "QB" => 18.0,   // starter baseline — will be adjusted below
         "RB" => 9.0,
         "WR" => 10.0,
         "TE" => 8.5,
         _ => 9.0
     };
+
+    private static double GetBaselineFppgWithContext(
+        string position, double simulationBaseline,
+        FF.Domain.Entities.Player player)
+    {
+        // If we got a real simulation result, use it
+        if (simulationBaseline > 0) return simulationBaseline;
+
+        var posAvg = GetPositionAverageFppg(position);
+
+        // QB with no simulation result and significant experience
+        // = almost certainly a backup/practice squad — heavily discount
+        if (position == "QB" && (player.YearsExperience ?? 0) > 1)
+            return posAvg * 0.25;   // backup QB floor
+
+        return posAvg;
+    }
 
     private static double GetFallbackMultiplier(string position, int age)
     {
