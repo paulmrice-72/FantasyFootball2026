@@ -10,7 +10,6 @@ COPY FF.Domain/FF.Domain.csproj                 FF.Domain/
 COPY FF.Infrastructure/FF.Infrastructure.csproj FF.Infrastructure/
 COPY FF.SharedKernel/FF.SharedKernel.csproj     FF.SharedKernel/
 COPY FF.WebBlazor/FF.WebBlazor.csproj           FF.WebBlazor/
-COPY FF.Tests/FF.Tests.csproj                   FF.Tests/
 
 # Restore — cached unless .csproj files change
 RUN dotnet restore FF.WebBlazor/FF.WebBlazor.csproj
