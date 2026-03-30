@@ -19,8 +19,43 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
                 m.LeagueName,
                 m.Season,
                 m.Role,
-                m.IsActive))
+                m.IsActive,
+                m.LeagueType))              // ← add
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task AddMembershipAsync(
+        string userId,
+        string sleeperUserId,
+        string leagueId,
+        string leagueName,
+        int season,
+        string role,
+        string leagueType,                  // ← add
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await dbContext.LeagueMemberships
+            .FirstOrDefaultAsync(m => m.UserId == userId
+                && m.LeagueId == leagueId
+                && m.Season == season, cancellationToken);
+
+        if (existing is not null)
+            return;
+
+        dbContext.LeagueMemberships.Add(new LeagueMembership
+        {
+            UserId = userId,
+            SleeperUserId = sleeperUserId,
+            LeagueId = leagueId,
+            LeagueName = leagueName,
+            Season = season,
+            Role = role,
+            LeagueType = leagueType,        // ← add
+            IsActive = true,
+            LinkedAt = DateTime.UtcNow
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task AddMembershipAsync(
