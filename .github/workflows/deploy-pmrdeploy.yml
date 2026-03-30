@@ -3,8 +3,7 @@ name: Deploy to PMRDEPLOY
 on:
   push:
     branches: [ develop ]
-  workflow_dispatch:    # ← add this line
-
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -35,7 +34,6 @@ jobs:
           context: .
           file: FF.API/Dockerfile
           push: true
-          no-cache: true
           tags: ghcr.io/${{ env.OWNER }}/${{ env.REPO }}/ff-api:latest
 
       - name: Build and push FF.WebBlazor
@@ -44,7 +42,6 @@ jobs:
           context: .
           file: FF.WebBlazor/Dockerfile
           push: true
-          no-cache: true
           tags: ghcr.io/${{ env.OWNER }}/${{ env.REPO }}/ff-blazor:latest
 
   deploy:
