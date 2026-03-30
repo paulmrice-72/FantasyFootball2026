@@ -5,6 +5,7 @@ on:
     branches: [ develop ]
   workflow_dispatch:    # ← add this line
 
+
 env:
   REGISTRY: ghcr.io
   OWNER: paulmrice-72
