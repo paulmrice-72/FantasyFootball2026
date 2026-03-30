@@ -15,6 +15,7 @@
 //   This makes the import fully idempotent — re-running the same file is safe.
 
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Stats.Queries.GetDataQuality;
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
@@ -391,5 +392,39 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
         return await _collection.Find(filter)
             .SortByDescending(x => x.Week)
             .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Returns a sample of documents for a given season — used for stat range validation.
+    /// </summary>
+    public async Task<List<PlayerGameLogDocument>> GetSampleBySeasonAsync(
+        int season, int limit, CancellationToken ct = default)
+    {
+        var filter = Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, season);
+        return await _collection
+            .Find(filter)
+            .Limit(limit)
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Returns document counts grouped by position for a given season — used for data quality reporting.
+    /// </summary>
+    public async Task<Dictionary<string, long>> GetPositionCountsBySeasonAsync(
+        int season, CancellationToken ct = default)
+    {
+        var result = new Dictionary<string, long>();
+
+        foreach (var position in DataQualityRules.ValidPositions)
+        {
+            var filter = Builders<PlayerGameLogDocument>.Filter.And(
+                Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Season, season),
+                Builders<PlayerGameLogDocument>.Filter.Eq(x => x.Position, position));
+
+            result[position] = await _collection
+                .CountDocumentsAsync(filter, cancellationToken: ct);
+        }
+
+        return result;
     }
 }
