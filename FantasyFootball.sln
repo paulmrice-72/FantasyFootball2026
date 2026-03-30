@@ -21,6 +21,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{49F57D10-954E-470F-B287-D5E26C71470E}"
 	ProjectSection(SolutionItems) = preProject
 		build.yml = build.yml
+		deploy-pmrdeploy.yml = deploy-pmrdeploy.yml
 	EndProjectSection
 EndProject
 Global
