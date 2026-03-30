@@ -16,6 +16,7 @@ public class Player : Entity
     public int? Age { get; private set; }
     public int? YearsExperience { get; private set; }
     public string? GsisId { get; set; }
+    public string? InjuryStatus { get; private set; }
     private Player() { } // EF Core constructor
 
     public static Player Create(
@@ -56,7 +57,8 @@ public class Player : Entity
         int? age,
         int? yearsExperience,
         int? jerseyNumber,
-        string? gsisId = null)
+        string? gsisId = null,
+        string? injuryStatus = null)
     {
         FirstName = firstName;
         LastName = lastName;
@@ -64,6 +66,7 @@ public class Player : Entity
         Age = age;
         YearsExperience = yearsExperience;
         JerseyNumber = jerseyNumber;
-        if (gsisId != null) GsisId = gsisId; // only overwrite if Sleeper provides it
+        if (gsisId != null) GsisId = gsisId;
+        InjuryStatus = injuryStatus; // null = no designation (healthy)
     }
 }
