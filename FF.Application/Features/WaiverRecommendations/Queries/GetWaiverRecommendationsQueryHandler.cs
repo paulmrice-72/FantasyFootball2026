@@ -1,5 +1,7 @@
 ﻿// FF.Application/QueryHandlers/GetWaiverRecommendationsQueryHandler.cs
+using FF.Application.Common;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using MediatR;
 
@@ -9,11 +11,10 @@ public class GetWaiverRecommendationsQueryHandler(
     IPlayerProjectionRepository projectionRepository,
     IRosterPlayerRepository rosterPlayerRepository,
     IVorpRecommendationRepository vorpRepository,
-    ISimulationResultRepository simulationResultRepository)
+    ISimulationResultRepository simulationResultRepository,
+    ICacheService cache)
     : IRequestHandler<GetWaiverRecommendationsQuery, IReadOnlyList<VorpRecommendationDocument>>
 {
-    // Replacement-level roster slot counts per position
-    // VORP baseline = the Nth ranked player at that position across all league rosters
     private static readonly Dictionary<string, int> ReplacementSlots = new()
     {
         ["QB"] = 12,
@@ -26,9 +27,25 @@ public class GetWaiverRecommendationsQueryHandler(
         GetWaiverRecommendationsQuery request,
         CancellationToken cancellationToken)
     {
-        // 1 — Load all projections for this week
-        var allProjections = await projectionRepository
-            .GetByWeekAsync(request.Season, request.Week, cancellationToken);
+        // ── Cache check: return persisted result if available ─────────────────
+        var cacheKey = CacheKeys.VorpRecommendations(
+            request.SleeperLeagueId, request.Season, request.Week,
+            request.Position, request.Top);
+
+        var cached = cache.Get<IReadOnlyList<VorpRecommendationDocument>>(cacheKey);
+        if (cached is not null)
+            return cached;
+
+        // 1 — Load all projections for this week (cached separately — shared across leagues)
+        var projCacheKey = CacheKeys.Projections(request.Season, request.Week);
+        var allProjections = cache.Get<IReadOnlyList<PlayerProjectionDocument>>(projCacheKey);
+        if (allProjections is null)
+        {
+            allProjections = await projectionRepository
+                .GetByWeekAsync(request.Season, request.Week, cancellationToken);
+            if (allProjections.Count > 0)
+                cache.Set(projCacheKey, allProjections, TimeSpan.FromHours(1));
+        }
 
         if (allProjections.Count == 0)
             return [];
@@ -102,12 +119,18 @@ public class GetWaiverRecommendationsQueryHandler(
         for (int i = 0; i < ranked.Count; i++)
             ranked[i].VorpRank = i + 1;
 
-        // 7 — Persist and return filtered result
+        // 7 — Persist to MongoDB
         if (ranked.Count > 0)
             await vorpRepository.UpsertBatchAsync(ranked, cancellationToken);
 
-        return await vorpRepository.GetByWeekAsync(
+        // 8 — Fetch filtered result, cache, and return
+        var result = await vorpRepository.GetByWeekAsync(
             request.Season, request.Week, request.Position, request.Top, cancellationToken);
+
+        if (result.Count > 0)
+            cache.Set(cacheKey, result, TimeSpan.FromMinutes(30));
+
+        return result;
     }
 
     private static Dictionary<string, decimal> ComputeReplacementLevels(
@@ -122,7 +145,6 @@ public class GetWaiverRecommendationsQueryHandler(
                 .OrderByDescending(p => p.ProjectedPoints)
                 .ToList();
 
-            // Replacement level = projection of the last startable player
             levels[pos] = ranked.Count >= slotCount
                 ? ranked[slotCount - 1].ProjectedPoints
                 : ranked.LastOrDefault()?.ProjectedPoints ?? 0m;

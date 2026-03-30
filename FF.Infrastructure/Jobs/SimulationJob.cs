@@ -1,5 +1,7 @@
 ﻿// FF.Infrastructure/Jobs/SimulationJob.cs
+using FF.Application.Common;
 using FF.Application.Features.Simulations.Commands.RunSimulations;
+using FF.Application.Interfaces.Services;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -7,6 +9,7 @@ namespace FF.Infrastructure.Jobs;
 
 public class SimulationJob(
     IMediator mediator,
+    ICacheService cache,
     ILogger<SimulationJob> logger)
 {
     public async Task RunAsync()
@@ -27,6 +30,12 @@ public class SimulationJob(
                 result.Value.Simulated,
                 result.Value.Skipped,
                 result.Value.Elapsed.TotalMilliseconds);
+
+            // Bust projection cache — next VORP query will re-hydrate from MongoDB
+            cache.Remove(CacheKeys.Projections(season, week));
+            logger.LogInformation(
+                "SimulationJob — projection cache invalidated for {Season} Week {Week}",
+                season, week);
         }
         else
         {
@@ -43,13 +52,11 @@ public class SimulationJob(
 
     private static int GetCurrentNflWeek()
     {
-        // NFL regular season starts first Thursday of September
-        // Returns 1-18 during season, 18 in off-season (safe default for backfill)
         var now = DateTime.UtcNow;
         var season = GetCurrentNflSeason();
         var seasonStart = GetSeasonStart(season);
 
-        if (now < seasonStart) return 18; // off-season — use last week as default
+        if (now < seasonStart) return 18;
 
         var daysSinceStart = (now - seasonStart).TotalDays;
         var week = (int)(daysSinceStart / 7) + 1;
@@ -58,7 +65,6 @@ public class SimulationJob(
 
     private static DateTime GetSeasonStart(int season)
     {
-        // First Thursday of September for the given season year
         var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
         var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
         return sept1.AddDays(daysUntilThursday);

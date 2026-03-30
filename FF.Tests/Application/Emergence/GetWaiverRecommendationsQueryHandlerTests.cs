@@ -1,6 +1,7 @@
 ﻿// FF.Tests/Application/Emergence/GetWaiverRecommendationsQueryHandlerTests.cs
 using FF.Application.Features.WaiverRecommendations.Queries;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using FluentAssertions;
 using Moq;
@@ -13,10 +14,11 @@ public class GetWaiverRecommendationsQueryHandlerTests
     private readonly Mock<IRosterPlayerRepository> _rosterRepo = new();
     private readonly Mock<IVorpRecommendationRepository> _vorpRepo = new();
     private readonly Mock<ISimulationResultRepository> _simRepo = new();
+    private readonly Mock<ICacheService> _cache = new();
 
     private GetWaiverRecommendationsQueryHandler CreateSut() =>
         new(_projectionRepo.Object, _rosterRepo.Object,
-            _vorpRepo.Object, _simRepo.Object);
+            _vorpRepo.Object, _simRepo.Object, _cache.Object);
 
     private static PlayerProjectionDocument MakeProjection(
         string playerId, string name, string position, string team, decimal points) =>

@@ -11,6 +11,7 @@ public class WarRoomBriefRepository(
 {
     private readonly IMongoCollection<WarRoomBriefDocument> _collection =
         database.GetCollection<WarRoomBriefDocument>("war_room_briefs");
+    private readonly ILogger<WarRoomBriefRepository> _logger = logger;
 
     public async Task UpsertAsync(WarRoomBriefDocument document, CancellationToken ct = default)
     {
@@ -27,6 +28,8 @@ public class WarRoomBriefRepository(
         if (existing is null)
         {
             await _collection.InsertOneAsync(document, cancellationToken: ct);
+            _logger.LogDebug("WarRoomBrief inserted for User {UserId} Season {Season} Week {Week}",
+                document.UserId, document.Season, document.Week);
         }
         else
         {
@@ -42,6 +45,9 @@ public class WarRoomBriefRepository(
             await _collection.UpdateOneAsync(
                 Builders<WarRoomBriefDocument>.Filter.Eq(x => x.Id, existing.Id),
                 update, cancellationToken: ct);
+
+            _logger.LogDebug("WarRoomBrief updated for User {UserId} Season {Season} Week {Week}",
+                document.UserId, document.Season, document.Week);
         }
     }
 

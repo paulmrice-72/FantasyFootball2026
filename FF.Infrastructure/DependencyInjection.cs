@@ -54,6 +54,10 @@ public static class DependencyInjection
 
         services.AddSingleton<MongoDbContext>();
 
+        // In-memory cache
+        services.AddMemoryCache();
+        services.AddSingleton<ICacheService, MemoryCacheService>();
+
         // Repositories
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IPlayerRepository, PlayerRepository>();
