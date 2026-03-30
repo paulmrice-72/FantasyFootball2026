@@ -1,4 +1,5 @@
 ﻿// FF.Tests/Infrastructure/EmailTemplateRendererTests.cs
+using FF.Application.Services;
 using FF.Domain.Documents;
 using FF.Infrastructure.Services;
 using FluentAssertions;

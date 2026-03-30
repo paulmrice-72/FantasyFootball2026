@@ -4,7 +4,6 @@ using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
-using FF.Infrastructure.Services;
 
 namespace FF.Application.Services;
 
@@ -104,9 +103,6 @@ public class WarRoomBriefService(
         // Generate Coach Riley narrative
         brief.CoachRileyNarrative = await coachRileyService
             .GenerateNarrativeAsync(brief, ct);
-
-        await briefRepository.UpsertAsync(brief, ct);
-        await briefRepository.UpsertAsync(brief, ct);
 
         await briefRepository.UpsertAsync(brief, ct);
 
