@@ -11,4 +11,5 @@ public class LeagueMembership
     public string Role { get; set; } = "member";              // member | commissioner
     public bool IsActive { get; set; } = true;
     public DateTime LinkedAt { get; set; } = DateTime.UtcNow;
+    public string LeagueType { get; set; } = "Redraft";
 }

@@ -61,7 +61,8 @@ public class SleeperLeagueImportService(
                 name: sleeperLeague.Name ?? "Unknown League",
                 sleeperLeagueId: sleeperLeagueId,
                 season: season,
-                totalTeams: sleeperLeague.TotalRosters);
+                totalTeams: sleeperLeague.TotalRosters,
+                leagueType: MapLeagueType(sleeperLeague.LeagueType));   // ← add
 
             _dbContext.Leagues.Add(league);
             isNewLeague = true;
@@ -69,7 +70,7 @@ public class SleeperLeagueImportService(
         }
         else
         {
-            league.SetUpdated();
+            league.UpdateLeagueType(MapLeagueType(sleeperLeague.LeagueType));  // ← add
             _logger.LogInformation("Updating existing league: {LeagueName}", league.Name);
         }
 
@@ -404,4 +405,12 @@ public class SleeperLeagueImportService(
 
         return imported;
     }
+
+    private static string MapLeagueType(int sleeperLeagueType) =>
+    sleeperLeagueType switch
+    {
+        2 => "Dynasty",
+        1 => "Keeper",
+        _ => "Redraft"
+    };
 }
