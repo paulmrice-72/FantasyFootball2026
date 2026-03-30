@@ -60,4 +60,9 @@ public interface IPlayerGameLogRepository
     Task<List<PlayerGameLogDocument>> GetByPositionAsync(
         string position,
         CancellationToken ct = default);
+    Task<List<PlayerGameLogDocument>> GetSampleBySeasonAsync(
+    int season, int limit, CancellationToken ct = default);
+
+    Task<Dictionary<string, long>> GetPositionCountsBySeasonAsync(
+        int season, CancellationToken ct = default);
 }

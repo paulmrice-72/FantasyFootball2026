@@ -1,8 +1,8 @@
-﻿// FF.Infrastructure/Services/EmailTemplateRenderer.cs
+﻿// FF.Application/Services/EmailTemplateRenderer.cs   ← fix comment
 using FF.Domain.Documents;
 using System.Text;
 
-namespace FF.Infrastructure.Services;
+namespace FF.Application.Services;   // ← was FF.Infrastructure.Services
 
 public static class EmailTemplateRenderer
 {
