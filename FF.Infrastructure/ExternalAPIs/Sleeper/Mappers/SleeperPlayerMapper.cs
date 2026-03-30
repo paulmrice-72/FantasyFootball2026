@@ -89,4 +89,23 @@ public static class SleeperPlayerMapper
             _ => null  // LB, CB, S, DL, OL etc - we don't track these
         };
     }
+
+    /// <summary>
+    /// Returns the raw Sleeper injury designation string for storage.
+    /// Null means no active designation (healthy/no report).
+    /// </summary>
+    public static string? MapInjuryDesignation(SleeperPlayerDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.InjuryStatus))
+            return null;
+
+        return dto.InjuryStatus.ToUpperInvariant() switch
+        {
+            "IR" => "IR",
+            "OUT" => "Out",
+            "DOUBTFUL" or "D" => "Doubtful",
+            "QUESTIONABLE" or "Q" => "Questionable",
+            _ => null
+        };
+    }
 }
