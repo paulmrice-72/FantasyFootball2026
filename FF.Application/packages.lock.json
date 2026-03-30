@@ -50,6 +50,15 @@
           "Microsoft.IdentityModel.JsonWebTokens": "8.14.0"
         }
       },
+      "Microsoft.Extensions.Caching.Abstractions": {
+        "type": "Direct",
+        "requested": "[9.0.0, )",
+        "resolved": "9.0.0",
+        "contentHash": "FPWZAa9c0H4dvOj351iR1jkUIs4u9ykL4Bm592yhjDyO5lCoWd+TMAHx2EMbarzUvCvgjWjJIoC6//Q9kH6YhA==",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "9.0.0"
+        }
+      },
       "Google.OrTools.runtime.linux-arm64": {
         "type": "Transitive",
         "resolved": "9.9.3963",
@@ -343,7 +352,7 @@
       "ff.sharedkernel": {
         "type": "Project",
         "dependencies": {
-          "MediatR": "[14.1.0, )",
+          "MediatR": "[12.2.0, )",
           "Serilog.Enrichers.CorrelationId": "[3.0.1, )",
           "Serilog.Enrichers.Environment": "[3.0.1, )",
           "Serilog.Enrichers.Thread": "[4.0.0, )",
