@@ -63,6 +63,7 @@ public class LinkSleeperAccountCommandHandler(
                     leagueName: league.Name,
                     season: league.Season,
                     role: "member",
+                    leagueType: league.LeagueType,      // ← add
                     cancellationToken: cancellationToken);
             }
         }

@@ -15,7 +15,8 @@ public record LeagueSummaryDto(
     string SleeperLeagueId,
     int Season,
     int TotalTeams,
-    bool IsActive
+    bool IsActive,
+    string LeagueType
 );
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -31,12 +32,13 @@ public class GetAllLeaguesQueryHandler(IUnitOfWork unitOfWork) : IRequestHandler
         var leagues = await _unitOfWork.Leagues.GetAllAsync(cancellationToken);
 
         return [.. leagues.Select(l => new LeagueSummaryDto(
-            Id: l.Id,
-            Name: l.Name,
-            SleeperLeagueId: l.SleeperLeagueId,
-            Season: l.Season,
-            TotalTeams: l.TotalTeams,
-            IsActive: l.IsActive
-        ))];
+                Id: l.Id,
+                Name: l.Name,
+                SleeperLeagueId: l.SleeperLeagueId,
+                Season: l.Season,
+                TotalTeams: l.TotalTeams,
+                IsActive: l.IsActive,
+                LeagueType: l.LeagueType
+            ))];
     }
 }

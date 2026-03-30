@@ -14,5 +14,6 @@ public record LeagueContext(
     string LeagueName,
     int Season,
     string Role,
-    bool IsActive
+    bool IsActive,
+    string LeagueType = "Redraft"   // default so existing callers don't break
 );
