@@ -69,8 +69,7 @@ try
         .Enrich.WithThreadId()
         .Enrich.WithCorrelationId()
         .WriteTo.Console()
-        .WriteTo.Seq(context.Configuration["Seq:ServerUrl"]
-            ?? "http://192.168.6.17:5341"));
+        .WriteTo.Seq(context.Configuration["Seq:ServerUrl"] ?? "http://ff-seq:5341"));
 
     // ── API SERVICES ──────────────────────────────────────
     builder.Services.AddControllers()
@@ -116,7 +115,9 @@ try
                     "https://localhost:64233",
                     "http://localhost:64234",
                     "https://localhost:64235",
-                    "http://localhost:64236")
+                    "http://localhost:64236",
+                    "http://192.168.6.22:64235",   // ← add PMRDEPLOY
+                    "http://192.168.6.22:64233")   // ← add PMRDEPLOY")
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
@@ -171,13 +172,10 @@ try
     app.MapControllers();
 
     // ── HANGFIRE DASHBOARD ────────────────────────────────
-    if (app.Environment.IsDevelopment())
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
     {
-        app.UseHangfireDashboard("/hangfire", new DashboardOptions
-        {
-            Authorization = [new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter()]
-        });
-    }
+        Authorization = [new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter()]
+    });
 
     // ── STARTUP TASKS ─────────────────────────────────────
     await DatabaseInitialiser.InitialiseAsync(app.Services);
