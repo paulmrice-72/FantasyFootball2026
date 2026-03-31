@@ -2,7 +2,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy solution and project files first for layer caching
 COPY FantasyFootball.sln .
 COPY FF.API/FF.API.csproj                       FF.API/
 COPY FF.Application/FF.Application.csproj       FF.Application/
@@ -11,10 +10,8 @@ COPY FF.Infrastructure/FF.Infrastructure.csproj FF.Infrastructure/
 COPY FF.SharedKernel/FF.SharedKernel.csproj     FF.SharedKernel/
 COPY FF.WebBlazor/FF.WebBlazor.csproj           FF.WebBlazor/
 
-# Restore — cached unless .csproj files change
 RUN dotnet restore FF.WebBlazor/FF.WebBlazor.csproj
 
-# Copy everything else and build
 COPY . .
 RUN dotnet publish FF.WebBlazor/FF.WebBlazor.csproj \
     -c Release \
@@ -22,11 +19,12 @@ RUN dotnet publish FF.WebBlazor/FF.WebBlazor.csproj \
     --no-restore
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
-WORKDIR /app
+FROM nginx:alpine AS runtime
 
-COPY --from=build /app/publish .
+# Copy published Blazor static files to nginx html directory
+COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+
+# nginx config for Blazor WASM — handles deep-link routing
+COPY FF.WebBlazor/nginx.conf /etc/nginx/nginx.conf
 
 EXPOSE 64236
-
-ENTRYPOINT ["dotnet", "FF.WebBlazor.dll"]

@@ -11,9 +11,11 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // HTTP Client
 builder.Services.AddScoped<AuthorizationMessageHandler>();
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:64233/";
+
 builder.Services.AddHttpClient("AuthAPI", client =>
 {
-    client.BaseAddress = new Uri("https://localhost:64233/");
+    client.BaseAddress = new Uri(apiBaseUrl);
 })
 .AddHttpMessageHandler<AuthorizationMessageHandler>();
 
