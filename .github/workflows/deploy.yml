@@ -1,0 +1,61 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ develop ]
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/paulmrice-72/fantasyfootball2026-api
+  BLAZOR_IMAGE: ghcr.io/paulmrice-72/fantasyfootball2026-blazor
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: FF.API/Dockerfile
+          push: true
+          tags: ${{ env.API_IMAGE }}:latest
+
+      - name: Build and push Blazor image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: FF.WebBlazor/Dockerfile
+          push: true
+          tags: ${{ env.BLAZOR_IMAGE }}:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Deploy to Hetzner
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 157.180.72.158
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /opt/fantasycombineai
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
