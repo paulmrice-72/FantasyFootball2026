@@ -1,3 +1,4 @@
+using FF.API.Infrastructure;
 using FF.API.Middleware;
 using FF.Application;
 using FF.Application.Common.Settings;
@@ -117,7 +118,8 @@ try
                     "https://localhost:64235",
                     "http://localhost:64236",
                     "http://192.168.6.22:64235",   // ← add PMRDEPLOY
-                    "http://192.168.6.22:64233")   // ← add PMRDEPLOY")
+                    "http://192.168.6.22:64233",  // ← add PMRDEPLOY")
+                    "https://fantasycombineai.com")   
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
@@ -174,7 +176,7 @@ try
     // ── HANGFIRE DASHBOARD ────────────────────────────────
     app.UseHangfireDashboard("/hangfire", new DashboardOptions
     {
-        Authorization = [new Hangfire.Dashboard.LocalRequestsOnlyAuthorizationFilter()]
+        Authorization = [new HangfireAuthorizationFilter()]
     });
 
     // ── STARTUP TASKS ─────────────────────────────────────
