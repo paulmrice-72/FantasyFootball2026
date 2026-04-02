@@ -14,17 +14,22 @@
 
 <MudPaper Class="fc-card pa-4" Elevation="0">
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Seq log viewer — access via SSH tunnel or direct server connection.
+        Seq is running internally on the production server. Access via SSH tunnel from PAULMRICE:
     </MudText>
-    <MudButton Variant="Variant.Outlined"
-               Color="Color.Warning"
-               StartIcon="@Icons.Material.Filled.OpenInNew"
-               Href="http://157.180.72.158:5341"
-               Target="_blank"
-               Class="mb-4">
-        Open Seq Dashboard
-    </MudButton>
+
+    <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background:#0A0F1E; border-radius:8px; border:1px solid var(--fc-border);">
+        <MudText Typo="Typo.body2" Style="font-family:monospace; color:var(--fc-amber);">
+            ssh -i ~/.ssh/fantasycombineai -L 5341:seq:5341 root@157.180.72.158
+        </MudText>
+    </MudPaper>
+
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-4">
+        Then open <strong style="color:var(--fc-amber);">http://localhost:5341</strong> in your browser. Keep the tunnel open while viewing logs.
+    </MudText>
+
+    <MudDivider Class="my-3" />
+
     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-        Note: Seq is accessible via direct server IP. Use SSH tunnel for secure access.
+        Seq ingestion endpoint: <strong>http://seq:5341</strong> (internal Docker network only)
     </MudText>
 </MudPaper>
