@@ -119,7 +119,8 @@ try
                     "http://localhost:64236",
                     "http://192.168.6.22:64235",   // ← add PMRDEPLOY
                     "http://192.168.6.22:64233",  // ← add PMRDEPLOY")
-                    "https://fantasycombineai.com")   
+                    "https://fantasycombineai.com",
+                    "https://www.fantasycombineai.com")   
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
