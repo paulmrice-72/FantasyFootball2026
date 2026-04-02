@@ -333,10 +333,10 @@ else
 }
 
 @code {
-    [Parameter] public string PlayerId { get; set; } = string.Empty;
+        [Parameter] public string PlayerId { get; set; } = string.Empty;
 
     //private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
-    //    private int _week;
+        //    private int _week;
     private int _season = 2024;
     private int _week = 18;
 
@@ -382,7 +382,7 @@ else
         try
         {
             _usage = await Http.GetFromJsonAsync<UsageDetail>(
-                $"api/v1/players/{PlayerId}/usage?season={_season}");
+                $"api/v1/usage-metrics/{PlayerId}?season={_season}");
         }
         catch { /* 404 = no usage metrics for this season */ }
 

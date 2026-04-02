@@ -6,16 +6,16 @@ using Microsoft.AspNetCore.Mvc;
 namespace FF.API.Controllers;
 
 [ApiController]
-[Route("api/v1/players")]
+[Route("api/v1/usage-metrics")]
 [Authorize]
 public class UsageMetricsController(IPlayerUsageMetricsRepository repository) : ControllerBase
 {
     private readonly IPlayerUsageMetricsRepository _repository = repository;
 
-    // GET /api/v1/players/{playerId}/usage?season=2024
-    [HttpGet("{playerId}/usage")]
+    // GET /api/v1/usage-metrics/{playerId}?season=2024
+    [HttpGet("{playerId}")]
     public async Task<IActionResult> GetUsageMetrics(
-        string playerId,
+            string playerId,
         [FromQuery] int season = 2024,
         CancellationToken ct = default)
     {
@@ -28,10 +28,10 @@ public class UsageMetricsController(IPlayerUsageMetricsRepository repository) : 
         return Ok(metrics);
     }
 
-    // GET /api/v1/players/usage?season=2024&position=WR
-    [HttpGet("usage")]
+    // GET /api/v1/usage-metrics?season=2024&position=WR
+    [HttpGet("")]
     public async Task<IActionResult> GetUsageMetricsBySeason(
-        [FromQuery] int season = 2024,
+            [FromQuery] int season = 2024,
         [FromQuery] string? position = null,
         CancellationToken ct = default)
     {
