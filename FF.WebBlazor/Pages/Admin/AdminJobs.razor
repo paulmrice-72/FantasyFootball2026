@@ -2,6 +2,7 @@
 @layout AdminLayout
 @attribute [Authorize(Roles = "Admin")]
 @using Microsoft.AspNetCore.Authorization
+@inject NavigationManager Nav
 
 <PageTitle>Jobs — Admin — FantasyCombine.AI</PageTitle>
 
@@ -12,8 +13,8 @@
     </MudText>
     <MudText Typo="Typo.body2" Class="mud-text-secondary">
         Hangfire dashboard available at
-        <MudLink Href="http://localhost:64234/hangfire" Target="_blank" Style="color:var(--fc-amber);">
-            localhost:64234/hangfire
+        <MudLink Href="@HangfireUrl" Target="_blank" Style="color:var(--fc-amber);">
+            @HangfireUrl
         </MudLink>
     </MudText>
 </div>
@@ -26,9 +27,13 @@
     <MudButton Variant="Variant.Outlined"
                Color="Color.Warning"
                StartIcon="@Icons.Material.Filled.OpenInNew"
-               Href="http://localhost:64234/hangfire"
+               Href="@HangfireUrl"
                Target="_blank"
                Class="mt-3">
         Open Hangfire Dashboard
     </MudButton>
 </MudPaper>
+
+@code {
+    private string HangfireUrl => new Uri(new Uri(Nav.BaseUri), "/hangfire").ToString();
+}
