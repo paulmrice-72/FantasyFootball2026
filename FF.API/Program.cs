@@ -177,6 +177,7 @@ try
 
     app.UseHttpsRedirection();
     app.UseCors("BlazorWasm");
+    app.UseRouting();
     app.UseAuthentication();
     app.UseAuthorization();
 
