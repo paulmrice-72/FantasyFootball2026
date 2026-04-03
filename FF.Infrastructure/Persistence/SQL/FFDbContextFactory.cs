@@ -18,7 +18,7 @@ public class FFDbContextFactory : IDesignTimeDbContextFactory<FFDbContext>
             .Build();
 
         var optionsBuilder = new DbContextOptionsBuilder<FFDbContext>();
-        optionsBuilder.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
+        optionsBuilder.UseNpgsql(configuration.GetConnectionString("DefaultConnection"));
 
         return new FFDbContext(optionsBuilder.Options);
     }
