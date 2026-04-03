@@ -12,6 +12,7 @@ using FF.Infrastructure.Persistence.SQL;
 using FF.SharedKernel.Common;
 using Hangfire;
 using MediatR;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Refit;
@@ -57,8 +58,13 @@ try
             ValidAudience = jwtSettings.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(jwtSettings.Secret)),
-            ClockSkew = TimeSpan.Zero // No grace period on token expiry
+            ClockSkew = TimeSpan.Zero
         };
+    })
+    .AddCookie("HangfireCookie", options =>
+    {
+        options.LoginPath = "/hangfire/login";
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
     });
 
     // ── SERILOG ───────────────────────────────────────────
@@ -173,6 +179,42 @@ try
     app.UseCors("BlazorWasm");
     app.UseAuthentication();
     app.UseAuthorization();
+
+    // ── HANGFIRE LOGIN ────────────────────────────────────
+    app.MapGet("/hangfire/login", () => Results.Content("""
+    <html><body style="font-family:sans-serif;display:flex;justify-content:center;margin-top:100px">
+    <form method='post' action='/hangfire/login'>
+        <h2>Hangfire Admin</h2>
+        <input type='password' name='password' placeholder='Password' style="padding:8px;width:200px" />
+        <button type='submit' style="padding:8px 16px;margin-left:8px">Login</button>
+    </form>
+    </body></html>
+""", "text/html"));
+    app.MapPost("/hangfire/login", async (HttpContext ctx, string password,
+        IConfiguration config) =>
+    {
+        var adminPassword = config["HangfireAdmin:Password"];
+        if (password != adminPassword)
+            return Results.Unauthorized();
+
+        var claims = new[] {
+        new System.Security.Claims.Claim(
+            System.Security.Claims.ClaimTypes.Role, "Admin")
+    };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "HangfireCookie");
+        var principal = new System.Security.Claims.ClaimsPrincipal(identity);
+        await ctx.SignInAsync("HangfireCookie", principal);
+        return Results.Redirect("/hangfire");
+    });
+
+    app.MapGet("/hangfire/login", () => Results.Content("""
+    <html><body>
+    <form method='post' action='/hangfire/login'>
+        <input type='password' name='password' placeholder='Admin password' />
+        <button type='submit'>Login</button>
+    </form>
+    </body></html>
+""", "text/html"));
 
     // ── HANGFIRE DASHBOARD ────────────────────────────────
     app.UseHangfireDashboard("/hangfire", new DashboardOptions

@@ -1,5 +1,5 @@
-﻿// FF.API/Infrastructure/HangfireAuthorizationFilter.cs
-using Hangfire.Dashboard;
+﻿using Hangfire.Dashboard;
+using Microsoft.AspNetCore.Authentication;
 
 namespace FF.API.Infrastructure;
 
@@ -9,9 +9,16 @@ public class HangfireAuthorizationFilter : IDashboardAuthorizationFilter
     {
         var httpContext = context.GetHttpContext();
 
-        if (!httpContext.User.Identity?.IsAuthenticated ?? true)
-            return false;
+        // Cookie auth — browser navigation
+        var result = httpContext.AuthenticateAsync("HangfireCookie").GetAwaiter().GetResult();
+        if (result.Succeeded && result.Principal?.IsInRole("Admin") == true)
+            return true;
 
-        return httpContext.User.IsInRole("Admin");
+        // JWT fallback
+        if (httpContext.User.Identity?.IsAuthenticated == true &&
+            httpContext.User.IsInRole("Admin"))
+            return true;
+
+        return false;
     }
 }
