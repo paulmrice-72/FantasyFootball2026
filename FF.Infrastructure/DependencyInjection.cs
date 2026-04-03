@@ -341,10 +341,10 @@ public static class DependencyInjection
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);
                     cm.MapIdMember(c => c.Id)
-                      .SetIdGenerator(StringObjectIdGenerator.Instance)
-                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                      .SetSerializer(new StringSerializer(BsonType.String)); // ← plain string, no ObjectId generator
                 });
             }
+
         }
         catch (Exception ex)
         {

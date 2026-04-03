@@ -14,6 +14,10 @@ public class InjuryAlertRepository(MongoDbContext context) : IInjuryAlertReposit
     {
         foreach (var alert in alerts)
         {
+            // Ensure Id is set — used as _id on insert
+            if (string.IsNullOrEmpty(alert.Id))
+                alert.Id = alert.SleeperPlayerId;
+
             var filter = Builders<InjuryAlertDocument>.Filter
                 .Eq(x => x.SleeperPlayerId, alert.SleeperPlayerId);
 
@@ -23,7 +27,7 @@ public class InjuryAlertRepository(MongoDbContext context) : IInjuryAlertReposit
                 .Set(x => x.NflTeam, alert.NflTeam)
                 .Set(x => x.Designation, alert.Designation)
                 .Set(x => x.SyncedAt, alert.SyncedAt)
-                .SetOnInsert(x => x.Id, alert.SleeperPlayerId);
+                .SetOnInsert(x => x.Id, alert.SleeperPlayerId); // safe now — string serializer registered
 
             await _collection.UpdateOneAsync(
                 filter, update,
