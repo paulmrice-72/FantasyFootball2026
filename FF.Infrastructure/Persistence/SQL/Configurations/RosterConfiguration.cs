@@ -42,7 +42,7 @@ public class RosterConfiguration : IEntityTypeConfiguration<Roster>
 
         builder.HasIndex(r => r.LeagueId);
 
-        builder.HasIndex(r => r.SleeperRosterId)
+        builder.HasIndex(r => new { r.LeagueId, r.SleeperRosterId })
             .IsUnique()
             .HasFilter("\"SleeperRosterId\" IS NOT NULL");
     }
