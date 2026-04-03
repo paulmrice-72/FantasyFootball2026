@@ -2,6 +2,7 @@
 using FF.Application.Common.Settings;
 using FF.Application.Interfaces.Auth;
 using FF.Application.Interfaces.Auth.DTOs;
+using FF.Application.Interfaces.Services;
 using FF.Domain.Entities;
 using FF.Infrastructure.Persistence.SQL;
 using FF.SharedKernel;
@@ -20,11 +21,13 @@ namespace FF.Infrastructure.Identity;
 public class AuthService(
     UserManager<ApplicationUser> userManager,
     FFDbContext context,
-    IOptions<JwtSettings> jwtSettings) : IAuthService
+    IOptions<JwtSettings> jwtSettings,
+    IEmailService emailService) : IAuthService
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly FFDbContext _context = context;
     private readonly JwtSettings _jwtSettings = jwtSettings.Value;
+    private readonly IEmailService _emailService = emailService;
 
     public async Task<Result<AuthResponse>> RegisterAsync(RegisterRequest request)
     {
@@ -152,5 +155,38 @@ public class AuthService(
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomBytes);
         return Convert.ToBase64String(randomBytes);
+    }
+
+    public async Task<Result> ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+            return Result.Success(); // Silent — don't reveal if email exists
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var encodedToken = Uri.EscapeDataString(token);
+        var encodedEmail = Uri.EscapeDataString(request.Email);
+        var resetLink = $"https://fantasycombineai.com/reset-password?email={encodedEmail}&token={encodedToken}";
+
+        await _emailService.SendPasswordResetAsync(user.Email!, user.FirstName ?? "Coach", resetLink);
+
+        return Result.Success();
+    }
+
+    public async Task<Result> ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+            return Result.Failure(Error.NotFound("Auth.UserNotFound", "User not found."));
+
+        var decodedToken = Uri.UnescapeDataString(request.Token);
+        var result = await _userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return Result.Failure(Error.Validation("Auth.ResetFailed", errors));
+        }
+
+        return Result.Success();
     }
 }
