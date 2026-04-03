@@ -7,8 +7,11 @@ public class HangfireAuthorizationFilter : IDashboardAuthorizationFilter
 {
     public bool Authorize(DashboardContext context)
     {
-        // Allow all requests in production — dashboard is Admin-only by obscurity
-        // TODO: wire up proper cookie auth when needed
-        return true;
+        var httpContext = context.GetHttpContext();
+
+        if (!httpContext.User.Identity?.IsAuthenticated ?? true)
+            return false;
+
+        return httpContext.User.IsInRole("Admin");
     }
 }
