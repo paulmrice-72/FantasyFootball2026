@@ -4,6 +4,8 @@
 @using Microsoft.AspNetCore.Authorization
 @inject NavigationManager Nav
 
+private string HangfireUrl => new Uri(new Uri(Nav.BaseUri), "/admin/hangfire-login").ToString();
+
 <PageTitle>Jobs — Admin — FantasyCombine.AI</PageTitle>
 
 <div class="fc-page-header mb-4">
