@@ -57,7 +57,7 @@ public class PlayerConfiguration : IEntityTypeConfiguration<Player>
         // Indexes — we'll query by SleeperPlayerId constantly
         builder.HasIndex(p => p.SleeperPlayerId)
             .IsUnique()
-            .HasFilter("[SleeperPlayerId] IS NOT NULL"); // Filtered — allows multiple nulls
+            .HasFilter("\"SleeperPlayerId\" IS NOT NULL");
 
         builder.HasIndex(p => p.Position);
         builder.HasIndex(p => p.Status);

@@ -24,6 +24,7 @@ using FF.Infrastructure.Persistence.SQL.Repositories;
 using FF.Infrastructure.Services;
 
 using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -48,7 +49,7 @@ public static class DependencyInjection
         System.Diagnostics.Debug.WriteLine("AddInfrastructure starting...");
         // Database
         services.AddDbContext<FFDbContext>(options =>
-            options.UseSqlServer(
+            options.UseNpgsql(
                 configuration.GetConnectionString("DefaultConnection"),
                 sql => sql.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null)));
 
@@ -128,7 +129,8 @@ public static class DependencyInjection
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
-            .UseSqlServerStorage(configuration.GetConnectionString("DefaultConnection")));
+            .UsePostgreSqlStorage(c =>
+                c.UseNpgsqlConnection(configuration.GetConnectionString("DefaultConnection"))));
 
         services.AddHangfireServer();
         services.AddScoped<IBackgroundJobService, HangfireBackgroundJobService>();
