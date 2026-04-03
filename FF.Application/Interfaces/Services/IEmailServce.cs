@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace FF.Application.Interfaces.Services
+﻿namespace FF.Application.Interfaces.Services
 {
     public interface IEmailService
     {
@@ -12,6 +6,12 @@ namespace FF.Application.Interfaces.Services
             string toEmail,
             string subject,
             string htmlBody,
+            CancellationToken ct = default);
+
+        Task SendPasswordResetAsync(
+            string toEmail,
+            string firstName,
+            string resetLink,
             CancellationToken ct = default);
     }
 }
