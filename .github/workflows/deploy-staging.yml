@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Deploy Staging (PMRDEPLOY)
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
           context: .
           file: FF.API/Dockerfile
           push: true
-          tags: ${{ env.API_IMAGE }}:latest
+          tags: ${{ env.API_IMAGE }}:staging
 
       - name: Build and push Blazor image
         uses: docker/build-push-action@v5
@@ -41,21 +41,16 @@ jobs:
           context: .
           file: FF.WebBlazor/Dockerfile
           push: true
-          tags: ${{ env.BLAZOR_IMAGE }}:latest
+          tags: ${{ env.BLAZOR_IMAGE }}:staging
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, pmrdeploy]
     needs: build-and-push
 
     steps:
-      - name: Deploy to Hetzner
-        uses: appleboy/ssh-action@v1
-        with:
-          host: 157.180.72.158
-          username: root
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          script: |
-            cd /opt/fantasycombineai
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker image prune -f
+      - name: Deploy to PMRDEPLOY
+        run: |
+          cd ~/fantasycombine
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker image prune -f
