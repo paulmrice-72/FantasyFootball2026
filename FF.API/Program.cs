@@ -171,14 +171,15 @@ try
 
     app.UseHttpsRedirection();
     app.UseCors("BlazorWasm");
+    app.UseAuthentication();
     app.UseAuthorization();
-    app.MapControllers();
 
     // ── HANGFIRE DASHBOARD ────────────────────────────────
     app.UseHangfireDashboard("/hangfire", new DashboardOptions
     {
         Authorization = [new HangfireAuthorizationFilter()]
     });
+    app.MapControllers();
 
     // ── STARTUP TASKS ─────────────────────────────────────
     await DatabaseInitialiser.InitialiseAsync(app.Services);
