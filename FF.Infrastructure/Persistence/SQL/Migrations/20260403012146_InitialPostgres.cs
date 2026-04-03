@@ -320,8 +320,8 @@ namespace FF.Infrastructure.Persistence.SQL.Migrations
                     Status = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     TransactionDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     Week = table.Column<int>(type: "integer", nullable: false),
-                    AddsJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DropsJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AddsJson = table.Column<string>(type: "text", nullable: true),
+                    DropsJson = table.Column<string>(type: "text", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
@@ -400,7 +400,7 @@ namespace FF.Infrastructure.Persistence.SQL.Migrations
                 table: "Players",
                 column: "SleeperPlayerId",
                 unique: true,
-                filter: "[SleeperPlayerId] IS NOT NULL");
+                filter: "\"SleeperPlayerId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Players_Status",
@@ -423,7 +423,7 @@ namespace FF.Infrastructure.Persistence.SQL.Migrations
                 table: "Rosters",
                 column: "SleeperRosterId",
                 unique: true,
-                filter: "[SleeperRosterId] IS NOT NULL");
+                filter: "\"SleeperRosterId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Transactions_LeagueId",
@@ -435,7 +435,7 @@ namespace FF.Infrastructure.Persistence.SQL.Migrations
                 table: "Transactions",
                 column: "SleeperTransactionId",
                 unique: true,
-                filter: "[SleeperTransactionId] IS NOT NULL");
+                filter: "\"SleeperTransactionId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserProjectionWeightProfiles_AppUserId_IsActive",

@@ -213,7 +213,7 @@ namespace FF.Infrastructure.Persistence.SQL.Migrations
 
                     b.HasIndex("SleeperPlayerId")
                         .IsUnique()
-                        .HasFilter("[SleeperPlayerId] IS NOT NULL");
+                        .HasFilter("\"SleeperPlayerId\" IS NOT NULL");
 
                     b.HasIndex("Status");
 
@@ -292,7 +292,7 @@ namespace FF.Infrastructure.Persistence.SQL.Migrations
 
                     b.HasIndex("SleeperRosterId")
                         .IsUnique()
-                        .HasFilter("[SleeperRosterId] IS NOT NULL");
+                        .HasFilter("\"SleeperRosterId\" IS NOT NULL");
 
                     b.ToTable("Rosters", (string)null);
                 });
@@ -303,13 +303,13 @@ namespace FF.Infrastructure.Persistence.SQL.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("AddsJson")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("DropsJson")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("LeagueId")
                         .HasColumnType("uuid");
@@ -344,7 +344,7 @@ namespace FF.Infrastructure.Persistence.SQL.Migrations
 
                     b.HasIndex("SleeperTransactionId")
                         .IsUnique()
-                        .HasFilter("[SleeperTransactionId] IS NOT NULL");
+                        .HasFilter("\"SleeperTransactionId\" IS NOT NULL");
 
                     b.ToTable("Transactions", (string)null);
                 });
