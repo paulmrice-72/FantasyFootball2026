@@ -181,15 +181,6 @@ try
     app.UseAuthorization();
 
     // ── HANGFIRE LOGIN ────────────────────────────────────
-    app.MapGet("/hangfire/login", () => Results.Content("""
-    <html><body style="font-family:sans-serif;display:flex;justify-content:center;margin-top:100px">
-    <form method='post' action='/hangfire/login'>
-        <h2>Hangfire Admin</h2>
-        <input type='password' name='password' placeholder='Password' style="padding:8px;width:200px" />
-        <button type='submit' style="padding:8px 16px;margin-left:8px">Login</button>
-    </form>
-    </body></html>
-""", "text/html"));
     app.MapPost("/hangfire/login", async (HttpContext ctx, string password,
         IConfiguration config) =>
     {
