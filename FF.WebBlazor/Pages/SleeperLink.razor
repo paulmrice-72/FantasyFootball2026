@@ -129,12 +129,59 @@
         </MudPaper>
 
     </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="fc-card pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">MY LEAGUES</MudText>
+
+            @if (_leagues is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_leagues.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    No leagues synced yet. Link your Sleeper account to get started.
+                </MudText>
+            }
+            else
+            {
+                foreach (var league in _leagues.OrderByDescending(l => l.Season))
+                {
+                    <div class="d-flex align-center justify-space-between mb-3">
+                        <div>
+                            <MudText Typo="Typo.body1" Style="font-weight:600;">@league.Name</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                @league.Season · @league.TotalTeams teams
+                            </MudText>
+                        </div>
+                        <div class="d-flex align-center gap-2">
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Color="@GetLeagueTypeColor(league.LeagueType)"
+                                     Variant="Variant.Filled">
+                                @league.LeagueType
+                            </MudChip>
+                            @if (!league.IsActive)
+                            {
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="Color.Default" Variant="Variant.Outlined">
+                                    Inactive
+                                </MudChip>
+                            }
+                        </div>
+                    </div>
+                    <MudDivider Class="mb-3" />
+                }
+            }
+        </MudPaper>
+    </MudItem>
 </MudGrid>
 
 @code {
     private string _sleeperUsername = string.Empty;
     private bool _linking;
     private UserContextDto? _context;
+    private List<LeagueSummaryDto>? _leagues;
 
     protected override async Task OnInitializedAsync()
     {
@@ -142,8 +189,11 @@
         {
             _context = await Http.GetFromJsonAsync<UserContextDto>(
                 "api/v1/identity/context");
+
             if (_context?.SleeperUsername is not null)
                 _sleeperUsername = _context.SleeperUsername;
+
+            _leagues = await Http.GetFromJsonAsync<List<LeagueSummaryDto>>("api/v1/leagues");
         }
         catch { /* not linked yet */ }
     }
@@ -192,6 +242,17 @@
         }
     }
 
+
+    // Add the DTO record:
+    private record LeagueSummaryDto(
+        Guid Id,
+        string Name,
+        string SleeperLeagueId,
+        int Season,
+        int TotalTeams,
+        bool IsActive,
+        string LeagueType);
+
     private record UserContextDto(
         string UserId,
         string? SleeperUserId,
@@ -200,4 +261,11 @@
         string? ActiveLeagueId);
 
     private record ErrorResponse(string ErrorMessage);
+
+    private static Color GetLeagueTypeColor(string leagueType) => leagueType switch
+    {
+        "Dynasty" => Color.Secondary,
+        "Keeper" => Color.Warning,
+        _ => Color.Primary   // Redraft
+    };
 }
