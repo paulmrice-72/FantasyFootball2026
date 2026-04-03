@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FF.Infrastructure.Persistence.SQL.Migrations
 {
     [DbContext(typeof(FFDbContext))]
-    [Migration("20260403012146_InitialPostgres")]
-    partial class InitialPostgres
+    [Migration("20260403012146_InitialPostgresCreate")]
+    partial class InitialPostgresCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
