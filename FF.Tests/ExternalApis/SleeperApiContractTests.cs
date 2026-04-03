@@ -23,7 +23,7 @@ using Xunit;
 
 namespace FF.Tests.ExternalApis;
 
-[Trait("Category", "Integration")]
+[Trait("Category", "ExternalApi")]
 public class SleeperApiContractTests
 {
     private readonly ISleeperApiClient _client;
