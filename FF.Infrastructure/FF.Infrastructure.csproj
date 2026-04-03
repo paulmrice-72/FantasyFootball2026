@@ -39,6 +39,7 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Persistence\Mongo\Documents\" />
+	  <Folder Include="Persistence\SQL\Migrations\" />
 	  <Folder Include="Stats\" />
 	</ItemGroup>
 </Project>

@@ -44,6 +44,6 @@ public class RosterConfiguration : IEntityTypeConfiguration<Roster>
 
         builder.HasIndex(r => r.SleeperRosterId)
             .IsUnique()
-            .HasFilter("[SleeperRosterId] IS NOT NULL");
+            .HasFilter("\"SleeperRosterId\" IS NOT NULL");
     }
 }

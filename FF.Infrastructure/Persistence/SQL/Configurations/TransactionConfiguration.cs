@@ -20,7 +20,7 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         // Unique index — prevents duplicate imports (idempotency guarantee)
         builder.HasIndex(t => t.SleeperTransactionId)
             .IsUnique()
-            .HasFilter("[SleeperTransactionId] IS NOT NULL");
+            .HasFilter("\"SleeperTransactionId\" IS NOT NULL");
 
         builder.Property(t => t.Type)
             .IsRequired()
@@ -34,8 +34,8 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.Property(t => t.TransactionDate);
 
         // Store as nvarchar(max) — JSON dictionaries of variable size
-        builder.Property(t => t.AddsJson).HasColumnType("nvarchar(max)");
-        builder.Property(t => t.DropsJson).HasColumnType("nvarchar(max)");
+        builder.Property(t => t.AddsJson).HasColumnType("text");
+        builder.Property(t => t.DropsJson).HasColumnType("text");
 
         // FK to League — restrict delete (don't cascade delete transactions)
         builder.HasOne(t => t.League)
