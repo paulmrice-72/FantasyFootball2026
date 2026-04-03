@@ -63,7 +63,7 @@ try
     })
     .AddCookie("HangfireCookie", options =>
     {
-        options.LoginPath = "/admin/hangfire-login";
+        options.LoginPath = "/api/hangfire/login";
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
     });
 
@@ -181,12 +181,12 @@ try
     app.UseAuthorization();
 
     // ── HANGFIRE LOGIN ────────────────────────────────────
-    app.MapPost("/admin/hangfire-login", async (HttpContext ctx, IConfiguration config) =>
+    app.MapPost("/api/hangfire/login", async (HttpContext ctx, IConfiguration config) =>
     {
         var password = ctx.Request.Form["password"].ToString();
         var adminPassword = config["HangfireAdmin:Password"];
         if (password != adminPassword)
-            return Results.Redirect("/admin/hangfire-login?error=1");
+            return Results.Redirect("/api/hangfire/login?error=1");
 
         var claims = new[] {
         new System.Security.Claims.Claim(
@@ -198,9 +198,9 @@ try
         return Results.Redirect("/hangfire");
     });
 
-    app.MapGet("/admin/hangfire-login", () => Results.Content("""
+    app.MapGet("/api/hangfire/login", () => Results.Content("""
     <html><body>
-    <form method='post' action='/admin/hangfire-login'>
+    <form method='post' action='/api/hangfire/login'>
         <input type='password' name='password' placeholder='Admin password' />
         <button type='submit'>Login</button>
     </form>
