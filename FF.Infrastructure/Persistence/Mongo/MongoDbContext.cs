@@ -10,6 +10,7 @@ public class MongoDbContext
     public MongoDbContext(IConfiguration configuration)
     {
         var host = configuration["MongoDB:Host"]
+
             ?? throw new InvalidOperationException("MongoDB:Host not configured.");
         var port = int.Parse(configuration["MongoDB:Port"] ?? "27017");
         var database = configuration["MongoDB:Database"]
