@@ -9,6 +9,7 @@ using FF.SharedKernel;
 using FF.SharedKernel.Common;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -22,12 +23,14 @@ public class AuthService(
     UserManager<ApplicationUser> userManager,
     FFDbContext context,
     IOptions<JwtSettings> jwtSettings,
-    IEmailService emailService) : IAuthService
+    IEmailService emailService,
+    IConfiguration configuration) : IAuthService
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly FFDbContext _context = context;
     private readonly JwtSettings _jwtSettings = jwtSettings.Value;
     private readonly IEmailService _emailService = emailService;
+    private readonly IConfiguration _configuration = configuration;
 
     public async Task<Result<AuthResponse>> RegisterAsync(RegisterRequest request)
     {
@@ -166,7 +169,8 @@ public class AuthService(
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var encodedToken = Uri.EscapeDataString(token);
         var encodedEmail = Uri.EscapeDataString(request.Email);
-        var resetLink = $"https://fantasycombineai.com/reset-password?email={encodedEmail}&token={encodedToken}";
+        var blazorBaseUrl = _configuration["BlazorBaseUrl"] ?? "https://fantasycombineai.com";
+        var resetLink = $"{blazorBaseUrl}/reset-password?email={encodedEmail}&token={encodedToken}";
 
         await _emailService.SendPasswordResetAsync(user.Email!, user.FirstName ?? "Coach", resetLink);
 
