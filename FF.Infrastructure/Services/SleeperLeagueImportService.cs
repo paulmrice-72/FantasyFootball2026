@@ -135,6 +135,14 @@ public class SleeperLeagueImportService(
             return;
         }
 
+        // Fetch fresh league data to update LeagueType
+        var sleeperLeague = await _sleeperApi.GetLeagueAsync(sleeperLeagueId, cancellationToken);
+        if (sleeperLeague is not null)
+        {
+            league.UpdateLeagueType(MapLeagueType(sleeperLeague.Settings?.Type ?? 0));
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
         // Sync rosters (picks up ownership changes, adds/drops)
         await ImportRostersAsync(league, sleeperLeagueId, cancellationToken);
 
