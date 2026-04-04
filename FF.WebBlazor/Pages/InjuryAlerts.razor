@@ -102,11 +102,12 @@
     protected override async Task OnInitializedAsync()
         => await LoadAlerts();
 
-    private async Task OnPositionChanged(string? position)
-    {
-        _selectedPosition = position;
-        await LoadAlerts();
-    }
+    private static readonly HashSet<string> SkillPositions = ["QB", "RB", "WR", "TE", "K"];
+
+    private static readonly HashSet<string> DefPositions =
+        ["CB", "LB", "DB", "DT", "DE", "S", "ILB", "OLB", "FS", "SS", "DL", "IDL"];
+
+    private List<InjuryAlertDto>? _allAlerts;
 
     private async Task LoadAlerts()
     {
@@ -114,11 +115,8 @@
         StateHasChanged();
         try
         {
-            var url = _selectedPosition is null
-                ? "api/v1/injuries"
-                : $"api/v1/injuries?position={_selectedPosition}";
-
-            _alerts = await Http.GetFromJsonAsync<List<InjuryAlertDto>>(url);
+            _allAlerts = await Http.GetFromJsonAsync<List<InjuryAlertDto>>("api/v1/injuries");
+            ApplyFilter();
         }
         catch
         {
@@ -129,6 +127,26 @@
         {
             _loading = false;
         }
+    }
+
+    private void ApplyFilter()
+    {
+        _alerts = _selectedPosition switch
+        {
+            null => _allAlerts,
+            "DEF" => _allAlerts?.Where(a => !SkillPositions.Contains(a.Position)).ToList(),
+            _ => _allAlerts?.Where(a => a.Position == _selectedPosition).ToList()
+        };
+    }
+
+    private async Task OnPositionChanged(string? position)
+    {
+        _selectedPosition = position;
+        if (_allAlerts is null)
+            await LoadAlerts();
+        else
+            ApplyFilter();
+        StateHasChanged();
     }
 
     private static Color GetDesignationColor(string designation) => designation switch
