@@ -1,0 +1,143 @@
+﻿@page "/injury-alerts"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Injury Alerts — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.LocalHospital" Class="mr-2" Style="vertical-align:middle;" />
+        Injury Alerts
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Active injury designations synced from Sleeper
+    </MudText>
+</div>
+
+@* Position filter *@
+<MudPaper Class="fc-card pa-3 mb-4" Elevation="0">
+    <MudChipSet T="string" SelectedValueChanged="OnPositionChanged" SelectionMode="SelectionMode.SingleSelection">
+        <MudChip T="string" Value="@((string?)null)" Variant="Variant.Filled" Color="Color.Primary">All</MudChip>
+        <MudChip T="string" Value="@("QB")" Variant="Variant.Filled" Color="Color.Default">QB</MudChip>
+        <MudChip T="string" Value="@("RB")" Variant="Variant.Filled" Color="Color.Default">RB</MudChip>
+        <MudChip T="string" Value="@("WR")" Variant="Variant.Filled" Color="Color.Default">WR</MudChip>
+        <MudChip T="string" Value="@("TE")" Variant="Variant.Filled" Color="Color.Default">TE</MudChip>
+        <MudChip T="string" Value="@("K")" Variant="Variant.Filled" Color="Color.Default">K</MudChip>
+    </MudChipSet>
+</MudPaper>
+
+@* Alerts table *@
+<MudPaper Class="fc-card" Elevation="0">
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_alerts is null || _alerts.Count == 0)
+    {
+        <div class="pa-6 d-flex flex-column align-center">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                     Style="color: #34D399; font-size: 3rem;" Class="mb-2" />
+            <MudText Typo="Typo.body1" Style="font-weight:600;">No active injury alerts</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                @(_selectedPosition is null ? "All players are healthy." : $"No {_selectedPosition} injuries reported.")
+            </MudText>
+        </div>
+    }
+    else
+    {
+        <MudTable Items="@_alerts" Hover="true" Dense="true"
+                  Breakpoint="Breakpoint.Sm" Elevation="0"
+                  Class="fc-table">
+            <HeaderContent>
+                <MudTh>Player</MudTh>
+                <MudTh>Position</MudTh>
+                <MudTh>Team</MudTh>
+                <MudTh>Designation</MudTh>
+                <MudTh>Updated</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Player">
+                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
+                </MudTd>
+                <MudTd DataLabel="Position">
+                    <MudText Typo="Typo.body2">@context.Position</MudText>
+                </MudTd>
+                <MudTd DataLabel="Team">
+                    <MudText Typo="Typo.body2">@(context.NflTeam ?? "—")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Designation">
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@GetDesignationColor(context.Designation)"
+                             Variant="Variant.Filled">
+                        @context.Designation
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Updated">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @context.SyncedAt.ToLocalTime().ToString("MMM d, h:mm tt")
+                    </MudText>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
+
+@code {
+    private List<InjuryAlertDto>? _alerts;
+    private bool _loading = true;
+    private string? _selectedPosition;
+
+    protected override async Task OnInitializedAsync()
+        => await LoadAlerts();
+
+    private async Task OnPositionChanged(string? position)
+    {
+        _selectedPosition = position;
+        await LoadAlerts();
+    }
+
+    private async Task LoadAlerts()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var url = _selectedPosition is null
+                ? "api/v1/injuries"
+                : $"api/v1/injuries?position={_selectedPosition}";
+
+            _alerts = await Http.GetFromJsonAsync<List<InjuryAlertDto>>(url);
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load injury alerts.", Severity.Error);
+            _alerts = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Color GetDesignationColor(string designation) => designation switch
+    {
+        "Out" => Color.Error,
+        "IR" => Color.Error,
+        "Doubtful" => Color.Warning,
+        "Questionable" => Color.Info,
+        _ => Color.Default
+    };
+
+    private record InjuryAlertDto(
+        string Id,
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        string? NflTeam,
+        string Designation,
+        DateTime SyncedAt);
+}
