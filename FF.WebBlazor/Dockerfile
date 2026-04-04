@@ -36,3 +36,4 @@ COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
 COPY FF.WebBlazor/nginx.conf /etc/nginx/nginx.conf
 
 EXPOSE 64236
+CMD ["nginx", "-g", "daemon off;"]
