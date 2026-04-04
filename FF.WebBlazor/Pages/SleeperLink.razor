@@ -131,7 +131,12 @@
     </MudItem>
     <MudItem xs="12" md="6">
         <MudPaper Class="fc-card pa-4" Elevation="0">
-            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">MY LEAGUES</MudText>
+            <div class="d-flex align-center justify-space-between mb-3">
+                <MudText Typo="Typo.subtitle2" Class="fc-section-label">MY LEAGUES</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                               Size="Size.Small"
+                               OnClick="RefreshLeagues" />
+            </div>
 
             @if (_leagues is null)
             {
@@ -242,6 +247,12 @@
         }
     }
 
+    private async Task RefreshLeagues()
+    {
+        _leagues = null;
+        StateHasChanged();
+        _leagues = await Http.GetFromJsonAsync<List<LeagueSummaryDto>>("api/v1/leagues");
+    }
 
     // Add the DTO record:
     private record LeagueSummaryDto(
