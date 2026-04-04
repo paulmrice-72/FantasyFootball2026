@@ -21,6 +21,14 @@ RUN dotnet publish FF.WebBlazor/FF.WebBlazor.csproj \
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM nginx:alpine AS runtime
 
+COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+COPY FF.WebBlazor/nginx.conf /etc/nginx/nginx.conf
+COPY FF.WebBlazor/docker-entrypoint.sh /docker-entrypoint.d/40-swap-appsettings.sh
+RUN chmod +x /docker-entrypoint.d/40-swap-appsettings.sh
+
+EXPOSE 64236
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
 # Copy published Blazor static files to nginx html directory
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
 
