@@ -20,12 +20,20 @@
 @* Position filter *@
 <MudPaper Class="fc-card pa-3 mb-4" Elevation="0">
     <MudChipSet T="string" SelectedValueChanged="OnPositionChanged" SelectionMode="SelectionMode.SingleSelection">
-        <MudChip T="string" Value="@((string?)null)" Variant="Variant.Filled" Color="Color.Primary">All</MudChip>
-        <MudChip T="string" Value="@("QB")" Variant="Variant.Filled" Color="Color.Default">QB</MudChip>
-        <MudChip T="string" Value="@("RB")" Variant="Variant.Filled" Color="Color.Default">RB</MudChip>
-        <MudChip T="string" Value="@("WR")" Variant="Variant.Filled" Color="Color.Default">WR</MudChip>
-        <MudChip T="string" Value="@("TE")" Variant="Variant.Filled" Color="Color.Default">TE</MudChip>
-        <MudChip T="string" Value="@("K")" Variant="Variant.Filled" Color="Color.Default">K</MudChip>
+        <MudChip T="string" Value="@((string?)null)" Variant="Variant.Filled"
+                 Color="@(_selectedPosition is null ? Color.Primary : Color.Default)">All</MudChip>
+        <MudChip T="string" Value="@("QB")" Variant="Variant.Filled"
+                 Color="@(_selectedPosition == "QB" ? Color.Primary : Color.Default)">QB</MudChip>
+        <MudChip T="string" Value="@("RB")" Variant="Variant.Filled"
+                 Color="@(_selectedPosition == "RB" ? Color.Primary : Color.Default)">RB</MudChip>
+        <MudChip T="string" Value="@("WR")" Variant="Variant.Filled"
+                 Color="@(_selectedPosition == "WR" ? Color.Primary : Color.Default)">WR</MudChip>
+        <MudChip T="string" Value="@("TE")" Variant="Variant.Filled"
+                 Color="@(_selectedPosition == "TE" ? Color.Primary : Color.Default)">TE</MudChip>
+        <MudChip T="string" Value="@("K")" Variant="Variant.Filled"
+                 Color="@(_selectedPosition == "K" ? Color.Primary : Color.Default)">K</MudChip>
+        <MudChip T="string" Value="@("DEF")" Variant="Variant.Filled"
+                 Color="@(_selectedPosition == "DEF" ? Color.Primary : Color.Default)">DEF</MudChip>
     </MudChipSet>
 </MudPaper>
 
