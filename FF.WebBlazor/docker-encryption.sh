@@ -1,4 +1,4 @@
-#!/bin/sh
+﻿#!/bin/sh
 if [ "$ASPNETCORE_ENVIRONMENT" = "Staging" ]; then
   echo "Staging environment detected — swapping appsettings"
   cp /usr/share/nginx/html/appsettings.Staging.json \
