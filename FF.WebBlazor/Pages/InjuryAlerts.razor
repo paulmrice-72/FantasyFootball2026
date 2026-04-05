@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
+@inject IDialogService DialogService
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 
@@ -68,7 +69,11 @@
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Player">
-                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
+                    <MudButton Variant="Variant.Text"
+                               Style="font-weight:600; color: var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                               OnClick="@(() => OpenPlayerCard(context))">
+                        @context.PlayerName
+                    </MudButton>
                 </MudTd>
                 <MudTd DataLabel="Position">
                     <MudText Typo="Typo.body2">@context.Position</MudText>
@@ -158,6 +163,30 @@
         _ => Color.Default
     };
 
+    private async Task OpenPlayerCard(InjuryAlertDto alert)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: alert.SleeperPlayerId,
+            FullName: alert.PlayerName,
+            Position: alert.Position,
+            NflTeam: alert.NflTeam,
+            Age: null,
+            DraftRound: null,
+            DraftPick: null,
+            CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{alert.SleeperPlayerId}.jpg",
+            FantasyProsRank: null,
+            FantasyProsTier: null,
+            DynastyScore: 0,
+            DraftCapitalScore: 0,
+            PositionalScore: 0,
+            ValuationBlendScore: 0,
+            FantasyProsScore: 0);
+
+        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, data } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(alert.PlayerName, parameters, options);
+    }
     private record InjuryAlertDto(
         string Id,
         string SleeperPlayerId,
