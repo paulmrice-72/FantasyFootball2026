@@ -225,17 +225,6 @@ else if (_filtered.Count > 0)
 
     private static readonly string[] Positions = ["", "QB", "RB", "WR", "TE"];
 
-    // ── Detail dialog ─────────────────────────────────────────
-    private bool _detailOpen;
-    private DynastyRow? _selectedPlayer;
-    private CareerSimResponse? _careerSim;
-    private readonly DialogOptions _dialogOptions = new()
-    {
-        MaxWidth = MaxWidth.Large,
-        FullWidth = true,
-        CloseButton = true
-    };
-
     // ── Lifecycle ─────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
         => await LoadRankings();

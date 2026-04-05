@@ -3,6 +3,7 @@
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudText Typo="Typo.h5" Class="mb-1" Style="color: var(--fc-cyan);">
     <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="mr-2" />
@@ -103,10 +104,15 @@ else
                                 #@context.VorpRank
                             </MudText>
                         </MudTd>
+                        @{
+                            var vorpContext = context;
+                        }
                         <MudTd>
-                            <MudText Typo="Typo.body2" Style="font-weight:600">
+                            <MudButton Variant="Variant.Text"
+                                       Style="font-weight:600; color: var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                       OnClick="@(() => _ = OpenPlayerCard(vorpContext.PlayerId, vorpContext.PlayerName, vorpContext.Position, vorpContext.NflTeam))">
                                 @context.PlayerName
-                            </MudText>
+                            </MudButton>
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small"
@@ -180,10 +186,15 @@ else
                                 #@context.FitRank
                             </MudText>
                         </MudTd>
+                        @{
+                            var fitContext = context;
+                        }
                         <MudTd>
-                            <MudText Typo="Typo.body2" Style="font-weight:600">
+                            <MudButton Variant="Variant.Text"
+                                       Style="font-weight:600; color: var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                       OnClick="@(() => _ = OpenPlayerCard(fitContext.Base.PlayerId, fitContext.Base.PlayerName, fitContext.Base.Position, fitContext.Base.NflTeam))">
                                 @context.Base.PlayerName
-                            </MudText>
+                            </MudButton>
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small"
@@ -251,10 +262,18 @@ else
                         <MudTh Style="text-align:right">Week</MudTh>
                     </HeaderContent>
                     <RowTemplate>
+                        @{
+                            var fitContext = context;
+                        }
+                        @{
+                            var emergenceContext = context;
+                        }
                         <MudTd>
-                            <MudText Typo="Typo.body2" Style="font-weight:600">
+                            <MudButton Variant="Variant.Text"
+                                       Style="font-weight:600; color: var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                       OnClick="@(() => _ = OpenPlayerCard(emergenceContext.PlayerId, emergenceContext.PlayerName, emergenceContext.Position, emergenceContext.NflTeam))">
                                 @context.PlayerName
-                            </MudText>
+                            </MudButton>
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small"
@@ -419,7 +438,30 @@ else
             _emergenceLoading = false;
         }
     }
+    private async Task OpenPlayerCard(string sleeperPlayerId, string playerName, string position, string? nflTeam)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: sleeperPlayerId,
+            FullName: playerName,
+            Position: position,
+            NflTeam: nflTeam,
+            Age: null,
+            DraftRound: null,
+            DraftPick: null,
+            CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{sleeperPlayerId}.jpg",
+            FantasyProsRank: null,
+            FantasyProsTier: null,
+            DynastyScore: 0,
+            DraftCapitalScore: 0,
+            PositionalScore: 0,
+            ValuationBlendScore: 0,
+            FantasyProsScore: 0);
 
+        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, data } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(playerName, parameters, options);
+    }
     // ── Local context record matching API response ────────────────────────
     private record UserContext(
         string UserId,
