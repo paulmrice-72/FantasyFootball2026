@@ -14,6 +14,9 @@ public class GetRookiePoolQueryHandler(
     IFantasyProsRookieRankingRepository fantasyProsRepository)
     : IRequestHandler<GetRookiePoolQuery, Result<List<RookiePlayerDto>>>
 {
+    private const string HeadshotBaseUrl =
+        "https://sleepercdn.com/content/nfl/players/thumb/";
+
     public async Task<Result<List<RookiePlayerDto>>> Handle(
         GetRookiePoolQuery request,
         CancellationToken cancellationToken)
@@ -47,7 +50,6 @@ public class GetRookiePoolQueryHandler(
             var fp = fpRankings.FirstOrDefault(
                 r => r.SleeperPlayerId == player.SleeperPlayerId);
 
-            // Overall pick = null until after NFL draft — scores 0 for draft capital
             var overallPick = player.DraftRound.HasValue && player.DraftPick.HasValue
                 ? ((player.DraftRound.Value - 1) * 32) + player.DraftPick.Value
                 : (int?)null;
@@ -58,14 +60,21 @@ public class GetRookiePoolQueryHandler(
                 valuation: val,
                 fantasyProsRank: fp?.FantasyProsRank);
 
+            // Headshot: Sleeper CDN — returns a placeholder image if not found
+            var headshotUrl = player.SleeperPlayerId is not null
+                ? $"{HeadshotBaseUrl}{player.SleeperPlayerId}.jpg"
+                : null;
+
             return new RookiePlayerDto(
                 SleeperPlayerId: player.SleeperPlayerId ?? string.Empty,
                 FullName: player.FullName,
                 Position: player.Position.ToString(),
                 NflTeam: player.NflTeam,
+                Age: player.Age,
                 DraftRound: player.DraftRound,
                 DraftPick: player.DraftPick,
                 CollegeTeam: player.CollegeTeam,
+                HeadshotUrl: headshotUrl,
                 CareerValueScore: val?.CareerValueScore,
                 TradeValue: val?.TradeValue,
                 DiscountedFutureValue: val?.DiscountedFutureValue,

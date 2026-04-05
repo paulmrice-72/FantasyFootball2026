@@ -6,9 +6,11 @@ public record RookiePlayerDto(
     string FullName,
     string Position,
     string? NflTeam,
+    int? Age,
     int? DraftRound,
     int? DraftPick,
     string? CollegeTeam,
+    string? HeadshotUrl,
 
     // From dynasty_valuations
     double? CareerValueScore,
