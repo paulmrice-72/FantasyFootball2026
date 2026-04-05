@@ -982,7 +982,8 @@
           "Google.OrTools": "[9.9.3963, )",
           "MathNet.Numerics": "[5.0.0, )",
           "MediatR": "[14.1.0, )",
-          "Microsoft.Extensions.Caching.Abstractions": "[9.0.0, )"
+          "Microsoft.Extensions.Caching.Abstractions": "[9.0.0, )",
+          "Microsoft.Extensions.Http": "[9.0.13, )"
         }
       },
       "ff.domain": {
