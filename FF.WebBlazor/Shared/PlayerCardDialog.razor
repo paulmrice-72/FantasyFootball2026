@@ -3,7 +3,7 @@
 @inject IHttpClientFactory HttpFactory
 @inject ISnackbar Snackbar
 
-<MudDialog>
+<MudDialog Style="background:#0f1923; border:1px solid rgba(99,179,237,0.25); border-radius:12px;">
     <TitleContent>
         <div class="d-flex align-center gap-3">
             @if (!string.IsNullOrEmpty(Player.HeadshotUrl))
@@ -49,35 +49,33 @@
     <DialogContent>
 
         @* ── Bio strip ───────────────────────────────────────────────────── *@
-        <div class="d-flex flex-wrap gap-4 mb-4 mt-1">
+        <div class="d-flex flex-wrap mt-1 mb-4" style="gap:24px 32px;">
             @if (!string.IsNullOrEmpty(Player.CollegeTeam))
             {
-                <div>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">College</MudText>
-                    <MudText Typo="Typo.body2" Style="font-weight:600;">@Player.CollegeTeam</MudText>
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">College</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.CollegeTeam</MudText>
                 </div>
             }
             @if (Player.DraftRound.HasValue && Player.DraftPick.HasValue)
             {
-                <div>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">NFL Draft</MudText>
-                    <MudText Typo="Typo.body2" Style="font-weight:600;">
-                        R@(Player.DraftRound) P@(Player.DraftPick)
-                    </MudText>
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">NFL Draft</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">R@(Player.DraftRound) P@(Player.DraftPick)</MudText>
                 </div>
             }
             @if (Player.FantasyProsRank.HasValue)
             {
-                <div>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">FP Rank</MudText>
-                    <MudText Typo="Typo.body2" Style="font-weight:600;">#@Player.FantasyProsRank</MudText>
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">FP Rank</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">#@Player.FantasyProsRank</MudText>
                 </div>
             }
             @if (!string.IsNullOrEmpty(Player.FantasyProsTier))
             {
-                <div>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Tier</MudText>
-                    <MudText Typo="Typo.body2" Style="font-weight:600;">@Player.FantasyProsTier</MudText>
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Tier</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.FantasyProsTier</MudText>
                 </div>
             }
         </div>

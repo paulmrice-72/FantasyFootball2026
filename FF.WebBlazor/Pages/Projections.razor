@@ -129,7 +129,7 @@ else if (_filtered.Count > 0)
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Player">
-                    <MudLink Href="@($"players/{context.PlayerId}")"
+                    <MudLink Href="@($"players/{context.SleeperPlayerId}")"
                              Typo="Typo.body2"
                              Style="font-weight:600; color: var(--fc-cyan);">
                         @context.PlayerName
@@ -326,9 +326,9 @@ else if (_filtered.Count > 0)
         _ => role
     };
 
-    // ── DTO ──────────────────────────────────────────────────
     private record SimRow(
         string PlayerId,
+        string SleeperPlayerId,      // ← add this
         string PlayerName,
         string Position,
         string NflTeam,
@@ -343,7 +343,6 @@ else if (_filtered.Count > 0)
         decimal Spread,
         string GameScript)
     {
-        // Convenience aliases used in the table
         public decimal BoomPct => BoomProbability;
         public decimal BustPct => BustProbability;
     }
