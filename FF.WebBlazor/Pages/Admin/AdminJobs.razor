@@ -35,5 +35,15 @@
 </MudPaper>
 
 @code {
-    private string HangfireUrl => new Uri(new Uri(Nav.BaseUri), "/api/hangfire/login").ToString();
+    [Inject] private IConfiguration Configuration { get; set; } = default!;
+
+    private string HangfireUrl
+    {
+        get
+        {
+            var apiBase = Configuration["ApiBaseUrl"]?.TrimEnd('/')
+                          ?? Nav.BaseUri.TrimEnd('/');
+            return $"{apiBase}/hangfire";
+        }
+    }
 }
