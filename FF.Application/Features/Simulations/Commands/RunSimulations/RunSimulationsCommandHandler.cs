@@ -94,6 +94,9 @@ public class RunSimulationsCommandHandler(
 
                 var result = MonteCarloSimulationService.Simulate(projection, role);
 
+                // ── Stamp SleeperPlayerId from projection ─────────────────
+                result.SleeperPlayerId = projection.SleeperPlayerId;
+
                 // Stamp Vegas context if available — falls back to defaults on doc
                 if (vegasLookup.TryGetValue(projection.NflTeam, out var line))
                 {
