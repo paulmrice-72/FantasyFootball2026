@@ -1,5 +1,5 @@
 ﻿// FF.Tests/Application/Emergence/GetWaiverRecommendationsQueryHandlerTests.cs
-using FF.Application.Features.WaiverRecommendations.Queries;
+using FF.Application.Features.WaiverRecommendations.Queries.GetWaiverRecommendations;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
