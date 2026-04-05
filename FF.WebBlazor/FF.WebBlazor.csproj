@@ -16,4 +16,10 @@
 	<ItemGroup>
 		<ProjectReference Include="..\FF.Domain\FF.Domain.csproj" />
 	</ItemGroup>
+	<ItemGroup>
+		<Content Update="wwwroot\appsettings.Development.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<DependentUpon>appsettings.json</DependentUpon>
+		</Content>
+	</ItemGroup>
 </Project>
