@@ -103,7 +103,8 @@ public class SleeperPlayerSyncService(
                         age: sleeperPlayer.Age,
                         yearsExperience: sleeperPlayer.YearsExp,
                         jerseyNumber: sleeperPlayer.Number,
-                        gsisId: sleeperPlayer.GsisId);
+                        gsisId: sleeperPlayer.GsisId,
+                        collegeTeam: sleeperPlayer.College);
                     existing.SetUpdated();
                     updated++;
                 }

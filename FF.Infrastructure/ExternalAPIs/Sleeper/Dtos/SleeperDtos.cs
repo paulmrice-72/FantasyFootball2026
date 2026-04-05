@@ -62,6 +62,8 @@ public class SleeperPlayerDto
 
     [JsonPropertyName("gsis_id")]
     public string? GsisId { get; set; }
+    [JsonPropertyName("college")]
+    public string? College { get; set; }
 
 }
 

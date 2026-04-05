@@ -32,7 +32,8 @@ public class Player : Entity
         Position position,
         string? nflTeam = null,
         string? sleeperPlayerId = null,
-        string? gsisId = null)
+        string? gsisId = null,
+        string? collegeTeam = null)
     {
         return new Player
         {
@@ -41,7 +42,8 @@ public class Player : Entity
             Position = position,
             NflTeam = nflTeam,
             SleeperPlayerId = sleeperPlayerId,
-            GsisId = gsisId
+            GsisId = gsisId,
+            CollegeTeam = collegeTeam
         };
     }
 
@@ -65,7 +67,8 @@ public class Player : Entity
         int? yearsExperience,
         int? jerseyNumber,
         string? gsisId = null,
-        string? injuryStatus = null)
+        string? injuryStatus = null,
+        string? collegeTeam = null)
     {
         FirstName = firstName;
         LastName = lastName;
@@ -75,6 +78,7 @@ public class Player : Entity
         JerseyNumber = jerseyNumber;
         if (gsisId != null) GsisId = gsisId;
         InjuryStatus = injuryStatus;
+        if (collegeTeam != null) CollegeTeam = collegeTeam;
     }
 
     /// <summary>
