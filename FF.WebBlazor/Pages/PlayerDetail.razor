@@ -11,9 +11,9 @@
 <MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
            Variant="Variant.Text"
            Color="Color.Default"
-           OnClick='@(() => Nav.NavigateTo("/projections"))'
+           OnClick='@(() => Nav.NavigateTo("/" + (ReturnUrl ?? "projections")))'
            Class="mb-3">
-    Back to Projections
+    Back
 </MudButton>
 
 @if (_loading)
@@ -319,6 +319,10 @@ else
 @code {
     [Parameter] public string PlayerId { get; set; } = string.Empty;
     [Parameter][SupplyParameterFromQuery] public string? GsisId { get; set; }
+    [Parameter][SupplyParameterFromQuery] public int? FromSeason { get; set; }
+    [Parameter][SupplyParameterFromQuery] public int? FromWeek { get; set; }
+    [Parameter][SupplyParameterFromQuery] public string? FromScoring { get; set; }
+    [Parameter][SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
 
     //private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
         //    private int _week;
@@ -338,9 +342,11 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _week = GetCurrentNflWeek();
+        _season = FromSeason ?? 2024;
+        _week = FromWeek ?? GetCurrentNflWeek();
         await LoadData();
     }
+
     private string ApiPlayerId => GsisId ?? PlayerId;
     private async Task LoadData()
     {

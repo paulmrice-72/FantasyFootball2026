@@ -5,6 +5,7 @@
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <PageTitle>Dynasty — FantasyCombine.AI</PageTitle>
 
@@ -208,89 +209,7 @@ else if (_filtered.Count > 0)
     </MudPaper>
 }
 
-@* ── PLAYER DETAIL DIALOG ────────────────────────────────── *@
-<MudDialog @bind-Visible="_detailOpen" Options="_dialogOptions">
-    <TitleContent>
-        <MudText Typo="Typo.h6" Style="color: var(--fc-cyan);">
-            @_selectedPlayer?.PlayerName
-            <MudChip T="string" Size="Size.Small" Class="@PositionClass(_selectedPlayer?.Position ?? "")" Style="margin-left:8px;">
-                @_selectedPlayer?.Position
-            </MudChip>
-        </MudText>
-    </TitleContent>
-    <DialogContent>
-        @if (_selectedPlayer is not null)
-        {
-            <MudGrid Spacing="3">
-                <MudItem xs="6" sm="3">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Trade Value</MudText>
-                    <MudText Typo="Typo.h6" Class="fc-cyan">@_selectedPlayer.TradeValue.ToString("F1")</MudText>
-                </MudItem>
-                <MudItem xs="6" sm="3">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Age</MudText>
-                    <MudText Typo="Typo.h6">@_selectedPlayer.Age</MudText>
-                </MudItem>
-                <MudItem xs="6" sm="3">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Career Phase</MudText>
-                    <MudText Typo="Typo.h6" Class="@PhaseClass(_selectedPlayer.CareerPhase)">@_selectedPlayer.CareerPhase</MudText>
-                </MudItem>
-                <MudItem xs="6" sm="3">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Prime Years Left</MudText>
-                    <MudText Typo="Typo.h6">@_selectedPlayer.YearsOfPrime.ToString("F0")</MudText>
-                </MudItem>
 
-                @if (_selectedPlayer.BreakoutSignals.Count > 0)
-                {
-                    <MudItem xs="12">
-                        <MudText Typo="Typo.subtitle2" Class="mb-2">Breakout Signals</MudText>
-                        @foreach (var signal in _selectedPlayer.BreakoutSignals)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="mr-1 mb-1">
-                                @signal
-                            </MudChip>
-                        }
-                    </MudItem>
-                }
-
-                @if (_careerSim is not null)
-                {
-                    <MudItem xs="12">
-                        <MudText Typo="Typo.subtitle2" Class="mb-2">5-Year Career Projection</MudText>
-                        <MudTable Items="@_careerSim.YearProjections" Dense="true" Hover="false" Class="fc-table">
-                            <HeaderContent>
-                                <MudTh>Year</MudTh>
-                                <MudTh>Age</MudTh>
-                                <MudTh>Floor</MudTh>
-                                <MudTh>Median</MudTh>
-                                <MudTh>Ceiling</MudTh>
-                                <MudTh>Injury Risk</MudTh>
-                                <MudTh>Phase</MudTh>
-                            </HeaderContent>
-                            <RowTemplate>
-                                <MudTd>@context.Year</MudTd>
-                                <MudTd>@context.AgeAtYear</MudTd>
-                                <MudTd><MudText Typo="Typo.body2" Class="fc-stat">@context.FloorFppg.ToString("F1")</MudText></MudTd>
-                                <MudTd><MudText Typo="Typo.body2" Class="fc-stat fc-cyan">@context.MedianFppg.ToString("F1")</MudText></MudTd>
-                                <MudTd><MudText Typo="Typo.body2" Class="fc-stat fc-ceiling">@context.CeilingFppg.ToString("F1")</MudText></MudTd>
-                                <MudTd><MudText Typo="Typo.body2" Class="@(context.InjuryRisk > 0.3 ? "fc-stat fc-bust" : "fc-stat")">@((context.InjuryRisk * 100).ToString("F0"))%</MudText></MudTd>
-                                <MudTd><MudText Typo="Typo.caption" Class="@PhaseClass(context.Phase.ToString())">@context.Phase</MudText></MudTd>
-                            </RowTemplate>
-                        </MudTable>
-                    </MudItem>
-                }
-            </MudGrid>
-        }
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="@(() => _detailOpen = false)">Close</MudButton>
-        <MudButton Color="Color.Primary"
-                   Variant="Variant.Filled"
-                   Href="dynasty/trade"
-                   StartIcon="@Icons.Material.Filled.SwapHoriz">
-            Analyze Trade
-        </MudButton>
-    </DialogActions>
-</MudDialog>
 
 @code {
     // ── State ─────────────────────────────────────────────────
@@ -385,22 +304,27 @@ else if (_filtered.Count > 0)
 
     private async Task OpenPlayerDetail(DynastyRow player)
     {
-        _selectedPlayer = player;
-        _careerSim = null;
-        _detailOpen = true;
-        StateHasChanged();
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: player.SleeperPlayerId,
+            FullName: player.PlayerName,
+            Position: player.Position,
+            NflTeam: player.NflTeam,
+            Age: player.Age,
+            DraftRound: null,
+            DraftPick: null,
+            CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg",
+            FantasyProsRank: null,
+            FantasyProsTier: null,
+            DynastyScore: player.TradeValue,
+            DraftCapitalScore: 0,
+            PositionalScore: 0,
+            ValuationBlendScore: player.CareerValue,
+            FantasyProsScore: player.BreakoutScore);
 
-        try
-        {
-            _careerSim = await Http.GetFromJsonAsync<CareerSimResponse>(
-                $"api/v1/dynasty/career-simulations/{player.SleeperPlayerId}");
-        }
-        catch
-        {
-            // Career sim not available — dialog still shows basic info
-        }
-
-        StateHasChanged();
+        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, data } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
     }
 
     // ── Filtering ─────────────────────────────────────────────
