@@ -12,6 +12,7 @@
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="MediatR" Version="14.1.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.13" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FF.SharedKernel\FF.SharedKernel.csproj" />

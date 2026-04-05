@@ -41,4 +41,9 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
             .OrderBy(p => p.LastName)
             .ToListAsync(cancellationToken);
     }
+    public async Task UpdateAsync(Player player, CancellationToken cancellationToken = default)
+    {
+        DbSet.Update(player);
+        await Context.SaveChangesAsync(cancellationToken);
+    }
 }

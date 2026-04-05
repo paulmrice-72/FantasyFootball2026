@@ -11,6 +11,7 @@ using FF.Infrastructure.Persistence.Mongo.Repositories;
 using FF.Infrastructure.Persistence.SQL;
 using FF.SharedKernel.Common;
 using Hangfire;
+using MathNet.Numerics;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -325,6 +326,15 @@ try
         job => job.RunAsync(CancellationToken.None),
         "0 9 * * 0",    // Sunday 9am UTC — final injury report before games
         utcOptions);
+
+    // ── E10 Dynasty Draft — nflverse draft pick sync ──────────────────────
+    // Runs daily April 25 – May 15. Disable after DraftRound/DraftPick confirmed populated.
+    RecurringJob.AddOrUpdate<NflverseDraftPickSyncJob>(
+        "nflverse-draft-pick-sync",
+        job => job.RunAsync(2026, CancellationToken.None),
+        "0 12 * * *",   // Daily noon UTC — nflverse updates by morning after each draft day
+        utcOptions);
+
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",
     //methodCall: job => job.SyncWaiversAsync(),

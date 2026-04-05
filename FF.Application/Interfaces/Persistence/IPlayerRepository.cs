@@ -9,4 +9,6 @@ public interface IPlayerRepository : IRepository<Player>
     Task<IReadOnlyList<Player>> GetByPositionAsync(Position position, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Player>> GetByNflTeamAsync(string nflTeam, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Player>> GetRookiesAsync(string? position, CancellationToken cancellationToken = default);
+    // FF.Domain/Repositories/IPlayerRepository.cs — add this method
+    Task UpdateAsync(Player player, CancellationToken cancellationToken = default);
 }

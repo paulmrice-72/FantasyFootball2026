@@ -4,6 +4,8 @@ using FF.Application.Features.DraftTools.Commands.RecordDraftPick;
 using FF.Application.Features.DraftTools.Commands.StartDraftSession;
 using FF.Application.Features.DraftTools.Queries.GetDraftSession;
 using FF.Application.Players.Queries.GetRookiePool;
+using FF.Infrastructure.Jobs;
+using Hangfire;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -115,8 +117,22 @@ public class DraftToolsController(IMediator mediator) : ControllerBase
 
         return result.IsSuccess ? Ok() : BadRequest(result.Error);
     }
-}
 
+
+/// <summary>
+/// POST /api/v1/drafttools/sync/draft-picks?season=2026
+/// Admin only. Manually triggers nflverse draft pick sync.
+/// </summary>
+[HttpPost("sync/draft-picks")]
+    [Authorize(Roles = "Admin")]
+    public IActionResult TriggerDraftPickSync([FromQuery] int season = 2026)
+    {
+        BackgroundJob.Enqueue<NflverseDraftPickSyncJob>(
+            job => job.RunAsync(season, CancellationToken.None));
+
+        return Ok(new { message = $"Draft pick sync queued for season {season}" });
+    }
+}
 // ── Request DTOs (thin, controller-layer only) ────────────────────────────────
 public record StartSessionRequest(string LeagueId, string LeagueName, int Season);
 public record ImportFantasyProsRequest(string CsvContent, int Season);

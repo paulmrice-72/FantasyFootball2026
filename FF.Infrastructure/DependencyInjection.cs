@@ -104,6 +104,11 @@ public static class DependencyInjection
         services.AddScoped<IVorpRecommendationRepository, VorpRecommendationRepository>();
         services.AddScoped<IInjuryAlertRepository, InjuryAlertRepository>();
         services.AddScoped<InjuryAlertSyncJob>();
+        services.AddHttpClient("NflverseClient", client =>
+        {
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("FantasyCombineAI/1.0");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
 
         // Add named HttpClient for nflverse — GitHub redirects require following redirects
         services.AddHttpClient<NflverseDownloadService>(client =>
