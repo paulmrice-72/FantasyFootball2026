@@ -2,7 +2,7 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
-@inject HttpClient Http
+@inject IHttpClientFactory HttpFactory
 @inject NavigationManager Nav
 
 <PageTitle>@(_sim?.PlayerName ?? "Player") — FantasyCombine.AI</PageTitle>
@@ -29,36 +29,8 @@ else if (_sim is null)
 else
 {
     @* ── PLAYER HEADER ───────────────────────────────────────── *@
-    <div class="fc-player-header mb-4">
-        <div class="fc-player-header-left" style="gap:16px;">
-
-            @* Headshot *@
-            <img src="@($"https://sleepercdn.com/content/nfl/players/thumb/{PlayerId}.jpg")"
-                 alt="@_sim.PlayerName"
-                 style="width:72px;height:72px;border-radius:10px;object-fit:cover;flex-shrink:0;"
-                 onerror="this.style.display='none'" />
-
-            @* Position badge + name *@
-            <div class="d-flex align-center gap-3">
-                <div class="fc-slot-pos-badge @PositionClass(_sim.Position) fc-player-pos-badge">
-                    @_sim.Position
-                </div>
-                <div>
-                    <MudText Typo="Typo.h4" Class="fc-page-title">@_sim.PlayerName</MudText>
-                    <div class="d-flex flex-wrap gap-3 mt-1">
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                            @_sim.NflTeam
-                            @if (!string.IsNullOrEmpty(_sim.OpponentTeam) && _sim.OpponentTeam != "UNK")
-                            {
-                                <span> vs @_sim.OpponentTeam</span>
-                            }
-                            · Season @_season · Week @_week
-                        </MudText>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="fc-player-header-right">
+    <PlayerHeader SleeperPlayerId="@PlayerId">
+        <HeaderActions>
             <MudChip T="string" Class="@ScriptClass(_sim.GameScript)" Size="Size.Medium">
                 @ScriptLabel(_sim.GameScript)
             </MudChip>
@@ -70,8 +42,8 @@ else
                     @(_sim.Spread > 0 ? $"+{_sim.Spread:F1}" : $"{_sim.Spread:F1}")
                 </MudChip>
             }
-        </div>
-    </div>
+        </HeaderActions>
+    </PlayerHeader>
 
     @* ── WEEK / SEASON CONTROLS ──────────────────────────────── *@
     <MudPaper Class="fc-controls-bar mb-4 pa-3" Elevation="0">
@@ -345,7 +317,8 @@ else
 }
 
 @code {
-        [Parameter] public string PlayerId { get; set; } = string.Empty;
+    [Parameter] public string PlayerId { get; set; } = string.Empty;
+    [Parameter][SupplyParameterFromQuery] public string? GsisId { get; set; }
 
     //private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
         //    private int _week;
@@ -368,7 +341,7 @@ else
         _week = GetCurrentNflWeek();
         await LoadData();
     }
-
+    private string ApiPlayerId => GsisId ?? PlayerId;
     private async Task LoadData()
     {
         _loading = true;
@@ -377,26 +350,28 @@ else
         _usage = null;
         StateHasChanged();
 
-        try
-        {
-            _sim = await Http.GetFromJsonAsync<SimDetail>(
-                $"api/v1/players/{PlayerId}/simulation?season={_season}&week={_week}");
-        }
-        catch { /* 404 = no sim data for this week */ }
+        var http = HttpFactory.CreateClient("AuthAPI");
 
         try
         {
-            _proj = await Http.GetFromJsonAsync<ProjDetail>(
-                $"api/v1/players/{PlayerId}/projection?season={_season}&week={_week}");
+            _sim = await http.GetFromJsonAsync<SimDetail>(
+                $"api/v1/players/{ApiPlayerId}/simulation?season={_season}&week={_week}");
         }
-        catch { /* 404 = no projection data for this week */ }
+        catch { }
 
         try
         {
-            _usage = await Http.GetFromJsonAsync<UsageDetail>(
-                $"api/v1/usage-metrics/{PlayerId}?season={_season}");
+            _proj = await http.GetFromJsonAsync<ProjDetail>(
+                $"api/v1/players/{ApiPlayerId}/projection?season={_season}&week={_week}");
         }
-        catch { /* 404 = no usage metrics for this season */ }
+        catch { }
+
+        try
+        {
+            _usage = await http.GetFromJsonAsync<UsageDetail>(
+                $"api/v1/usage-metrics/{ApiPlayerId}?season={_season}");
+        }
+        catch { }
 
         _loading = false;
     }
