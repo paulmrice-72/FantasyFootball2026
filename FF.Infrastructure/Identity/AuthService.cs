@@ -166,7 +166,8 @@ public class AuthService(
         if (user is null)
             return Result.Success(); // Silent — don't reveal if email exists
 
-        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        // user is guaranteed non-null here — null-forgiving operator silences analyzer
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user!);
         var encodedToken = Uri.EscapeDataString(token);
         var encodedEmail = Uri.EscapeDataString(request.Email);
         var blazorBaseUrl = _configuration["BlazorBaseUrl"] ?? "https://fantasycombineai.com";

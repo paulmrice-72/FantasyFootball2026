@@ -70,13 +70,13 @@ public class AdminController(
         await userManager.RemoveFromRoleAsync(user, "Admin");
         return Ok($"Admin role removed from {email}.");
     }
-    [HttpPost("reset-password-temp")]
-    [AllowAnonymous]
-    public async Task<IActionResult> ResetPasswordTemp()
-    {
-        var user = await userManager.FindByEmailAsync("paulmrice@gmail.com");
-        var token = await userManager.GeneratePasswordResetTokenAsync(user);
-        var result = await userManager.ResetPasswordAsync(user, token, "ScoobyBoots1!");
-        return Ok(result.Succeeded);
-    }
+    //[HttpPost("reset-password-temp")]
+    //[AllowAnonymous]
+    //public async Task<IActionResult> ResetPasswordTemp()
+    //{
+    //    var user = await userManager.FindByEmailAsync("paulmrice@gmail.com");
+    //    var token = await userManager.GeneratePasswordResetTokenAsync(user);
+    //    var result = await userManager.ResetPasswordAsync(user, token, "ScoobyBoots1!");
+    //    return Ok(result.Succeeded);
+    //}
 }

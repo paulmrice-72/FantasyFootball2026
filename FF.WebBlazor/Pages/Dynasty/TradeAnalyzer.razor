@@ -32,6 +32,7 @@
             <MudAutocomplete T="PlayerSearchResult"
                              @bind-Value="_mySearchResult"
                              SearchFunc="SearchPlayers"
+                             Disabled="@(!_playersLoaded)"
                              ToStringFunc="@(p => p?.PlayerName ?? string.Empty)"
                              Label="Add player..."
                              Variant="Variant.Outlined"

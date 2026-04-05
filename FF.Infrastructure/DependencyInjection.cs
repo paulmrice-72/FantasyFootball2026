@@ -143,6 +143,8 @@ public static class DependencyInjection
         services.AddScoped<ProjectionInputBuilder>();
         services.AddScoped<PlayerProjectionService>();
         services.AddScoped<RosterProfileService>();
+        services.AddScoped<IFantasyProsRookieRankingRepository, FantasyProsRookieRankingRepository>();
+        services.AddScoped<IDraftSessionRepository, DraftSessionRepository>();
         services.AddSleeperApiClient();
 
         // Identity
@@ -342,6 +344,37 @@ public static class DependencyInjection
                     cm.SetIgnoreExtraElements(true);
                     cm.MapIdMember(c => c.Id)
                       .SetSerializer(new StringSerializer(BsonType.String)); // ← plain string, no ObjectId generator
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(FantasyProsRookieRankingDocument)))
+            {
+                BsonClassMap.RegisterClassMap<FantasyProsRookieRankingDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIdMember(cm.GetMemberMap(x => x.Id));
+                    cm.IdMemberMap.SetSerializer(new StringSerializer(BsonType.String));
+                    cm.SetIgnoreExtraElements(true);
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(DraftSessionDocument)))
+            {
+                BsonClassMap.RegisterClassMap<DraftSessionDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIdMember(cm.GetMemberMap(x => x.Id));
+                    cm.IdMemberMap.SetSerializer(new StringSerializer(BsonType.String));
+                    cm.SetIgnoreExtraElements(true);
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(DraftPick)))
+            {
+                BsonClassMap.RegisterClassMap<DraftPick>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
                 });
             }
 
