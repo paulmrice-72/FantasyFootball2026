@@ -231,11 +231,12 @@
                     }
                     else if (_sessionId is not null)
                     {
-                        <MudIconButton Icon="@Icons.Material.Filled.HowToVote"
-                                       Size="Size.Small"
-                                       Color="Color.Primary"
-                                       Title="Mark as drafted"
-                                       OnClick="@(() => MarkDrafted(context))" />
+                        <MudTooltip Text="Mark as drafted">
+                            <MudIconButton Icon="@Icons.Material.Filled.HowToVote"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           OnClick="@(() => MarkDrafted(context))" />
+                        </MudTooltip>
                     }
                     else
                     {
@@ -250,7 +251,7 @@
 </MudPaper>
 
 @* ── MARK DRAFTED DIALOG ─────────────────────────────────────────────── *@
-<MudDialog @bind-IsVisible="_showPickDialog">
+<MudDialog @bind-Visible="_showPickDialog">
     <TitleContent>
         <MudText Typo="Typo.h6">
             <MudIcon Icon="@Icons.Material.Filled.HowToVote" Class="mr-2" />
