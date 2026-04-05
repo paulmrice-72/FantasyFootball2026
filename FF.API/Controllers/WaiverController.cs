@@ -1,6 +1,7 @@
 ﻿// FF.API/Controllers/WaiverController.cs
 using FF.Application.Features.RosterAwareRecommendations.Queries;
-using FF.Application.Features.WaiverRecommendations.Queries;
+using FF.Application.Features.WaiverRecommendations.Queries.GetWaiverRecommendations;
+using FF.Application.Features.WaiverRecommendations.Queries.OffSeasonAvailablePlayer;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +40,18 @@ public class WaiverController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(
             new GetRosterAwareRecommendationsQuery(
                 leagueId, sleeperUserId, season, week, position, top), ct);
+        return Ok(result);
+    }
+
+    [HttpGet("available/offseason")]
+    public async Task<IActionResult> GetOffSeasonAvailable(
+    [FromQuery] string leagueId,
+    [FromQuery] string? position = null,
+    [FromQuery] int top = 50,
+    CancellationToken ct = default)
+    {
+        var result = await mediator.Send(
+            new GetOffSeasonAvailablePlayersQuery(leagueId, position, top), ct);
         return Ok(result);
     }
 }

@@ -2,7 +2,7 @@
 using FF.Domain.Documents;
 using MediatR;
 
-namespace FF.Application.Features.WaiverRecommendations.Queries;
+namespace FF.Application.Features.WaiverRecommendations.Queries.GetWaiverRecommendations;
 
 public record GetWaiverRecommendationsQuery(
     string SleeperLeagueId,
