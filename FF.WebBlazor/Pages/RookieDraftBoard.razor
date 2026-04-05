@@ -4,6 +4,7 @@
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Rookie Draft Board — FantasyCombine.AI</PageTitle>
 
@@ -148,6 +149,7 @@
                 <MudTh>Player</MudTh>
                 <MudTh>Pos</MudTh>
                 <MudTh>Team</MudTh>
+                <MudTh>Age</MudTh>
                 <MudTh>Pick</MudTh>
                 <MudTh>
                     <MudTooltip Text="Composite dynasty score — draft capital 35%, positional value 25%, dynasty valuation 30%, FP rank 10%">
@@ -164,9 +166,12 @@
                     </MudText>
                 </MudTd>
                 <MudTd DataLabel="Player">
-                    <MudText Typo="Typo.body2" Style="font-weight:600;">
+                    <MudButton Variant="Variant.Text"
+                               Class="pa-0"
+                               Style="font-weight:600; text-transform:none; min-width:0;"
+                               OnClick="@(() => OpenPlayerCard(context))">
                         @context.FullName
-                    </MudText>
+                    </MudButton>
                     @if (!string.IsNullOrEmpty(context.CollegeTeam))
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
@@ -183,6 +188,9 @@
                 </MudTd>
                 <MudTd DataLabel="Team">
                     <MudText Typo="Typo.body2">@(context.NflTeam ?? "—")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Age">
+                    <MudText Typo="Typo.body2">@(context.Age.HasValue? context.Age.ToString() : "—")</MudText>
                 </MudTd>
                 <MudTd DataLabel="Pick">
                     @if (context.DraftRound.HasValue && context.DraftPick.HasValue)
@@ -318,6 +326,41 @@
     private int _pickSlot = 1;
     private bool _isMyPick = true;
 
+    private async Task OpenPlayerCard(RookiePlayerDto player)
+    {
+        var cardData = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: player.SleeperPlayerId,
+            FullName: player.FullName,
+            Position: player.Position,
+            NflTeam: player.NflTeam,
+            Age: player.Age,
+            DraftRound: player.DraftRound,
+            DraftPick: player.DraftPick,
+            CollegeTeam: player.CollegeTeam,
+            HeadshotUrl: player.HeadshotUrl,
+            FantasyProsRank: player.FantasyProsRank,
+            FantasyProsTier: player.FantasyProsTier,
+            DynastyScore: player.DynastyScore,
+            DraftCapitalScore: player.DraftCapitalScore,
+            PositionalScore: player.PositionalScore,
+            ValuationBlendScore: player.ValuationBlendScore,
+            FantasyProsScore: player.FantasyProsScore);
+
+        var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, cardData }
+    };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true,
+            BackdropClick = true
+        };
+
+        await DialogService.ShowAsync<PlayerCardDialog>(player.FullName, parameters, options);
+    }
     // ── Lifecycle ─────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
@@ -536,9 +579,11 @@
         string FullName,
         string Position,
         string? NflTeam,
+        int? Age,
         int? DraftRound,
         int? DraftPick,
         string? CollegeTeam,
+        string? HeadshotUrl,
         double? CareerValueScore,
         double? TradeValue,
         double? DiscountedFutureValue,

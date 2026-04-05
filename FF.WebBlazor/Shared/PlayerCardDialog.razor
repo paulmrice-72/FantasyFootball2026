@@ -1,0 +1,244 @@
+﻿@* FF.WebBlazor/Shared/PlayerCardDialog.razor *@
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpFactory
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-3">
+            @if (!string.IsNullOrEmpty(Player.HeadshotUrl))
+            {
+                <img src="@Player.HeadshotUrl"
+                     alt="@Player.FullName"
+                     style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+                     onerror="this.style.display='none'" />
+            }
+            else
+            {
+                <MudAvatar Style="width:56px;height:56px;border-radius:8px;">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
+                </MudAvatar>
+            }
+            <div>
+                <MudText Typo="Typo.h6" Style="font-weight:700;line-height:1.2;">
+                    @Player.FullName
+                </MudText>
+                <div class="d-flex align-center gap-2 mt-1">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@GetPositionColor(Player.Position)"
+                             Variant="Variant.Filled">
+                        @Player.Position
+                    </MudChip>
+                    @if (!string.IsNullOrEmpty(Player.NflTeam))
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @Player.NflTeam
+                        </MudText>
+                    }
+                    @if (Player.Age.HasValue)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            Age @Player.Age
+                        </MudText>
+                    }
+                </div>
+            </div>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+
+        @* ── Bio strip ───────────────────────────────────────────────────── *@
+        <div class="d-flex flex-wrap gap-4 mb-4 mt-1">
+            @if (!string.IsNullOrEmpty(Player.CollegeTeam))
+            {
+                <div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">College</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600;">@Player.CollegeTeam</MudText>
+                </div>
+            }
+            @if (Player.DraftRound.HasValue && Player.DraftPick.HasValue)
+            {
+                <div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">NFL Draft</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600;">
+                        R@(Player.DraftRound) P@(Player.DraftPick)
+                    </MudText>
+                </div>
+            }
+            @if (Player.FantasyProsRank.HasValue)
+            {
+                <div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">FP Rank</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600;">#@Player.FantasyProsRank</MudText>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Player.FantasyProsTier))
+            {
+                <div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Tier</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600;">@Player.FantasyProsTier</MudText>
+                </div>
+            }
+        </div>
+
+        <MudDivider Class="mb-4" />
+
+        @* ── Score breakdown ─────────────────────────────────────────────── *@
+        <MudText Typo="Typo.subtitle2" Class="mb-3"
+                 Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
+            Dynasty Score Breakdown
+        </MudText>
+
+        @ScoreRow("Dynasty Score", Player.DynastyScore, "Composite — draft capital 35%, positional 25%, valuation 30%, FP rank 10%")
+        @ScoreRow("Draft Capital", Player.DraftCapitalScore, "Log-scaled pick slot — earlier picks score higher")
+        @ScoreRow("Positional Value", Player.PositionalScore, "QB 85 · WR 90 · TE 75 · RB 55 — dynasty scarcity weighting")
+        @ScoreRow("Valuation Blend", Player.ValuationBlendScore, "Blend of Career Value, Trade Value, and Discounted Future Value")
+        @ScoreRow("FP Score", Player.FantasyProsScore, "FantasyPros dynasty rookie rank — rank 1 = 100, rank 100+ = 0")
+
+        <MudDivider Class="my-4" />
+
+        @* ── AI Scout Report ─────────────────────────────────────────────── *@
+        <div class="d-flex align-center justify-space-between mb-2">
+            <MudText Typo="Typo.subtitle2"
+                     Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
+                🤖 AI Scout Report
+            </MudText>
+            @if (!_narrativeLoaded)
+            {
+                <MudButton Variant="Variant.Outlined"
+                           Size="Size.Small"
+                           Color="Color.Primary"
+                           OnClick="GenerateNarrative"
+                           Disabled="@_narrativeLoading">
+                    @if (_narrativeLoading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        <span>Generating...</span>
+                    }
+                    else
+                    {
+                        <span>Generate</span>
+                    }
+                </MudButton>
+            }
+        </div>
+
+        @if (_narrativeLoaded)
+        {
+            <MudPaper Class="pa-3" Elevation="0"
+                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;">
+                <MudText Typo="Typo.body2" Style="line-height:1.7;white-space:pre-wrap;">
+                    @_narrative
+                </MudText>
+            </MudPaper>
+        }
+        else if (!_narrativeLoading)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Click Generate for an AI-powered scouting summary.
+            </MudText>
+        }
+
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public PlayerCardData Player { get; set; } = default!;
+
+    private string? _narrative;
+    private bool _narrativeLoading;
+    private bool _narrativeLoaded;
+
+    private async Task GenerateNarrative()
+    {
+        _narrativeLoading = true;
+        StateHasChanged();
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var response = await http.GetAsync(
+                $"api/v1/players/{Player.SleeperPlayerId}/narrative");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content
+                    .ReadFromJsonAsync<NarrativeResponse>();
+                _narrative = result?.Narrative;
+                _narrativeLoaded = true;
+            }
+            else
+            {
+                Snackbar.Add("Could not generate scout report.", Severity.Warning);
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Could not generate scout report.", Severity.Warning);
+        }
+        finally
+        {
+            _narrativeLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private RenderFragment ScoreRow(string label, double value, string tooltip) => __builder =>
+    {
+        <MudTooltip Text="@tooltip" Placement="Placement.Left">
+            <div class="d-flex align-center gap-2 mb-2">
+                <MudText Typo="Typo.body2" Style="min-width:130px;">@label</MudText>
+                <MudProgressLinear Value="@value" Max="100"
+                                   Color="@GetScoreColor(value)"
+                                   Style="flex:1;height:6px;border-radius:3px;" />
+                <MudText Typo="Typo.body2"
+                         Style="font-weight:600;min-width:36px;text-align:right;">
+                    @value.ToString("F1")
+                </MudText>
+            </div>
+        </MudTooltip>
+    };
+
+    private static Color GetPositionColor(string pos) => pos switch
+    {
+        "QB" => Color.Warning,
+        "WR" => Color.Primary,
+        "TE" => Color.Secondary,
+        "RB" => Color.Success,
+        _ => Color.Default
+    };
+
+    private static Color GetScoreColor(double score) => score switch
+    {
+        >= 75 => Color.Success,
+        >= 50 => Color.Primary,
+        >= 25 => Color.Warning,
+        _ => Color.Default
+    };
+
+    // ── Shared DTO passed from the board ─────────────────────────────────
+    public record PlayerCardData(
+        string SleeperPlayerId,
+        string FullName,
+        string Position,
+        string? NflTeam,
+        int? Age,
+        int? DraftRound,
+        int? DraftPick,
+        string? CollegeTeam,
+        string? HeadshotUrl,
+        int? FantasyProsRank,
+        string? FantasyProsTier,
+        double DynastyScore,
+        double DraftCapitalScore,
+        double PositionalScore,
+        double ValuationBlendScore,
+        double FantasyProsScore);
+
+    private record NarrativeResponse(string Narrative);
+}
