@@ -2,7 +2,9 @@
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Players.Commands.SyncPlayers;
 using FF.Application.Players.Queries.GetAllPlayers;
+using FF.Application.Players.Queries.GetPlayerNarrative;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FF.API.Controllers;
@@ -11,6 +13,7 @@ namespace FF.API.Controllers;
 [Route("api/v1/[controller]")]
 public class PlayersController(
     IMediator mediator,
+    IPlayerRepository playerRepository,
     ISimulationResultRepository simulationRepo,
     IPlayerProjectionRepository projectionRepo,
     IPlayerUsageMetricsRepository usageMetricsRepo) : ControllerBase
@@ -31,6 +34,53 @@ public class PlayersController(
         if (!result.IsSuccess)
             return StatusCode(500, result.Error?.Message);
         return Ok(result.Value);
+    }
+
+    /// <summary>
+    /// Returns lightweight bio for the player header — headshot, name, position,
+    /// team, age, jersey, college, years experience.
+    /// </summary>
+    [HttpGet("{sleeperPlayerId}/bio")]
+    public async Task<IActionResult> GetBio(
+        string sleeperPlayerId,
+        CancellationToken ct)
+    {
+        var player = await playerRepository.GetBySleeperIdAsync(sleeperPlayerId, ct);
+        if (player is null)
+            return NotFound($"Player {sleeperPlayerId} not found.");
+
+        return Ok(new
+        {
+            sleeperPlayerId = player.SleeperPlayerId,
+            fullName = player.FullName,
+            position = player.Position.ToString(),
+            nflTeam = player.NflTeam,
+            age = player.Age,
+            jerseyNumber = player.JerseyNumber,
+            collegeTeam = player.CollegeTeam,
+            yearsExperience = player.YearsExperience,
+            headshotUrl = player.SleeperPlayerId is not null
+                               ? $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg"
+                               : null
+        });
+    }
+
+    /// <summary>
+    /// Returns (or generates) an AI scouting narrative for a rookie player.
+    /// Cached in MongoDB for 7 days.
+    /// </summary>
+    [HttpGet("{sleeperPlayerId}/narrative")]
+    public async Task<IActionResult> GetNarrative(
+        string sleeperPlayerId,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new GetPlayerNarrativeQuery(sleeperPlayerId), ct);
+
+        if (!result.IsSuccess)
+            return NotFound(result.Error?.Message);
+
+        return Ok(new { narrative = result.Value!.Narrative });
     }
 
     /// <summary>

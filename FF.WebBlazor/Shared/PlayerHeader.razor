@@ -1,0 +1,142 @@
+﻿@* FF.WebBlazor/Shared/PlayerHeader.razor *@
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpFactory
+
+@if (_bio is not null)
+{
+    <div class="d-flex align-center gap-4 mb-4 flex-wrap">
+
+        @* ── Headshot ── *@
+        @if (!string.IsNullOrEmpty(_bio.HeadshotUrl))
+        {
+            <img src="@_bio.HeadshotUrl"
+                 alt="@_bio.FullName"
+                 style="width:80px;height:80px;border-radius:12px;object-fit:cover;flex-shrink:0;box-shadow:0 4px 16px rgba(0,0,0,0.4);"
+                 onerror="this.style.display='none'" />
+        }
+
+        @* ── Identity block ── *@
+        <div>
+            @* Name + position badge *@
+            <div class="d-flex align-center gap-2 mb-1">
+                <MudChip T="string" Size="Size.Small"
+                         Color="@GetPositionColor(_bio.Position)"
+                         Variant="Variant.Filled"
+                         Style="font-weight:700;">
+                    @_bio.Position
+                </MudChip>
+                @if (_bio.JerseyNumber.HasValue)
+                {
+                    <MudText Typo="Typo.h5" Style="font-weight:300; color:var(--mud-palette-text-secondary);">
+                        #@_bio.JerseyNumber
+                    </MudText>
+                }
+                <MudText Typo="Typo.h4" Class="fc-page-title" Style="line-height:1;">
+                    @_bio.FullName
+                </MudText>
+            </div>
+            @* ── Bio strip ── *@
+            <div style="display:flex; flex-wrap:wrap; gap:8px 24px; margin-top:8px;">
+                @if (!string.IsNullOrEmpty(_bio.NflTeam))
+                {
+                    <div style="display:flex; flex-direction:column; line-height:1.2;">
+                        <span style="font-size:.65rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mud-palette-text-secondary);">Team</span>
+                        <span style="font-weight:600; font-size:.875rem;">@_bio.NflTeam</span>
+                    </div>
+                }
+                @if (_bio.Age.HasValue)
+                {
+                    <div style="display:flex; flex-direction:column; line-height:1.2;">
+                        <span style="font-size:.65rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mud-palette-text-secondary);">Age</span>
+                        <span style="font-weight:600; font-size:.875rem;">@_bio.Age</span>
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(_bio.CollegeTeam))
+                {
+                    <div style="display:flex; flex-direction:column; line-height:1.2;">
+                        <span style="font-size:.65rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mud-palette-text-secondary);">College</span>
+                        <span style="font-weight:600; font-size:.875rem;">@_bio.CollegeTeam</span>
+                    </div>
+                }
+                @if (_bio.YearsExperience.HasValue)
+                {
+                    var exp = _bio.YearsExperience.Value == 0
+                        ? "Rookie"
+                        : $"{_bio.YearsExperience} yr{(_bio.YearsExperience == 1 ? "" : "s")}";
+                    <div style="display:flex; flex-direction:column; line-height:1.2;">
+                        <span style="font-size:.65rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mud-palette-text-secondary);">Experience</span>
+                        <span style="font-weight:600; font-size:.875rem;">@exp</span>
+                    </div>
+                }
+            </div>
+
+        </div>
+
+        @* Slot for page-specific chips (spread, game script, etc.) *@
+        @if (HeaderActions is not null)
+        {
+            <div class="d-flex align-center gap-2 ml-auto flex-wrap">
+                @HeaderActions
+            </div>
+        }
+
+    </div>
+}
+else if (_loading)
+{
+    <div class="d-flex align-center gap-3 mb-4">
+        <MudSkeleton SkeletonType="SkeletonType.Circle" Width="80px" Height="80px" />
+        <div>
+            <MudSkeleton Width="200px" Height="32px" Class="mb-1" />
+            <MudSkeleton Width="300px" Height="20px" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string SleeperPlayerId { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+
+    private PlayerBio? _bio;
+    private bool _loading = true;
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrEmpty(SleeperPlayerId)) return;
+
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            _bio = await http.GetFromJsonAsync<PlayerBio>(
+                $"api/v1/players/{SleeperPlayerId}/bio");
+        }
+        catch { }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+    private static Color GetPositionColor(string? pos) => pos switch
+    {
+        "QB" => Color.Warning,
+        "WR" => Color.Primary,
+        "TE" => Color.Secondary,
+        "RB" => Color.Success,
+        _    => Color.Default
+    };
+
+    private record PlayerBio(
+        string? SleeperPlayerId,
+        string FullName,
+        string Position,
+        string? NflTeam,
+        int? Age,
+        int? JerseyNumber,
+        string? CollegeTeam,
+        int? YearsExperience,
+        string? HeadshotUrl);
+}

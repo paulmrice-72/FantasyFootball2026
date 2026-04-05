@@ -129,7 +129,7 @@ else if (_filtered.Count > 0)
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Player">
-                    <MudLink Href="@($"players/{context.SleeperPlayerId}")"
+                    <MudLink Href="@($"players/{context.SleeperPlayerId ?? context.PlayerId}?gsisId={context.PlayerId}")"
                              Typo="Typo.body2"
                              Style="font-weight:600; color: var(--fc-cyan);">
                         @context.PlayerName
