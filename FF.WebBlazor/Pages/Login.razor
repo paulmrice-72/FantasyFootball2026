@@ -123,7 +123,8 @@
                           FullWidth="true"
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Lock"
-                          AdornmentColor="Color.Primary" />
+                          AdornmentColor="Color.Primary"
+                          @onkeydown="OnKeyDown" />
 
             <div style="text-align:right; margin-bottom: 20px;">
                 <MudLink Href="/forgot-password" Style="font-size:0.8rem;color:#607d8b;">Forgot password?</MudLink>
@@ -194,4 +195,9 @@
 
         Navigation.NavigateTo("/");
     }
+    private async Task OnKeyDown(KeyboardEventArgs e)
+{
+    if (e.Key == "Enter" && !_isLoading)
+        await HandleLogin();
+}
 }

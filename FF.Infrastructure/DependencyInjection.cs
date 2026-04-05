@@ -150,6 +150,12 @@ public static class DependencyInjection
         services.AddScoped<RosterProfileService>();
         services.AddScoped<IFantasyProsRookieRankingRepository, FantasyProsRookieRankingRepository>();
         services.AddScoped<IDraftSessionRepository, DraftSessionRepository>();
+        services.AddScoped<IPlayerNarrativeRepository, PlayerNarrativeRepository>();
+        services.AddHttpClient<IPlayerScoutService, PlayerScoutService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
+        });
         services.AddSleeperApiClient();
 
         // Identity
@@ -380,6 +386,18 @@ public static class DependencyInjection
                 {
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(PlayerNarrativeDocument)))
+            {
+                BsonClassMap.RegisterClassMap<PlayerNarrativeDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
                 });
             }
 
