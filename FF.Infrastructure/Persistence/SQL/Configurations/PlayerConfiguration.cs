@@ -1,4 +1,5 @@
-﻿using FF.Domain.Entities;
+﻿// FF.Infrastructure/Persistence/SQL/Configurations/PlayerConfiguration.cs
+using FF.Domain.Entities;
 using FF.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -14,7 +15,7 @@ public class PlayerConfiguration : IEntityTypeConfiguration<Player>
         builder.HasKey(p => p.Id);
 
         builder.Property(p => p.Id)
-            .ValueGeneratedNever(); // We set Guid in domain, not DB
+            .ValueGeneratedNever();
 
         builder.Property(p => p.FirstName)
             .IsRequired()
@@ -24,12 +25,11 @@ public class PlayerConfiguration : IEntityTypeConfiguration<Player>
             .IsRequired()
             .HasMaxLength(100);
 
-        // FullName is a computed C# property — not mapped to a column
         builder.Ignore(p => p.FullName);
 
         builder.Property(p => p.Position)
             .IsRequired()
-            .HasConversion<string>()  // Store as "QB", "RB" etc — readable in DB
+            .HasConversion<string>()
             .HasMaxLength(10);
 
         builder.Property(p => p.Status)
@@ -46,20 +46,27 @@ public class PlayerConfiguration : IEntityTypeConfiguration<Player>
             .HasMaxLength(50);
 
         builder.Property(p => p.Age);
-
         builder.Property(p => p.YearsExperience);
+
+        // ── E10 Dynasty Draft ─────────────────────────────────────────
+        builder.Property(p => p.DraftRound);
+        builder.Property(p => p.DraftPick);
+        builder.Property(p => p.CollegeTeam)
+            .HasMaxLength(100);
 
         builder.Property(p => p.CreatedAt)
             .IsRequired();
 
         builder.Property(p => p.UpdatedAt);
 
-        // Indexes — we'll query by SleeperPlayerId constantly
         builder.HasIndex(p => p.SleeperPlayerId)
             .IsUnique()
             .HasFilter("\"SleeperPlayerId\" IS NOT NULL");
 
         builder.HasIndex(p => p.Position);
         builder.HasIndex(p => p.Status);
+
+        // ── E10 — query rookies by YearsExperience ────────────────────
+        builder.HasIndex(p => p.YearsExperience);
     }
 }

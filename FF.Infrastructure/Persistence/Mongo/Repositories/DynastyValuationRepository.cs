@@ -76,4 +76,16 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
         foreach (var document in documents)
             await UpsertAsync(document, ct);
     }
+
+    public async Task<List<DynastyValuationDocument>> GetBySleeperPlayerIdsAsync(
+    IEnumerable<string> sleeperPlayerIds,
+    CancellationToken ct = default)
+    {
+        var filter = Builders<DynastyValuationDocument>.Filter
+            .In(x => x.SleeperPlayerId, sleeperPlayerIds);
+
+        return await _collection
+            .Find(filter)
+            .ToListAsync(ct);
+    }
 }

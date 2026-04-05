@@ -23,4 +23,22 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
             .OrderBy(p => p.Position)
             .ThenBy(p => p.LastName)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Player>> GetRookiesAsync(
+        string? position,
+        CancellationToken cancellationToken = default)
+    {
+        var query = DbSet.AsNoTracking()
+            .Where(p => p.YearsExperience == 0);
+
+        if (!string.IsNullOrWhiteSpace(position))
+        {
+            if (Enum.TryParse<Position>(position, ignoreCase: true, out var posEnum))
+                query = query.Where(p => p.Position == posEnum);
+        }
+
+        return await query
+            .OrderBy(p => p.LastName)
+            .ToListAsync(cancellationToken);
+    }
 }

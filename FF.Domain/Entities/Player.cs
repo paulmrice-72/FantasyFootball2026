@@ -1,4 +1,5 @@
-﻿using FF.Domain.Enums;
+﻿// FF.Domain/Entities/Player.cs
+using FF.Domain.Enums;
 using FF.SharedKernel;
 
 namespace FF.Domain.Entities;
@@ -17,7 +18,13 @@ public class Player : Entity
     public int? YearsExperience { get; private set; }
     public string? GsisId { get; set; }
     public string? InjuryStatus { get; private set; }
-    private Player() { } // EF Core constructor
+
+    // ── E10 Dynasty Draft ─────────────────────────────────────────────────
+    public int? DraftRound { get; private set; }
+    public int? DraftPick { get; private set; }
+    public string? CollegeTeam { get; private set; }
+
+    private Player() { }
 
     public static Player Create(
         string firstName,
@@ -67,6 +74,17 @@ public class Player : Entity
         YearsExperience = yearsExperience;
         JerseyNumber = jerseyNumber;
         if (gsisId != null) GsisId = gsisId;
-        InjuryStatus = injuryStatus; // null = no designation (healthy)
+        InjuryStatus = injuryStatus;
+    }
+
+    /// <summary>
+    /// Populated after NFL draft (April 24-26). Null until draft occurs.
+    /// </summary>
+    public void UpdateDraftCapital(int? draftRound, int? draftPick, string? collegeTeam)
+    {
+        DraftRound = draftRound;
+        DraftPick = draftPick;
+        if (collegeTeam != null) CollegeTeam = collegeTeam;
+        SetUpdated();
     }
 }
