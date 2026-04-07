@@ -1,4 +1,5 @@
-﻿using FF.Application.Interfaces.Repositories;
+﻿using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Repositories;
 using FF.Domain.Documents;
 using FF.Domain.Enums;
 using FF.Infrastructure.Services;
@@ -11,9 +12,11 @@ namespace FF.Tests.Application.Dynasty;
 public class TradeAnalyzerServiceTests
 {
     private readonly Mock<IDynastyValuationRepository> _valuationRepo = new();
+    private readonly Mock<IPickValueRepository> _pickValueRepo = new();
 
     private TradeAnalyzerService CreateSut() => new(
         _valuationRepo.Object,
+        _pickValueRepo.Object,
         NullLogger<TradeAnalyzerService>.Instance);
 
     private static DynastyValuationDocument MakeValuation(
@@ -36,11 +39,11 @@ public class TradeAnalyzerServiceTests
     // ── Grade computation ─────────────────────────────────────────────────
 
     [Theory]
-    [InlineData(80.0, 60.0, "A")]   // +20 diff
-    [InlineData(75.0, 65.0, "B")]   // +10 diff
-    [InlineData(70.0, 65.0, "C")]   // +5 diff — even
-    [InlineData(60.0, 70.0, "D")]   // -10 diff
-    [InlineData(50.0, 70.0, "F")]   // -20 diff
+    [InlineData(60.0, 80.0, "A")]   // you give 60, get 80 — win
+    [InlineData(65.0, 75.0, "B")]   // you give 65, get 75
+    [InlineData(65.0, 70.0, "C")]   // roughly even
+    [InlineData(70.0, 60.0, "D")]   // you give more
+    [InlineData(70.0, 50.0, "F")]   // you give much more
     public async Task AnalyzeAsync_CorrectGrade_ForValueDifferential(
         double myValue, double theirValue, string expectedGrade)
     {
@@ -52,7 +55,7 @@ public class TradeAnalyzerServiceTests
             .ReturnsAsync(MakeValuation("their1", "Their Player", "WR", 25, theirValue));
 
         var sut = CreateSut();
-        var result = await sut.AnalyzeAsync("user1", ["my1"], ["their1"], 2026);
+        var result = await sut.AnalyzeAsync("user1", ["my1"], ["their1"], [], [], 2026);
 
         result.Grade.Should().Be(expectedGrade);
     }
@@ -67,18 +70,17 @@ public class TradeAnalyzerServiceTests
             .ReturnsAsync(MakeValuation("my1", "Player A", "WR", 25, 60.0));
         _valuationRepo
             .Setup(r => r.GetBySleeperIdAsync("my2", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MakeValuation("my2", "Player B", "RB", 24, 40.0));
+            .ReturnsAsync(MakeValuation("my2", "Player B", "RB", 24, 15.0));
         _valuationRepo
             .Setup(r => r.GetBySleeperIdAsync("their1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MakeValuation("their1", "Player C", "QB", 28, 75.0));
+            .ReturnsAsync(MakeValuation("their1", "Player C", "QB", 28, 100.0));
 
         var sut = CreateSut();
-        var result = await sut.AnalyzeAsync(
-            "user1", ["my1", "my2"], ["their1"], 2026);
+        var result = await sut.AnalyzeAsync("user1", ["my1", "my2"], ["their1"], [], [], 2026);
 
-        result.MySideValue.Should().BeApproximately(100.0, 0.01);
-        result.TheirSideValue.Should().BeApproximately(75.0, 0.01);
-        result.ValueDifferential.Should().BeApproximately(25.0, 0.01);
+        result.MySideValue.Should().BeApproximately(75.0, 0.01);   // my1=60 + my2=15
+        result.TheirSideValue.Should().BeApproximately(100.0, 0.01); // their1=100
+        result.ValueDifferential.Should().BeApproximately(-25.0, 0.01); // 75-100
     }
 
     // ── Unknown player handling ───────────────────────────────────────────
@@ -94,11 +96,11 @@ public class TradeAnalyzerServiceTests
             .ReturnsAsync((DynastyValuationDocument?)null);
 
         var sut = CreateSut();
-        var result = await sut.AnalyzeAsync(
-            "user1", ["known"], ["unknown"], 2026);
+        var result = await sut.AnalyzeAsync("user1", ["unknown"], ["known"], [], [], 2026);
 
-        result.TheirSideValue.Should().Be(0);
-        result.Grade.Should().Be("A");
+        result.MySideValue.Should().Be(0);       // unknown player = 0
+        result.TheirSideValue.Should().BeApproximately(70.0, 0.01);
+        result.Grade.Should().Be("A");           // getting 70, giving 0 = A
     }
 
     // ── Insights ──────────────────────────────────────────────────────────
@@ -114,9 +116,7 @@ public class TradeAnalyzerServiceTests
             .ReturnsAsync(MakeValuation("old", "Old RB", "RB", 30, 60.0));
 
         var sut = CreateSut();
-        var result = await sut.AnalyzeAsync(
-            "user1", ["young"], ["old"], 2026);
-
+        var result = await sut.AnalyzeAsync("user1", ["old"], ["young"], [], [], 2026);
         result.KeyInsights.Should().Contain(s => s.Contains("younger"));
     }
 
@@ -133,9 +133,7 @@ public class TradeAnalyzerServiceTests
             .ReturnsAsync(MakeValuation("steady", "Steady RB", "RB", 26, 65.0));
 
         var sut = CreateSut();
-        var result = await sut.AnalyzeAsync(
-            "user1", ["breakout"], ["steady"], 2026);
-
+        var result = await sut.AnalyzeAsync("user1", ["steady"], ["breakout"], [], [], 2026);
         result.KeyInsights.Should().Contain(s => s.Contains("breakout"));
     }
 
@@ -149,8 +147,7 @@ public class TradeAnalyzerServiceTests
             .ReturnsAsync(MakeValuation("p1", "Player", "WR", 25, 70.0));
 
         var sut = CreateSut();
-        var result = await sut.AnalyzeAsync(
-            "user1", ["p1"], ["p1"], 2026);
+        var result = await sut.AnalyzeAsync("user1", ["my1"], ["their1"], [], [], 2026);
 
         result.Id.Should().NotBeNullOrEmpty();
         result.UserId.Should().Be("user1");

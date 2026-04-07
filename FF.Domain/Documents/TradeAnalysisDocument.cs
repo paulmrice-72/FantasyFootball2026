@@ -29,4 +29,10 @@ public class TradeSideDetail
     public double BreakoutScore { get; set; }
     public string BreakoutClassification { get; set; } = string.Empty;
     public double YearsOfPrimeRemaining { get; set; }
+
+    // Draft pick fields — null when item is a player
+    public bool IsDraftPick { get; set; } = false;
+    public int? PickRound { get; set; }
+    public string? PickTier { get; set; }
+    public int? PickYear { get; set; }
 }

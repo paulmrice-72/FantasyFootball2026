@@ -79,35 +79,4 @@ public class DynastyController(IMediator mediator) : ControllerBase
             ElapsedSeconds = result.Elapsed.TotalSeconds
         });
     }
-
-    [HttpPost("trade/analyze")]
-    public async Task<IActionResult> AnalyzeTrade(
-    [FromBody] AnalyzeTradeRequest request,
-    CancellationToken ct)
-    {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                     ?? string.Empty;
-
-        var result = await mediator.Send(new AnalyzeTradeCommand(
-            userId,
-            request.MyPlayerIds,
-            request.TheirPlayerIds,
-            request.Season > 0 ? request.Season : 2026), ct);
-
-        return Ok(result);
-    }
-
-    [HttpGet("trade/history")]
-    public async Task<IActionResult> GetTradeHistory(CancellationToken ct)
-    {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                     ?? string.Empty;
-        var result = await mediator.Send(new GetTradeHistoryQuery(userId), ct);
-        return Ok(result);
-    }
-
-    public record AnalyzeTradeRequest(
-    List<string> MyPlayerIds,
-    List<string> TheirPlayerIds,
-    int Season);
 }

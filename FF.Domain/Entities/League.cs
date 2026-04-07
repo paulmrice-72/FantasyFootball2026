@@ -15,6 +15,9 @@ public class League : Entity
     public decimal PassingTdPoints { get; private set; } = 4m;  // 4 or 6
     public decimal BonusRecTe { get; private set; } = 0m;       // TE premium bonus if applicable
     public string LeagueType { get; private set; } = "Redraft";
+    public int DraftRounds { get; private set; } = 3;
+    public int PickYearsOut { get; private set; } = 3;
+    public bool CanTradePicks { get; private set; } = false;
     private League() { }
 
     public static League Create(
@@ -46,5 +49,13 @@ public class League : Entity
         RecPerReception = recPerReception;
         PassingTdPoints = passingTdPoints;
         BonusRecTe = bonusRecTe;
+    }
+
+    public void UpdateDraftSettings(int draftRounds, int tradePickLimit)
+    {
+        DraftRounds = draftRounds > 0 ? draftRounds : 3;
+        CanTradePicks = tradePickLimit > 0;
+        PickYearsOut = tradePickLimit > 0 ? tradePickLimit : 0;
+        SetUpdated();
     }
 }
