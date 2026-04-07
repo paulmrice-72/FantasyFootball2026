@@ -27,6 +27,7 @@ builder.Services.AddSingleton<TokenStore>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();
+builder.Services.AddSingleton<LeagueStateService>();
 
 // MudBlazor
 builder.Services.AddMudServices();
