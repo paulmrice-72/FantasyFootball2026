@@ -1,0 +1,249 @@
+﻿@page "/my-team"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject LeagueStateService LeagueState
+@implements IDisposable
+
+<PageTitle>My Team — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.Groups" Class="mr-2" Style="vertical-align:middle;" />
+        My Team
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        @if (_roster is not null)
+        {
+            <span>@_roster.TeamName · @_roster.Wins–@_roster.Losses</span>
+        }
+    </MudText>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_noSleeper)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">
+        No Sleeper account linked.
+        <MudLink Href="/settings/sleeper">Link your Sleeper account</MudLink> to view your roster.
+    </MudAlert>
+}
+else if (_noLeague)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        No active league found. Import a league from
+        <MudLink Href="/settings/sleeper">Sleeper settings</MudLink>.
+    </MudAlert>
+}
+else if (_roster is null)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">
+        Roster not found for this league. Try syncing your league.
+    </MudAlert>
+}
+else
+{
+    @* ── POSITION GROUPS ───────────────────────────────── *@
+    @foreach (var group in _roster.Players.GroupBy(p => p.Position).OrderBy(g => PositionOrder(g.Key)))
+    {
+        <MudText Typo="Typo.subtitle1" Class="mb-2 mt-4"
+                 Style="color:var(--fc-cyan);font-weight:600;">
+            @group.Key
+        </MudText>
+        <MudPaper Elevation="0" Class="fc-table-paper mb-2">
+            <MudTable Items="@group.ToList()" Dense="true" Hover="true" Class="fc-table">
+                <HeaderContent>
+                    <MudTh>Player</MudTh>
+                    <MudTh>Team</MudTh>
+                    <MudTh>Age</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Proj Pts</MudTh>
+                    <MudTh>Bye</MudTh>
+                    <MudTh>Role</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>
+                        <MudText Typo="Typo.body2" Style="font-weight:600;">
+                            @context.PlayerName
+                        </MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudText Typo="Typo.body2">@context.NflTeam</MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudText Typo="Typo.body2">@(context.Age?.ToString() ?? "—")</MudText>
+                    </MudTd>
+                    <MudTd>
+                        @if (!string.IsNullOrEmpty(context.InjuryDesignation))
+                        {
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@InjuryColor(context.InjuryDesignation)"
+                                     Variant="Variant.Filled">
+                                @context.InjuryDesignation
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Active</MudText>
+                        }
+                    </MudTd>
+                    <MudTd>
+                        <MudText Typo="Typo.body2" Class="fc-stat"
+                                 Style="font-family:'JetBrains Mono',monospace;">
+                            @(context.MedianProjectedPoints.HasValue
+                                ? context.MedianProjectedPoints.Value.ToString("F1")
+                                : "—")
+                        </MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
+                    </MudTd>
+                    <MudTd>
+                        @if (context.IsStarter)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary"
+                                     Variant="Variant.Text">Starter</MudChip>
+                        }
+                        else if (context.IsOnIr)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error"
+                                     Variant="Variant.Text">IR</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default"
+                                     Variant="Variant.Text">Bench</MudChip>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private bool _noSleeper;
+    private bool _noLeague;
+    private MyRosterDto? _roster;
+
+    private HttpClient Http => HttpClientFactory.CreateClient("AuthAPI");
+
+
+    private async Task LoadRosterAsync()
+    {
+        _loading = true;
+        _noSleeper = false;
+        _noLeague = false;
+        _roster = null;
+
+        try
+        {
+            var leagueId = LeagueState.ActiveLeagueId;
+
+            if (string.IsNullOrEmpty(leagueId))
+            {
+                // Fall back to context fetch on first load
+                var context = await Http.GetFromJsonAsync<UserContextResponse>(
+                    "api/v1/identity/context");
+
+                if (context?.IsSleeperLinked != true) { _noSleeper = true; return; }
+
+                leagueId = context.ActiveLeagueId;
+                if (string.IsNullOrEmpty(leagueId)) { _noLeague = true; return; }
+
+                LeagueState.ActiveLeagueId = leagueId;
+            }
+
+            var response = await Http.GetAsync(
+                $"api/v1/team/roster?sleeperLeagueId={leagueId}");
+
+            if (response.IsSuccessStatusCode)
+                _roster = await response.Content.ReadFromJsonAsync<MyRosterDto>();
+            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                _noSleeper = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading roster: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        LeagueState.OnLeagueChanged += OnLeagueChangedHandler;
+        await LoadRosterAsync();
+    }
+
+    private void OnLeagueChangedHandler()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await LoadRosterAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        LeagueState.OnLeagueChanged -= OnLeagueChangedHandler;
+    }
+    private static int PositionOrder(string pos) => pos switch
+    {
+        "QB" => 0,
+        "RB" => 1,
+        "WR" => 2,
+        "TE" => 3,
+        "K" => 4,
+        _ => 5
+    };
+
+    private static Color InjuryColor(string designation) => designation switch
+    {
+        "Out" => Color.Error,
+        "D" => Color.Error,
+        "IR" => Color.Error,
+        "Q" => Color.Warning,
+        "Doubtful" => Color.Warning,
+        _ => Color.Default
+    };
+
+    // ── DTOs ──────────────────────────────────────────────────
+    private record UserContextResponse(
+        bool IsSleeperLinked,
+        string? ActiveLeagueId,
+        List<LeagueItem>? Leagues);
+
+    private record LeagueItem(string LeagueId, string LeagueName, int Season, string Role);
+
+    private record MyRosterDto(
+        string TeamName,
+        string OwnerName,
+        string LeagueId,
+        int Wins,
+        int Losses,
+        int WaiverPosition,
+        List<MyRosterPlayerDto> Players);
+
+    private record MyRosterPlayerDto(
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        string NflTeam,
+        int? Age,
+        string? InjuryDesignation,
+        bool IsStarter,
+        bool IsOnIr,
+        double? MedianProjectedPoints,
+        string? ByeWeek);
+}

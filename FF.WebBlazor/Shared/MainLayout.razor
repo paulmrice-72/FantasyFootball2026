@@ -7,6 +7,7 @@
 @inherits LayoutComponentBase
 @inject IJSRuntime JS
 @inject IHttpClientFactory HttpClientFactory
+@inject LeagueStateService LeagueState
 
 <MudThemeProvider Theme="_theme" />
 <MudPopoverProvider />
@@ -206,6 +207,7 @@
     private void OnLeagueChanged(string leagueId)
     {
         _activeLeagueId = leagueId;
+        LeagueState.ActiveLeagueId = leagueId;
     }
 
     private record UserContextResponse(

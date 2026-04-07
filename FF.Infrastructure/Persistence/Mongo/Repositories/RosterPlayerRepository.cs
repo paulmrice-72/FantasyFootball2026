@@ -81,4 +81,10 @@ public class RosterPlayerRepository(
 
         return await _collection.Find(filter).FirstOrDefaultAsync(ct);
     }
+
+    public async Task<RosterPlayerDocument?> GetBySleeperUserIdAsync(
+    string sleeperUserId, string sleeperLeagueId, CancellationToken ct = default)
+    => await _collection
+        .Find(x => x.SleeperUserId == sleeperUserId && x.SleeperLeagueId == sleeperLeagueId)
+        .FirstOrDefaultAsync(ct);
 }

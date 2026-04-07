@@ -77,20 +77,12 @@ else
             {
                 <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
             }
-            else if (_vorpRecs.Count == 0 && _vorpQueried)
+            else if (_vorpRecs.Count == 0 && _vorpQueried && !_isOffSeason)
             {
                 <MudAlert Severity="Severity.Info">
                     No available players found. Ensure projections are calculated for this week.
                 </MudAlert>
             }
-            else if (_vorpRecs.Count > 0)
-                @if (_isOffSeason)
-                {
-                    <MudAlert Severity="Severity.Info" Class="mb-3">
-                        Off-season mode — players ranked by dynasty trade value.
-                        In-season VORP available once Week 1 projections are calculated.
-                    </MudAlert>
-                }
 
             @if (_vorpLoading)
             {
@@ -102,14 +94,12 @@ else
                     No available players found. Ensure dynasty valuations have been calculated.
                 </MudAlert>
             }
-            else if (!_isOffSeason && _vorpRecs.Count == 0 && _vorpQueried)
-            {
-                <MudAlert Severity="Severity.Info">
-                    No available players found. Ensure projections are calculated for this week.
-                </MudAlert>
-            }
             else if (_isOffSeason && _offSeasonRecs.Count > 0)
             {
+                <MudAlert Severity="Severity.Info" Class="mb-3">
+                    Off-season mode — players ranked by dynasty trade value.
+                    In-season VORP available once Week 1 projections are calculated.
+                </MudAlert>
                 <MudTable Items="@FilteredOffSeason" Dense="true" Hover="true" Striped="true"
                           Style="background: var(--fc-navy-card);">
                     <HeaderContent>
@@ -156,7 +146,6 @@ else
             else if (!_isOffSeason && _vorpRecs.Count > 0)
             {
                 @* existing VORP table unchanged *@
-            }
             }
         </MudTabPanel>
 
