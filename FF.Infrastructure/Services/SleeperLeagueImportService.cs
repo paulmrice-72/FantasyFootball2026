@@ -81,6 +81,12 @@ public class SleeperLeagueImportService(
             var passTd = sleeperLeague.ScoringSettings.GetValueOrDefault("pass_td", 4m);
             var bonusRecTe = sleeperLeague.ScoringSettings.GetValueOrDefault("bonus_rec_te", 0m);
             league.UpdateScoringSettings(rec, passTd, bonusRecTe);
+
+            // Sync draft settings from Sleeper
+            var draftRounds = sleeperLeague.Settings?.DraftRounds ?? 3;
+            var tradePickLimit = sleeperLeague.Settings?.TradePickLimit ?? 0;
+            league.UpdateDraftSettings(draftRounds, tradePickLimit);
+
             _logger.LogInformation(
                 "Scoring settings synced for {LeagueName}: rec={Rec}, passTd={PassTd}, bonusRecTe={BonusRecTe}",
                 league.Name, rec, passTd, bonusRecTe);
@@ -140,6 +146,11 @@ public class SleeperLeagueImportService(
         if (sleeperLeague is not null)
         {
             league.UpdateLeagueType(MapLeagueType(sleeperLeague.Settings?.Type ?? 0));
+
+            league.UpdateDraftSettings(
+                sleeperLeague.Settings?.DraftRounds ?? 3,
+                sleeperLeague.Settings?.TradePickLimit ?? 0);
+
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 

@@ -9,7 +9,11 @@ public record AnalyzeTradeCommand(
     string UserId,
     List<string> MyPlayerIds,
     List<string> TheirPlayerIds,
+    List<TradePickRequest> MyPicks,
+    List<TradePickRequest> TheirPicks,
     int Season) : IRequest<TradeAnalysisDocument>;
+
+public record TradePickRequest(int Round, string Tier, int Year);
 
 public class AnalyzeTradeCommandHandler(
     ITradeAnalyzerService tradeAnalyzerService,
@@ -23,6 +27,8 @@ public class AnalyzeTradeCommandHandler(
             request.UserId,
             request.MyPlayerIds,
             request.TheirPlayerIds,
+            request.MyPicks,
+            request.TheirPicks,
             request.Season,
             ct);
 

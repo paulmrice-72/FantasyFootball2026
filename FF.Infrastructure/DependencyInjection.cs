@@ -104,6 +104,9 @@ public static class DependencyInjection
         services.AddScoped<IVorpRecommendationRepository, VorpRecommendationRepository>();
         services.AddScoped<IInjuryAlertRepository, InjuryAlertRepository>();
         services.AddScoped<InjuryAlertSyncJob>();
+        services.AddScoped<IPickValueRepository, PickValueRepository>();
+        services.AddScoped<SeedPickValuesJob>();
+
         services.AddHttpClient("NflverseClient", client =>
         {
             client.DefaultRequestHeaders.UserAgent.ParseAdd("FantasyCombineAI/1.0");
@@ -392,6 +395,18 @@ public static class DependencyInjection
             if (!BsonClassMap.IsClassMapRegistered(typeof(PlayerNarrativeDocument)))
             {
                 BsonClassMap.RegisterClassMap<PlayerNarrativeDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(PickValueDocument)))
+            {
+                BsonClassMap.RegisterClassMap<PickValueDocument>(cm =>
                 {
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);

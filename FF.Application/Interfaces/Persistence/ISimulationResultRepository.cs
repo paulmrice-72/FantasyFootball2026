@@ -11,4 +11,5 @@ public interface ISimulationResultRepository
     Task<IReadOnlyList<SimulationResultDocument>> GetByWeekAsync(int season, int week, CancellationToken ct = default);
     Task<IReadOnlyList<SimulationResultDocument>> GetByPositionAsync(int season, int week, string position, CancellationToken ct = default);
     Task<SimulationResultDocument?> GetMostRecentBySleeperIdAsync(string sleeperPlayerId, int season, CancellationToken ct = default);
+    Task<IReadOnlyList<SimulationResultDocument>> GetLatestBySleeperIdsAsync(IEnumerable<string> sleeperPlayerIds, int season, CancellationToken ct = default);
 }
