@@ -117,4 +117,26 @@ public class SimulationResultRepository(
             .SortByDescending(x => x.Week)
             .FirstOrDefaultAsync(ct);
     }
+
+    public async Task<IReadOnlyList<SimulationResultDocument>> GetLatestBySleeperIdsAsync(
+    IEnumerable<string> sleeperPlayerIds, int season,
+    CancellationToken ct = default)
+    {
+        var ids = sleeperPlayerIds.ToList();
+
+        var filter = Builders<SimulationResultDocument>.Filter.And(
+            Builders<SimulationResultDocument>.Filter.In(x => x.SleeperPlayerId, ids),
+            Builders<SimulationResultDocument>.Filter.Eq(x => x.Season, season));
+
+        var docs = await _collection
+            .Find(filter)
+            .SortByDescending(x => x.Week)
+            .ToListAsync(ct);
+
+        // One doc per player — latest week wins
+        return docs
+            .GroupBy(d => d.SleeperPlayerId)
+            .Select(g => g.First())
+            .ToList();
+    }
 }

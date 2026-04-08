@@ -127,6 +127,7 @@ public class SleeperLeagueDto
 
     [JsonPropertyName("previous_league_id")]
     public string? PreviousLeagueId { get; set; }  // useful for dynasty leagues
+
     //[JsonPropertyName("league_type")]
     //public int LeagueType { get; set; }  // 0=Redraft, 1=Keeper, 2=Dynasty
 }
@@ -155,6 +156,8 @@ public class SleeperLeagueSettingsDto
     public int WaiverBudget { get; set; }
     [JsonPropertyName("type")]
     public int Type { get; set; }  // 0=Redraft, 1=Keeper, 2=Dynasty
+    [JsonPropertyName("trade_pick_limit")]
+    public int TradePickLimit { get; set; }  // number of years out picks can be traded; 0 = not allowed
 }
 
 // ── Roster ───────────────────────────────────────────────────────────────────

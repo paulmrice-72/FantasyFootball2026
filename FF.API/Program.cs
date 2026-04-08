@@ -335,6 +335,7 @@ try
         "0 12 * * *",   // Daily noon UTC — nflverse updates by morning after each draft day
         utcOptions);
 
+    BackgroundJob.Enqueue<SeedPickValuesJob>(job => job.SeedAsync());
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",
     //methodCall: job => job.SyncWaiversAsync(),

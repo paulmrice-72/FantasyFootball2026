@@ -40,5 +40,17 @@ public class LeagueConfiguration : IEntityTypeConfiguration<League>
         // SleeperLeagueId + Season must be unique — same league can exist across seasons
         builder.HasIndex(l => new { l.SleeperLeagueId, l.Season })
             .IsUnique();
+
+        builder.Property(l => l.DraftRounds)
+            .IsRequired()
+            .HasDefaultValue(4);
+
+        builder.Property(l => l.PickYearsOut)
+            .IsRequired()
+            .HasDefaultValue(3);
+
+        builder.Property(l => l.CanTradePicks)
+            .IsRequired()
+            .HasDefaultValue(false);
     }
 }

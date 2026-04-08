@@ -16,4 +16,6 @@ public interface IRosterPlayerRepository
     /// <summary>Find the roster containing a specific player in a league.</summary>
     Task<RosterPlayerDocument?> GetByPlayerIdAsync(
         string sleeperPlayerId, string sleeperLeagueId, CancellationToken ct = default);
+    Task<RosterPlayerDocument?> GetBySleeperUserIdAsync(
+    string sleeperUserId, string sleeperLeagueId, CancellationToken ct = default);
 }

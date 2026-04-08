@@ -46,4 +46,10 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
         DbSet.Update(player);
         await Context.SaveChangesAsync(cancellationToken);
     }
+    public async Task<IReadOnlyList<Player>> GetBySleeperIdsAsync(
+        IEnumerable<string> sleeperPlayerIds,
+        CancellationToken cancellationToken = default)
+    => await DbSet.AsNoTracking()
+        .Where(p => p.SleeperPlayerId != null && sleeperPlayerIds.Contains(p.SleeperPlayerId))
+        .ToListAsync(cancellationToken);
 }
