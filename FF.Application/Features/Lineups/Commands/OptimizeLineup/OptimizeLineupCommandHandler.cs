@@ -19,8 +19,10 @@ public class OptimizeLineupCommandHandler(
         CancellationToken cancellationToken)
     {
         logger.LogInformation(
-            "Optimizing lineup Season {Season} Week {Week} Mode {Mode} RiskProfile {RiskProfile}",
-            request.Season, request.Week, request.Mode, request.RiskProfile?.ToString() ?? "None");
+            "Optimizing lineup Season {Season} Week {Week} Mode {Mode} RiskProfile {RiskProfile} RosterFilter {RosterFilter}",
+            request.Season, request.Week, request.Mode,
+            request.RiskProfile?.ToString() ?? "None",
+            request.RosterSleeperIds?.Count.ToString() ?? "None");
 
         var simResults = await simulationRepository.GetByWeekAsync(
             request.Season, request.Week, cancellationToken);
@@ -36,10 +38,27 @@ public class OptimizeLineupCommandHandler(
                     "Run simulations first via POST /api/v1/projections/simulate."));
         }
 
+        // TEAM-002: if roster filter provided, restrict pool to rostered players only
+        var rosterIds = request.RosterSleeperIds;
+        var filteredResults = rosterIds is { Count: > 0 }
+            ? simResults.Where(s => rosterIds.Contains(s.SleeperPlayerId ?? s.PlayerId)).ToList()
+            : simResults;
+
+        if (filteredResults.Count == 0)
+        {
+            logger.LogWarning(
+                "No simulation results matched roster SleeperIds for Season {Season} Week {Week}",
+                request.Season, request.Week);
+            return Result.Failure<LineupOptimizerResult>(
+                new Error("Optimizer.NoRosterData",
+                    "No simulation data found for your rostered players. " +
+                    "Ensure simulations have been run with SleeperPlayerId stamped."));
+        }
+
         var lockedIds = request.LockedPlayerIds ?? [];
         var excludedIds = request.ExcludedPlayerIds ?? [];
 
-        var players = simResults
+        var players = filteredResults
             .Select(s => new PlayerSlot
             {
                 PlayerId = s.PlayerId,
@@ -51,7 +70,6 @@ public class OptimizeLineupCommandHandler(
                 ProjectedCeiling = s.Ceiling,
                 BoomProbability = s.BoomProbability,
                 BustProbability = s.BustProbability,
-                // OwnershipPct not yet sourced — remains null until DIFF-009
                 IsLocked = lockedIds.Contains(s.PlayerId),
                 IsExcluded = excludedIds.Contains(s.PlayerId)
             })
