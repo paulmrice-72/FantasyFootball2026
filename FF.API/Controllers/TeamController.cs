@@ -22,24 +22,16 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
         [FromQuery] string sleeperLeagueId,
         CancellationToken ct)
     {
-        var internalUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-            ?? string.Empty;
-        var appUser = await userManager.FindByIdAsync(internalUserId);
-
-        if (appUser?.SleeperUserId is null)
-            return BadRequest("Sleeper account not linked.");
-        if (string.IsNullOrEmpty(sleeperLeagueId))
-            return BadRequest("sleeperLeagueId is required.");
+        var appUser = await GetAppUserAsync();
+        if (appUser?.SleeperUserId is null) return BadRequest("Sleeper account not linked.");
+        if (string.IsNullOrEmpty(sleeperLeagueId)) return BadRequest("sleeperLeagueId is required.");
 
         var result = await mediator.Send(
             new GetMyRosterQuery(appUser.SleeperUserId, sleeperLeagueId), ct);
 
-        return result is null
-            ? NotFound("Roster not found for this league.")
-            : Ok(result);
+        return result is null ? NotFound("Roster not found.") : Ok(result);
     }
 
-    // TEAM-002: optimize lineup pre-filtered to user's rostered players
     [HttpPost("optimize-lineup")]
     public async Task<IActionResult> OptimizeMyLineup(
         [FromQuery] string sleeperLeagueId,
@@ -49,28 +41,19 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
         [FromQuery] string? riskProfile = null,
         CancellationToken ct = default)
     {
-        var internalUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-            ?? string.Empty;
-        var appUser = await userManager.FindByIdAsync(internalUserId);
+        var appUser = await GetAppUserAsync();
+        if (appUser?.SleeperUserId is null) return BadRequest("Sleeper account not linked.");
+        if (string.IsNullOrEmpty(sleeperLeagueId)) return BadRequest("sleeperLeagueId is required.");
 
-        if (appUser?.SleeperUserId is null)
-            return BadRequest("Sleeper account not linked.");
-        if (string.IsNullOrEmpty(sleeperLeagueId))
-            return BadRequest("sleeperLeagueId is required.");
-
-        // Step 1: fetch the user's roster to get their SleeperPlayerIds
         var roster = await mediator.Send(
             new GetMyRosterQuery(appUser.SleeperUserId, sleeperLeagueId), ct);
-
-        if (roster is null)
-            return NotFound("Roster not found for this league.");
+        if (roster is null) return NotFound("Roster not found.");
 
         var rosterSleeperIds = roster.Players
             .Select(p => p.SleeperPlayerId)
             .Where(id => !string.IsNullOrEmpty(id))
             .ToList();
 
-        // Step 2: parse enums
         if (!Enum.TryParse<OptimizationMode>(mode, true, out var optimizationMode))
             optimizationMode = OptimizationMode.Median;
 
@@ -79,18 +62,40 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             Enum.TryParse<RiskProfile>(riskProfile, true, out var rp))
             parsedRisk = rp;
 
-        // Step 3: run optimizer restricted to roster
-        var command = new OptimizeLineupCommand(
+        var result = await mediator.Send(new OptimizeLineupCommand(
             Season: season,
             Week: week,
             Mode: optimizationMode,
             RiskProfile: parsedRisk,
-            RosterSleeperIds: rosterSleeperIds);
+            RosterSleeperIds: rosterSleeperIds), ct);
 
-        var result = await mediator.Send(command, ct);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error.Message);
+    }
 
-        return result.IsSuccess
-            ? Ok(result.Value)
-            : BadRequest(result.Error.Message);
+    // TEAM-003: current week matchup
+    [HttpGet("matchup")]
+    public async Task<IActionResult> GetMyMatchup(
+        [FromQuery] string sleeperLeagueId,
+        [FromQuery] int season,
+        [FromQuery] int week,
+        CancellationToken ct = default)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser?.SleeperUserId is null) return BadRequest("Sleeper account not linked.");
+        if (string.IsNullOrEmpty(sleeperLeagueId)) return BadRequest("sleeperLeagueId is required.");
+
+        var result = await mediator.Send(
+            new GetMyMatchupQuery(appUser.SleeperUserId, sleeperLeagueId, season, week), ct);
+
+        return result is null ? NotFound("Matchup not found for this week.") : Ok(result);
+    }
+
+    // ── Shared helper ────────────────────────────────────────────────────────
+    private async Task<ApplicationUser?> GetAppUserAsync()
+    {
+        var internalUserId = User
+            .FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? string.Empty;
+        return await userManager.FindByIdAsync(internalUserId);
     }
 }

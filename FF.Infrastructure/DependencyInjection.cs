@@ -2,6 +2,7 @@
 using FF.Application.Common.Settings;
 using FF.Application.Identity.Interfaces;
 using FF.Application.Interfaces.Auth;
+using FF.Application.Interfaces.External;
 using FF.Application.Interfaces.Jobs;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
@@ -159,6 +160,7 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
         });
+        services.AddScoped<ISleeperMatchupService, SleeperMatchupService>();
         services.AddSleeperApiClient();
 
         // Identity
