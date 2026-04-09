@@ -126,7 +126,109 @@ else
         </MudPaper>
     }
 }
+@* ── TEAM-002: OPTIMIZE MY LINEUP ──────────────────────── *@
+@if (_roster is not null)
+{
+    <MudPaper Class="fc-card pa-4 mt-4" Elevation="0">
+        <div class="d-flex align-center mb-3">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label">OPTIMIZE MY LINEUP</MudText>
+            <MudSpacer />
+            @if (_lineupResult is not null)
+            {
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="fc-stat">
+                    @_lineupResult.TotalProjectedPoints.ToString("F1") pts projected
+                </MudChip>
+            }
+        </div>
 
+        <MudGrid Spacing="2" Class="mb-3">
+            <MudItem xs="6" sm="4">
+                <MudSelect T="string" @bind-Value="_optimizerMode" Label="Score Mode"
+                           Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@("Median")">Median</MudSelectItem>
+                    <MudSelectItem Value="@("Floor")">Floor</MudSelectItem>
+                    <MudSelectItem Value="@("Ceiling")">Ceiling</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" sm="4">
+                <MudSelect T="string" @bind-Value="_optimizerRisk" Label="Risk Profile"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                    <MudSelectItem T="string" Value="@("Safe")">Safe — high floor</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Ceiling")">Ceiling — max upside</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Contrarian")">Contrarian</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.AutoAwesome"
+                           FullWidth="true" Disabled="@_optimizing"
+                           OnClick="@(() => _ = OptimizeMyLineupAsync())"
+                           Style="height:40px;">
+                    @if (_optimizing)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true"
+                                             Class="mr-2" Color="Color.Surface" />
+                        <span>Optimizing...</span>
+                    }
+                    else
+                    {
+                        <span>Optimize My Lineup</span>
+                    }
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        @if (_optimizerError is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_optimizerError</MudAlert>
+        }
+
+        @if (_lineupResult is not null)
+        {
+            @foreach (var slotType in new[] { "QB", "RB", "WR", "TE", "FLEX" })
+            {
+                var slots = _lineupResult.Lineup
+                    .Where(s => s.SlotType == slotType)
+                    .ToList();
+                if (!slots.Any()) continue;
+
+                <div class="fc-slot-group mb-2">
+                    <MudText Typo="Typo.overline" Class="fc-slot-label">@slotType</MudText>
+                    @foreach (var slot in slots)
+                    {
+                        <div class="fc-lineup-slot">
+                            <div class="fc-slot-pos-badge @PositionClass(slot.Position)">
+                                @slot.Position
+                            </div>
+                            <div class="fc-slot-info">
+                                <MudText Typo="Typo.body1" Style="font-weight:700;">
+                                    @slot.PlayerName
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @slot.Position
+                                </MudText>
+                            </div>
+                            <div class="fc-slot-pts">
+                                <MudText Typo="Typo.h6" Class="fc-stat fc-cyan">
+                                    @slot.ProjectedPoints.ToString("F1")
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">proj</MudText>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <MudDivider Class="my-3" />
+            <div class="d-flex justify-space-between align-center">
+                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">TOTAL PROJECTED</MudText>
+                <MudText Typo="Typo.h5" Class="fc-stat fc-cyan">
+                    @_lineupResult.TotalProjectedPoints.ToString("F1")
+                </MudText>
+            </div>
+        }
+    </MudPaper>
+}
 @code {
     private bool _loading = true;
     private bool _noSleeper;
@@ -135,6 +237,80 @@ else
 
     private HttpClient Http => HttpClientFactory.CreateClient("AuthAPI");
 
+    // ── TEAM-002: Lineup Optimizer ─────────────────────────
+    private bool _optimizing;
+    private string? _optimizerError;
+    private OptimizerResult? _lineupResult;
+    private string _optimizerMode = "Median";
+    private string _optimizerRisk = "";
+
+    private async Task OptimizeMyLineupAsync()
+    {
+        if (_roster is null) return;
+        _optimizing = true;
+        _optimizerError = null;
+        _lineupResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var leagueId = LeagueState.ActiveLeagueId;
+            var week = GetCurrentNflWeek();
+            var season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+            var riskParam = string.IsNullOrEmpty(_optimizerRisk) ? "" : $"&riskProfile={_optimizerRisk}";
+            var url = $"api/v1/team/optimize-lineup?sleeperLeagueId={leagueId}&season={season}&week={week}&mode={_optimizerMode}{riskParam}";
+
+            var response = await Http.PostAsync(url, null);
+            if (response.IsSuccessStatusCode)
+            {
+                _lineupResult = await response.Content.ReadFromJsonAsync<OptimizerResult>();
+                Snackbar.Add($"Lineup optimized — {_lineupResult?.TotalProjectedPoints:F1} pts projected.", Severity.Success);
+            }
+            else
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _optimizerError = err.Contains("NoRosterData")
+                    ? "No simulation data found for your roster. Re-run simulations with SleeperPlayerId stamped."
+                    : $"Optimizer error: {err}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _optimizerError = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            _optimizing = false;
+        }
+    }
+
+    private static int GetCurrentNflWeek()
+    {
+        var now = DateTime.UtcNow;
+        var season = now.Month >= 3 ? now.Year : now.Year - 1;
+        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+        var seasonStart = sept1.AddDays(daysUntilThursday);
+        if (now < seasonStart) return 18;
+        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
+        return Math.Clamp(week, 1, 18);
+    }
+
+    // ── DTOs ────────────────────────────────────────────────
+    private record OptimizerResult(
+        bool Success,
+        List<OptimizedSlot> Lineup,
+        decimal TotalProjectedPoints,
+        string Mode,
+        string? RiskProfile);
+
+    private record OptimizedSlot(
+        string PlayerId,
+        string PlayerName,
+        string Position,
+        string SlotType,
+        decimal ProjectedPoints,
+        decimal? RiskScore);
 
     private async Task LoadRosterAsync()
     {
@@ -246,4 +422,13 @@ else
         bool IsOnIr,
         double? MedianProjectedPoints,
         string? ByeWeek);
+
+    private static string PositionClass(string pos) => pos switch
+    {
+        "QB" => "fc-chip-qb",
+        "RB" => "fc-chip-rb",
+        "WR" => "fc-chip-wr",
+        "TE" => "fc-chip-te",
+        _ => ""
+    };
 }

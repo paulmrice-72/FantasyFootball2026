@@ -12,5 +12,6 @@ public record OptimizeLineupCommand(
     OptimizationMode Mode = OptimizationMode.Median,
     RiskProfile? RiskProfile = null,
     IReadOnlyList<string>? LockedPlayerIds = null,
-    IReadOnlyList<string>? ExcludedPlayerIds = null)
+    IReadOnlyList<string>? ExcludedPlayerIds = null,
+    IReadOnlyList<string>? RosterSleeperIds = null)   // ← TEAM-002: pre-filter to roster
     : IRequest<Result<LineupOptimizerResult>>;
