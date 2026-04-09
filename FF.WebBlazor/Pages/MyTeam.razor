@@ -350,188 +350,7 @@ else if (_roster is null)
         Roster not found for this league. Try syncing your league.
     </MudAlert>
 }
-else
-{
-    @* ── POSITION GROUPS ───────────────────────────────── *@
-    @foreach (var group in _roster.Players.GroupBy(p => p.Position).OrderBy(g => PositionOrder(g.Key)))
-    {
-        <MudText Typo="Typo.subtitle1" Class="mb-2 mt-4"
-                 Style="color:var(--fc-cyan);font-weight:600;">
-            @group.Key
-        </MudText>
-        <MudPaper Elevation="0" Class="fc-table-paper mb-2">
-            <MudTable Items="@group.ToList()" Dense="true" Hover="true" Class="fc-table">
-                <HeaderContent>
-                    <MudTh>Player</MudTh>
-                    <MudTh>Team</MudTh>
-                    <MudTh>Age</MudTh>
-                    <MudTh>Status</MudTh>
-                    <MudTh>Proj Pts</MudTh>
-                    <MudTh>Bye</MudTh>
-                    <MudTh>Role</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd>
-                        <MudText Typo="Typo.body2" Style="font-weight:600;">
-                            @context.PlayerName
-                        </MudText>
-                    </MudTd>
-                    <MudTd>
-                        <MudText Typo="Typo.body2">@context.NflTeam</MudText>
-                    </MudTd>
-                    <MudTd>
-                        <MudText Typo="Typo.body2">@(context.Age?.ToString() ?? "—")</MudText>
-                    </MudTd>
-                    <MudTd>
-                        @if (!string.IsNullOrEmpty(context.InjuryDesignation))
-                        {
-                            <MudChip T="string" Size="Size.Small"
-                                     Color="@InjuryColor(context.InjuryDesignation)"
-                                     Variant="Variant.Filled">
-                                @context.InjuryDesignation
-                            </MudChip>
-                        }
-                        else
-                        {
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Active</MudText>
-                        }
-                    </MudTd>
-                    <MudTd>
-                        <MudText Typo="Typo.body2" Class="fc-stat"
-                                 Style="font-family:'JetBrains Mono',monospace;">
-                            @(context.MedianProjectedPoints.HasValue
-                                ? context.MedianProjectedPoints.Value.ToString("F1")
-                                : "—")
-                        </MudText>
-                    </MudTd>
-                    <MudTd>
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
-                    </MudTd>
-                    <MudTd>
-                        @if (context.IsStarter)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Primary"
-                                     Variant="Variant.Text">Starter</MudChip>
-                        }
-                        else if (context.IsOnIr)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Error"
-                                     Variant="Variant.Text">IR</MudChip>
-                        }
-                        else
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Default"
-                                     Variant="Variant.Text">Bench</MudChip>
-                        }
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
-        </MudPaper>
-    }
-}
-@* ── TEAM-002: OPTIMIZE MY LINEUP ──────────────────────── *@
-@if (_roster is not null)
-{
-    <MudPaper Class="fc-card pa-4 mt-4" Elevation="0">
-        <div class="d-flex align-center mb-3">
-            <MudText Typo="Typo.subtitle2" Class="fc-section-label">OPTIMIZE MY LINEUP</MudText>
-            <MudSpacer />
-            @if (_lineupResult is not null)
-            {
-                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="fc-stat">
-                    @_lineupResult.TotalProjectedPoints.ToString("F1") pts projected
-                </MudChip>
-            }
-        </div>
 
-        <MudGrid Spacing="2" Class="mb-3">
-            <MudItem xs="6" sm="4">
-                <MudSelect T="string" @bind-Value="_optimizerMode" Label="Score Mode"
-                           Variant="Variant.Outlined" Margin="Margin.Dense">
-                    <MudSelectItem Value="@("Median")">Median</MudSelectItem>
-                    <MudSelectItem Value="@("Floor")">Floor</MudSelectItem>
-                    <MudSelectItem Value="@("Ceiling")">Ceiling</MudSelectItem>
-                </MudSelect>
-            </MudItem>
-            <MudItem xs="6" sm="4">
-                <MudSelect T="string" @bind-Value="_optimizerRisk" Label="Risk Profile"
-                           Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
-                    <MudSelectItem T="string" Value="@("Safe")">Safe — high floor</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("Ceiling")">Ceiling — max upside</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("Contrarian")">Contrarian</MudSelectItem>
-                </MudSelect>
-            </MudItem>
-            <MudItem xs="12" sm="4" Class="d-flex align-end">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.AutoAwesome"
-                           FullWidth="true" Disabled="@_optimizing"
-                           OnClick="@(() => _ = OptimizeMyLineupAsync())"
-                           Style="height:40px;">
-                    @if (_optimizing)
-                    {
-                        <MudProgressCircular Size="Size.Small" Indeterminate="true"
-                                             Class="mr-2" Color="Color.Surface" />
-                        <span>Optimizing...</span>
-                    }
-                    else
-                    {
-                        <span>Optimize My Lineup</span>
-                    }
-                </MudButton>
-            </MudItem>
-        </MudGrid>
-
-        @if (_optimizerError is not null)
-        {
-            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_optimizerError</MudAlert>
-        }
-
-        @if (_lineupResult is not null)
-        {
-            @foreach (var slotType in new[] { "QB", "RB", "WR", "TE", "FLEX" })
-            {
-                var slots = _lineupResult.Lineup
-                    .Where(s => s.SlotType == slotType)
-                    .ToList();
-                if (!slots.Any()) continue;
-
-                <div class="fc-slot-group mb-2">
-                    <MudText Typo="Typo.overline" Class="fc-slot-label">@slotType</MudText>
-                    @foreach (var slot in slots)
-                    {
-                        <div class="fc-lineup-slot">
-                            <div class="fc-slot-pos-badge @PositionClass(slot.Position)">
-                                @slot.Position
-                            </div>
-                            <div class="fc-slot-info">
-                                <MudText Typo="Typo.body1" Style="font-weight:700;">
-                                    @slot.PlayerName
-                                </MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                    @slot.Position
-                                </MudText>
-                            </div>
-                            <div class="fc-slot-pts">
-                                <MudText Typo="Typo.h6" Class="fc-stat fc-cyan">
-                                    @slot.ProjectedPoints.ToString("F1")
-                                </MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">proj</MudText>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-
-            <MudDivider Class="my-3" />
-            <div class="d-flex justify-space-between align-center">
-                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">TOTAL PROJECTED</MudText>
-                <MudText Typo="Typo.h5" Class="fc-stat fc-cyan">
-                    @_lineupResult.TotalProjectedPoints.ToString("F1")
-                </MudText>
-            </div>
-        }
-    </MudPaper>
-}
 @code {
     private bool _loading = true;
     private bool _noSleeper;
@@ -551,7 +370,11 @@ else
     private bool _startSitTabActive;
     private bool _startSitLoading;
     private StartSitRecommendationsDto? _startSitData;
-
+    private static readonly System.Text.Json.JsonSerializerOptions _enumJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
     private async Task OptimizeMyLineupAsync()
     {
         if (_roster is null) return;
@@ -760,7 +583,7 @@ else
                 $"api/v1/team/start-sit?sleeperLeagueId={leagueId}&season={season}&week={week}");
 
             if (response.IsSuccessStatusCode)
-                _startSitData = await response.Content.ReadFromJsonAsync<StartSitRecommendationsDto>();
+                _startSitData = await response.Content.ReadFromJsonAsync<StartSitRecommendationsDto>(_enumJsonOptions);
         }
         catch (Exception ex)
         {
