@@ -1,0 +1,379 @@
+﻿@page "/my-matchup"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject ISnackbar Snackbar
+@inject LeagueStateService LeagueState
+@implements IDisposable
+
+<PageTitle>My Matchup — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.SportsMma" Class="mr-2" Style="vertical-align:middle;" />
+        My Matchup
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Week @_week · @_season Season
+    </MudText>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_noSleeper)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">
+        No Sleeper account linked. <MudLink Href="/settings/sleeper">Link your Sleeper account</MudLink>.
+    </MudAlert>
+}
+else if (_noLeague)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        No active league found. Import a league from <MudLink Href="/settings/sleeper">Sleeper settings</MudLink>.
+    </MudAlert>
+}
+else if (_matchup is null)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        No matchup data found for Week @_week. Sleeper may not have published matchups yet,
+        or this is the off-season.
+    </MudAlert>
+}
+else
+{
+    @* ── WIN PROBABILITY BANNER ─────────────────────────────── *@
+    <MudPaper Class="fc-card pa-4 mb-4" Elevation="0">
+        <MudGrid Spacing="0" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudItem xs="5" Class="text-center">
+                <MudText Typo="Typo.h6" Style="font-weight:700;">@_matchup.MyTeam.TeamName</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@_matchup.MyTeam.OwnerName</MudText>
+                <MudText Typo="Typo.h3" Class="fc-stat fc-cyan mt-1">
+                    @_matchup.MyTeam.TotalProjectedPoints.ToString("F1")
+                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">projected</MudText>
+                <div class="mt-2">
+                    <MudChip T="string" Color="@WinProbColor(_matchup.MyWinProbability)"
+                             Size="Size.Medium" Variant="Variant.Filled">
+                        @((_matchup.MyWinProbability * 100).ToString("F0"))% win prob
+                    </MudChip>
+                </div>
+            </MudItem>
+
+            <MudItem xs="2" Class="text-center">
+                <MudText Typo="Typo.h5" Class="mud-text-secondary" Style="font-weight:300;">vs</MudText>
+                <MudDivider Vertical="true" Class="my-1" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Wk @_matchup.Week</MudText>
+            </MudItem>
+
+            <MudItem xs="5" Class="text-center">
+                <MudText Typo="Typo.h6" Style="font-weight:700;">@_matchup.Opponent.TeamName</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@_matchup.Opponent.OwnerName</MudText>
+                <MudText Typo="Typo.h3" Class="fc-stat fc-ceiling mt-1">
+                    @_matchup.Opponent.TotalProjectedPoints.ToString("F1")
+                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">projected</MudText>
+                <div class="mt-2">
+                    <MudChip T="string" Color="@WinProbColor(_matchup.OpponentWinProbability)"
+                             Size="Size.Medium" Variant="Variant.Filled">
+                        @((_matchup.OpponentWinProbability * 100).ToString("F0"))% win prob
+                    </MudChip>
+                </div>
+            </MudItem>
+        </MudGrid>
+
+        @* Floor / Ceiling range *@
+        <MudDivider Class="my-3" />
+        <MudGrid Spacing="0">
+            <MudItem xs="5" Class="text-center">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Floor @_matchup.MyTeam.ProjectedFloor.ToString("F1") —
+                    Ceiling @_matchup.MyTeam.ProjectedCeiling.ToString("F1")
+                </MudText>
+            </MudItem>
+            <MudItem xs="2" />
+            <MudItem xs="5" Class="text-center">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Floor @_matchup.Opponent.ProjectedFloor.ToString("F1") —
+                    Ceiling @_matchup.Opponent.ProjectedCeiling.ToString("F1")
+                </MudText>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ── SIDE-BY-SIDE PLAYER TABLES ──────────────────────────── *@
+    <MudGrid Spacing="3">
+        @* My starters *@
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-2">
+                MY STARTERS
+            </MudText>
+            <MudPaper Elevation="0" Class="fc-table-paper">
+                <MudTable Items="@_matchup.MyTeam.Players.Where(p => p.IsStarter).ToList()"
+                          Dense="true" Hover="true" Class="fc-table">
+                    <HeaderContent>
+                        <MudTh>Player</MudTh>
+                        <MudTh>Pos</MudTh>
+                        <MudTh>Proj</MudTh>
+                        <MudTh>Status</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                @context.PlayerName
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @context.NflTeam
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Class="@PositionClass(context.Position)"
+                                     Variant="Variant.Filled">
+                                @context.Position
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
+                                @(context.MedianProjectedPoints.HasValue
+                                    ? context.MedianProjectedPoints.Value.ToString("F1")
+                                    : "—")
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            @if (!string.IsNullOrEmpty(context.InjuryDesignation))
+                            {
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@InjuryColor(context.InjuryDesignation)"
+                                         Variant="Variant.Filled">
+                                    @context.InjuryDesignation
+                                </MudChip>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+
+            @* My bench *@
+            @if (_matchup.MyTeam.Players.Any(p => !p.IsStarter))
+            {
+                <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-2 mt-4">
+                    MY BENCH
+                </MudText>
+                <MudPaper Elevation="0" Class="fc-table-paper">
+                    <MudTable Items="@_matchup.MyTeam.Players.Where(p => !p.IsStarter).ToList()"
+                              Dense="true" Hover="true" Class="fc-table">
+                        <HeaderContent>
+                            <MudTh>Player</MudTh>
+                            <MudTh>Pos</MudTh>
+                            <MudTh>Proj</MudTh>
+                            <MudTh>Status</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                    @context.PlayerName
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @context.NflTeam
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small"
+                                         Class="@PositionClass(context.Position)"
+                                         Variant="Variant.Filled">
+                                    @context.Position
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    @(context.MedianProjectedPoints.HasValue
+                                        ? context.MedianProjectedPoints.Value.ToString("F1")
+                                        : "—")
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                @if (!string.IsNullOrEmpty(context.InjuryDesignation))
+                                {
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@InjuryColor(context.InjuryDesignation)"
+                                             Variant="Variant.Filled">
+                                        @context.InjuryDesignation
+                                    </MudChip>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            }
+        </MudItem>
+
+        @* Opponent starters *@
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-2">
+                OPPONENT STARTERS
+            </MudText>
+            <MudPaper Elevation="0" Class="fc-table-paper">
+                <MudTable Items="@_matchup.Opponent.Players.Where(p => p.IsStarter).ToList()"
+                          Dense="true" Hover="true" Class="fc-table">
+                    <HeaderContent>
+                        <MudTh>Player</MudTh>
+                        <MudTh>Pos</MudTh>
+                        <MudTh>Proj</MudTh>
+                        <MudTh>Status</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                @context.PlayerName
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @context.NflTeam
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Class="@PositionClass(context.Position)"
+                                     Variant="Variant.Filled">
+                                @context.Position
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.body2" Class="fc-stat fc-ceiling">
+                                @(context.MedianProjectedPoints.HasValue
+                                    ? context.MedianProjectedPoints.Value.ToString("F1")
+                                    : "—")
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            @if (!string.IsNullOrEmpty(context.InjuryDesignation))
+                            {
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@InjuryColor(context.InjuryDesignation)"
+                                         Variant="Variant.Filled">
+                                    @context.InjuryDesignation
+                                </MudChip>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _noSleeper;
+    private bool _noLeague;
+    private MyMatchupDto? _matchup;
+    private int _week;
+    private int _season;
+
+    private HttpClient Http => HttpClientFactory.CreateClient("AuthAPI");
+
+    protected override async Task OnInitializedAsync()
+    {
+        _week = GetCurrentNflWeek();
+        _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+        LeagueState.OnLeagueChanged += OnLeagueChangedHandler;
+        await LoadMatchupAsync();
+    }
+
+    private async Task LoadMatchupAsync()
+    {
+        _loading = true;
+        _noSleeper = false;
+        _noLeague = false;
+        _matchup = null;
+
+        try
+        {
+            var leagueId = LeagueState.ActiveLeagueId;
+            if (string.IsNullOrEmpty(leagueId))
+            {
+                var context = await Http.GetFromJsonAsync<UserContextResponse>(
+                    "api/v1/identity/context");
+                if (context?.IsSleeperLinked != true) { _noSleeper = true; return; }
+                leagueId = context.ActiveLeagueId;
+                if (string.IsNullOrEmpty(leagueId)) { _noLeague = true; return; }
+                LeagueState.ActiveLeagueId = leagueId;
+            }
+
+            var response = await Http.GetAsync(
+                $"api/v1/team/matchup?sleeperLeagueId={leagueId}&season={_season}&week={_week}");
+
+            if (response.IsSuccessStatusCode)
+                _matchup = await response.Content.ReadFromJsonAsync<MyMatchupDto>();
+            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                _noSleeper = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading matchup: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnLeagueChangedHandler() =>
+        _ = InvokeAsync(async () => { await LoadMatchupAsync(); StateHasChanged(); });
+
+    public void Dispose() =>
+        LeagueState.OnLeagueChanged -= OnLeagueChangedHandler;
+
+    private static int GetCurrentNflWeek()
+    {
+        var now = DateTime.UtcNow;
+        var season = now.Month >= 3 ? now.Year : now.Year - 1;
+        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var daysDiff = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+        var start = sept1.AddDays(daysDiff);
+        if (now < start) return 18;
+        return Math.Clamp((int)((now - start).TotalDays / 7) + 1, 1, 18);
+    }
+
+    private static Color WinProbColor(double prob) =>
+        prob >= 0.65 ? Color.Success : prob >= 0.45 ? Color.Warning : Color.Error;
+
+    private static Color InjuryColor(string d) => d switch
+    {
+        "Out" or "D" or "IR" => Color.Error,
+        "Q" or "Doubtful" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private static string PositionClass(string pos) => pos switch
+    {
+        "QB" => "fc-chip-qb",
+        "RB" => "fc-chip-rb",
+        "WR" => "fc-chip-wr",
+        "TE" => "fc-chip-te",
+        _ => ""
+    };
+
+    // ── DTOs ──────────────────────────────────────────────────────────────────
+    private record UserContextResponse(
+        bool IsSleeperLinked, string? ActiveLeagueId, List<LeagueItem>? Leagues);
+    private record LeagueItem(string LeagueId, string LeagueName, int Season, string Role);
+
+    private record MyMatchupDto(
+        int Week, int Season,
+        MyMatchupSideDto MyTeam, MyMatchupSideDto Opponent,
+        double MyWinProbability, double OpponentWinProbability);
+
+    private record MyMatchupSideDto(
+        string TeamName, string OwnerName,
+        double TotalProjectedPoints, double ProjectedFloor, double ProjectedCeiling,
+        List<MyMatchupPlayerDto> Players);
+
+    private record MyMatchupPlayerDto(
+        string SleeperPlayerId, string PlayerName, string Position, string NflTeam,
+        bool IsStarter,
+        double? MedianProjectedPoints, double? FloorProjectedPoints, double? CeilingProjectedPoints,
+        string? InjuryDesignation);
+}
