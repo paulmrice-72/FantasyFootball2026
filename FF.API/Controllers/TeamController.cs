@@ -98,4 +98,25 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             ?? string.Empty;
         return await userManager.FindByIdAsync(internalUserId);
     }
+
+    // TEAM-004: Start/Sit recommendations
+    [HttpGet("start-sit")]
+    public async Task<IActionResult> GetStartSitRecommendations(
+        [FromQuery] string sleeperLeagueId,
+        [FromQuery] int season,
+        [FromQuery] int week,
+        CancellationToken ct = default)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser?.SleeperUserId is null) return BadRequest("Sleeper account not linked.");
+        if (string.IsNullOrEmpty(sleeperLeagueId)) return BadRequest("sleeperLeagueId is required.");
+
+        var result = await mediator.Send(
+            new GetStartSitRecommendationsQuery(
+                appUser.SleeperUserId, sleeperLeagueId, season, week), ct);
+
+        return result is null
+            ? NotFound("No roster found or insufficient data for recommendations.")
+            : Ok(result);
+    }
 }
