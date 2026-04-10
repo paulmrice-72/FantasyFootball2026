@@ -119,4 +119,23 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             ? NotFound("No roster found or insufficient data for recommendations.")
             : Ok(result);
     }
+    // TEAM-005: Positional depth grades
+    [HttpGet("depth-grades")]
+    public async Task<IActionResult> GetPositionalDepthGrades(
+        [FromQuery] string sleeperLeagueId,
+        [FromQuery] int season,
+        CancellationToken ct = default)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser?.SleeperUserId is null) return BadRequest("Sleeper account not linked.");
+        if (string.IsNullOrEmpty(sleeperLeagueId)) return BadRequest("sleeperLeagueId is required.");
+
+        var result = await mediator.Send(
+            new GetPositionalDepthGradesQuery(
+                appUser.SleeperUserId, sleeperLeagueId, season), ct);
+
+        return result is null
+            ? NotFound("No roster found or insufficient data.")
+            : Ok(result);
+    }
 }
