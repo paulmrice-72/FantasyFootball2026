@@ -138,4 +138,23 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             ? NotFound("No roster found or insufficient data.")
             : Ok(result);
     }
+
+    // TEAM-006: Dynasty team grade
+    [HttpGet("dynasty-grade")]
+    public async Task<IActionResult> GetDynastyTeamGrade(
+        [FromQuery] string sleeperLeagueId,
+        CancellationToken ct = default)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser?.SleeperUserId is null) return BadRequest("Sleeper account not linked.");
+        if (string.IsNullOrEmpty(sleeperLeagueId)) return BadRequest("sleeperLeagueId is required.");
+
+        var result = await mediator.Send(
+            new GetDynastyTeamGradeQuery(
+                appUser.SleeperUserId, sleeperLeagueId), ct);
+
+        return result is null
+            ? NotFound("No roster or dynasty valuation data found.")
+            : Ok(result);
+    }
 }
