@@ -324,7 +324,67 @@
             }
         }
     </MudTabPanel>
-
+    <MudTabPanel Text="Depth Grades">
+        @if (_depthLoading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4 mt-2" />
+        }
+        else if (_depthGrades is null)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-2">
+                Depth grade data unavailable — simulation data may need to be regenerated.
+            </MudAlert>
+        }
+        else
+        {
+            <MudGrid Spacing="3" Class="mt-2">
+                @foreach (var g in _depthGrades.Grades)
+                {
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Elevation="0" Class="fc-card pa-4 text-center">
+                            @* Grade letter *@
+                            <MudText Typo="Typo.h2" Style="@(GradeColor(g.Grade) + "font-weight:800; line-height:1;")">
+                                @g.Grade
+                            </MudText>
+                            @* Position label *@
+                            <MudText Typo="Typo.subtitle1" Style="color:var(--fc-cyan); font-weight:600;" Class="mt-1">
+                                @g.Position
+                            </MudText>
+                            @* Descriptor *@
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @g.Label
+                            </MudText>
+                            @* Score bar *@
+                            <MudProgressLinear Value="@g.GradeScore"
+                                              Color="@GradeBarColor(g.Grade)"
+                                              Rounded="true"
+                                              Size="Size.Small"
+                                              Class="my-2" />
+                            @* Stats row *@
+                            <div class="d-flex justify-space-around mt-2">
+                                <div>
+                                    <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
+                                        @g.StarterScore.ToString("F1")
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">starter pts</MudText>
+                                </div>
+                                <div>
+                                    <MudText Typo="Typo.body2" Class="fc-stat">
+                                        @g.HealthyCount / @g.RosteredCount
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">healthy</MudText>
+                                </div>
+                            </div>
+                            @* Summary *@
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block" Style="font-style:italic;">
+                                @g.Summary
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudTabPanel>
 </MudTabs>
 @if (_loading)
 {
@@ -370,6 +430,9 @@ else if (_roster is null)
     private bool _startSitTabActive;
     private bool _startSitLoading;
     private StartSitRecommendationsDto? _startSitData;
+    // ── TEAM-005: Depth Grades ────────────────────────────────────────────────
+    private bool _depthLoading;
+    private PositionalDepthGradesDto? _depthGrades;
     private static readonly System.Text.Json.JsonSerializerOptions _enumJsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -494,8 +557,13 @@ else if (_roster is null)
 
     private void OnLeagueChangedHandler()
     {
-        _startSitData = null;  // reset so it reloads on next tab visit
-        _ = InvokeAsync(async () => { await LoadRosterAsync(); StateHasChanged(); });
+        _startSitData = null;
+        _depthGrades = null;   // ← add this line
+        _ = InvokeAsync(async () =>
+        {
+            await LoadRosterAsync();
+            StateHasChanged();
+        });
     }
 
     public void Dispose()
@@ -563,8 +631,8 @@ else if (_roster is null)
     private async Task OnTabChanged(int index)
     {
         _activeTab = index;
-        if (index == 1 && _startSitData is null)
-            await LoadStartSitAsync();
+        if (index == 1 && _startSitData is null) await LoadStartSitAsync();
+        if (index == 2 && _depthGrades is null) await LoadDepthGradesAsync();
     }
 
     private async Task LoadStartSitAsync()
@@ -626,5 +694,53 @@ else if (_roster is null)
         StartSitVerdict.LeanSit => "LEAN SIT",
         StartSitVerdict.Sit => "SIT",
         _ => "—"
+    };
+    private record PositionalDepthGradesDto(List<PositionDepthGradeDto> Grades);
+    private record PositionDepthGradeDto(
+        string Position, string Grade, int GradeScore, string Label,
+        string Summary, int RosteredCount, int HealthyCount,
+        double StarterScore, double DepthScore);
+
+    private async Task LoadDepthGradesAsync()
+    {
+        _depthLoading = true;
+        StateHasChanged();
+        try
+        {
+            var leagueId = LeagueState.ActiveLeagueId;
+            if (string.IsNullOrEmpty(leagueId)) return;
+            var season = DateTime.UtcNow.Month >= 9
+                ? DateTime.UtcNow.Year
+                : DateTime.UtcNow.Year - 1;
+            var response = await Http.GetAsync(
+                $"api/v1/team/depth-grades?sleeperLeagueId={leagueId}&season={season}");
+            if (response.IsSuccessStatusCode)
+                _depthGrades = await response.Content.ReadFromJsonAsync<PositionalDepthGradesDto>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading depth grades: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _depthLoading = false;
+        }
+    }
+
+    private static string GradeColor(string grade) => grade switch
+    {
+        "A+" or "A" => "color:#00e5c8;",          // fc-cyan — elite
+        "B+" or "B" => "color:#4fc3f7;",           // light blue — solid
+        "C+" or "C" => "color:#ffd54f;",           // amber — average
+        "D" => "color:#ff8a65;",           // orange — weak
+        _ => "color:#ef5350;"            // red — dire
+    };
+
+    private static Color GradeBarColor(string grade) => grade switch
+    {
+        "A+" or "A" => Color.Success,
+        "B+" or "B" => Color.Info,
+        "C+" or "C" => Color.Warning,
+        _ => Color.Error
     };
 }
