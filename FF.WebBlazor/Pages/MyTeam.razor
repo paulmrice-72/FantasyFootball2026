@@ -385,6 +385,103 @@
             </MudGrid>
         }
     </MudTabPanel>
+    <MudTabPanel Text="Dynasty Grade">
+        @if (_dynastyLoading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4 mt-2" />
+        }
+        else if (_dynastyGrade is null)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-2">
+                Dynasty valuation data unavailable — dynasty valuations may need to be computed.
+            </MudAlert>
+        }
+        else
+        {
+            @* Profile banner *@
+            <div class="d-flex align-center justify-center mb-4 mt-2">
+                <MudChip T="string" Color="Color.Primary" Size="Size.Large" Variant="Variant.Filled"
+                         Style="font-size:1rem; font-weight:700; letter-spacing:0.05em;">
+                    @_dynastyGrade.OverallProfile
+                </MudChip>
+            </div>
+
+            @* Dual gauge cards *@
+            <MudGrid Spacing="3">
+                @* Contention card *@
+                <MudItem xs="12" sm="6">
+                    <MudPaper Elevation="0" Class="fc-card pa-4 text-center">
+                        <MudText Typo="Typo.overline" Class="fc-section-label mb-2 d-block">
+                            CONTENTION — WIN NOW
+                        </MudText>
+                        <MudText Typo="Typo.h1" Style="@(DynastyGradeColor(_dynastyGrade.ContentionGrade) + "font-weight:800; line-height:1;")">
+                            @_dynastyGrade.ContentionGrade
+                        </MudText>
+                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mt-1">
+                            @_dynastyGrade.ContentionLabel
+                        </MudText>
+                        <MudProgressLinear Value="@_dynastyGrade.ContentionScore"
+                                           Color="@DynastyBarColor(_dynastyGrade.ContentionGrade)"
+                                           Rounded="true" Size="Size.Medium" Class="my-3" />
+                        <MudText Typo="Typo.body2" Class="fc-stat fc-cyan mb-1">
+                            @_dynastyGrade.PrimePlayerCount prime-age player(s)
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-style:italic;">
+                            @_dynastyGrade.ContentionSummary
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+
+                @* Longevity card *@
+                <MudItem xs="12" sm="6">
+                    <MudPaper Elevation="0" Class="fc-card pa-4 text-center">
+                        <MudText Typo="Typo.overline" Class="fc-section-label mb-2 d-block">
+                            LONGEVITY — FUTURE VALUE
+                        </MudText>
+                        <MudText Typo="Typo.h1" Style="@(DynastyGradeColor(_dynastyGrade.LongevityGrade) + "font-weight:800; line-height:1;")">
+                            @_dynastyGrade.LongevityGrade
+                        </MudText>
+                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mt-1">
+                            @_dynastyGrade.LongevityLabel
+                        </MudText>
+                        <MudProgressLinear Value="@_dynastyGrade.LongevityScore"
+                                           Color="@DynastyBarColor(_dynastyGrade.LongevityGrade)"
+                                           Rounded="true" Size="Size.Medium" Class="my-3" />
+                        <MudText Typo="Typo.body2" Class="fc-stat fc-cyan mb-1">
+                            @_dynastyGrade.YoungPlayerCount ascending player(s)
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-style:italic;">
+                            @_dynastyGrade.LongevitySummary
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            @* Footer stats row *@
+            <MudPaper Elevation="0" Class="fc-card pa-3 mt-3">
+                <div class="d-flex justify-space-around">
+                    <div class="text-center">
+                        <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
+                            @_dynastyGrade.RosteredCount
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">rostered</MudText>
+                    </div>
+                    <div class="text-center">
+                        <MudText Typo="Typo.body2" Class="fc-stat">
+                            @_dynastyGrade.AvgAge.ToString("F1")
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">avg age</MudText>
+                    </div>
+                    <div class="text-center">
+                        <MudText Typo="Typo.body2" Class="fc-stat">
+                            @_dynastyGrade.AvgTradeValue.ToString("F1")
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">avg trade value</MudText>
+                    </div>
+                </div>
+            </MudPaper>
+        }
+    </MudTabPanel>
 </MudTabs>
 @if (_loading)
 {
@@ -427,7 +524,7 @@ else if (_roster is null)
     private string _optimizerRisk = "";
     // ── TEAM-004: Start/Sit ────────────────────────────────
     private int _activeTab;
-    private bool _startSitTabActive;
+
     private bool _startSitLoading;
     private StartSitRecommendationsDto? _startSitData;
     // ── TEAM-005: Depth Grades ────────────────────────────────────────────────
@@ -438,6 +535,9 @@ else if (_roster is null)
         PropertyNameCaseInsensitive = true,
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
+    // ── TEAM-006: Dynasty Grade ───────────────────────────────────────────────
+    private bool _dynastyLoading;
+    private DynastyTeamGradeDto? _dynastyGrade;
     private async Task OptimizeMyLineupAsync()
     {
         if (_roster is null) return;
@@ -558,7 +658,8 @@ else if (_roster is null)
     private void OnLeagueChangedHandler()
     {
         _startSitData = null;
-        _depthGrades = null;   // ← add this line
+        _depthGrades = null;
+        _dynastyGrade = null;   // ← add this line
         _ = InvokeAsync(async () =>
         {
             await LoadRosterAsync();
@@ -633,6 +734,7 @@ else if (_roster is null)
         _activeTab = index;
         if (index == 1 && _startSitData is null) await LoadStartSitAsync();
         if (index == 2 && _depthGrades is null) await LoadDepthGradesAsync();
+        if (index == 3 && _dynastyGrade is null) await LoadDynastyGradeAsync();
     }
 
     private async Task LoadStartSitAsync()
@@ -737,6 +839,52 @@ else if (_roster is null)
     };
 
     private static Color GradeBarColor(string grade) => grade switch
+    {
+        "A+" or "A" => Color.Success,
+        "B+" or "B" => Color.Info,
+        "C+" or "C" => Color.Warning,
+        _ => Color.Error
+    };
+
+    private record DynastyTeamGradeDto(
+        string ContentionGrade, int ContentionScore, string ContentionLabel, string ContentionSummary,
+        string LongevityGrade, int LongevityScore, string LongevityLabel, string LongevitySummary,
+        string OverallProfile, int RosteredCount, int PrimePlayerCount, int YoungPlayerCount,
+        double AvgTradeValue, double AvgAge);
+
+    private async Task LoadDynastyGradeAsync()
+    {
+        _dynastyLoading = true;
+        StateHasChanged();
+        try
+        {
+            var leagueId = LeagueState.ActiveLeagueId;
+            if (string.IsNullOrEmpty(leagueId)) return;
+            var response = await Http.GetAsync(
+                $"api/v1/team/dynasty-grade?sleeperLeagueId={leagueId}");
+            if (response.IsSuccessStatusCode)
+                _dynastyGrade = await response.Content.ReadFromJsonAsync<DynastyTeamGradeDto>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading dynasty grade: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _dynastyLoading = false;
+        }
+    }
+
+    private static string DynastyGradeColor(string grade) => grade switch
+    {
+        "A+" or "A" => "color:#00e5c8;",
+        "B+" or "B" => "color:#4fc3f7;",
+        "C+" or "C" => "color:#ffd54f;",
+        "D" => "color:#ff8a65;",
+        _ => "color:#ef5350;"
+    };
+
+    private static Color DynastyBarColor(string grade) => grade switch
     {
         "A+" or "A" => Color.Success,
         "B+" or "B" => Color.Info,
