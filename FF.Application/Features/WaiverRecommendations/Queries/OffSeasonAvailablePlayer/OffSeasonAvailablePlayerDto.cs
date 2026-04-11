@@ -7,4 +7,5 @@ public record OffSeasonAvailablePlayerDto(
     string? NflTeam,
     int Age,
     double TradeValue,
-    int Rank);
+    int Rank,
+    string? CollegeTeam);

@@ -12,4 +12,5 @@ public interface IPlayerRepository : IRepository<Player>
     // FF.Domain/Repositories/IPlayerRepository.cs — add this method
     Task UpdateAsync(Player player, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Player>> GetBySleeperIdsAsync(IEnumerable<string> sleeperPlayerIds, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Player>> GetPlayersNeedingCollegeBackfillAsync(CancellationToken cancellationToken = default);
 }
