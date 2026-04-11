@@ -157,4 +157,24 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             ? NotFound("No roster or dynasty valuation data found.")
             : Ok(result);
     }
+
+    // TEAM-007: Draft prep dashboard
+    [HttpGet("draft-prep")]
+    public async Task<IActionResult> GetDraftPrep(
+        [FromQuery] string sleeperLeagueId,
+        [FromQuery] int simSeason,
+        [FromQuery] int rookieSeason,
+        CancellationToken ct = default)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser?.SleeperUserId is null)
+            return BadRequest("Sleeper account not linked.");
+        if (string.IsNullOrEmpty(sleeperLeagueId))
+            return BadRequest("sleeperLeagueId is required.");
+
+        var result = await mediator.Send(
+            new GetDraftPrepQuery(appUser.SleeperUserId, sleeperLeagueId, simSeason, rookieSeason), ct);
+
+        return result is null ? NotFound() : Ok(result);
+    }
 }
