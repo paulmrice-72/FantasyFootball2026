@@ -161,6 +161,7 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
         });
         services.AddScoped<ISleeperMatchupService, SleeperMatchupService>();
+        services.AddScoped<IWriterPersonaRepository, WriterPersonaRepository>();
         services.AddSleeperApiClient();
 
         // Identity
