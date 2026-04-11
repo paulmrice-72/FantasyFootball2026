@@ -260,6 +260,10 @@ public class SleeperLeagueImportService(
                 PlayerIds = sleeperRoster.Players ?? [],
                 StarterIds = sleeperRoster.Starters ?? [],
                 Season = season,
+                Wins = sleeperRoster.Settings?.Wins ?? 0,
+                Losses = sleeperRoster.Settings?.Losses ?? 0,
+                Ties = sleeperRoster.Settings?.Ties ?? 0,
+                WaiverPosition = sleeperRoster.Settings?.WaiverPosition ?? 0,
                 SyncedAt = DateTime.UtcNow
             };
         }).ToList();

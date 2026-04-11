@@ -60,20 +60,20 @@ public class GetMyRosterQueryHandler(
                     IsOnIr: rosterDoc.StarterIds.Contains(sleeperPlayerId) is false
                              && player?.InjuryStatus == "IR",
                     MedianProjectedPoints: sim is not null ? (double)sim.Median : null,
-                    ByeWeek: null); // TEAM-001B — bye weeks not yet synced
+                   ByeWeek: player is not null ? GetByeWeek(player.NflTeam) : null);
             })
             .OrderBy(p => PositionOrder(p.Position))
             .ThenBy(p => p.PlayerName)
             .ToList();
 
         return new MyRosterDto(
-            TeamName: rosterDoc.TeamName,
-            OwnerName: rosterDoc.OwnerName,
-            LeagueId: request.SleeperLeagueId,
-            Wins: 0,   // TEAM-001B — wire from Roster entity
-            Losses: 0,
-            WaiverPosition: 0,
-            Players: rosterPlayers);
+                    TeamName: rosterDoc.TeamName,
+                    OwnerName: rosterDoc.OwnerName,
+                    LeagueId: request.SleeperLeagueId,
+                    Wins: rosterDoc.Wins,
+                    Losses: rosterDoc.Losses,
+                    WaiverPosition: rosterDoc.WaiverPosition,
+                    Players: rosterPlayers);
     }
 
     private static MyRosterDto BuildEmptyRoster(RosterPlayerDocument doc) =>
@@ -87,5 +87,46 @@ public class GetMyRosterQueryHandler(
         "TE" => 3,
         "K" => 4,
         _ => 5
+    };
+    /// <summary>
+    /// 2025 NFL bye weeks by team. Update each September.
+    /// </summary>
+    private static string? GetByeWeek(string? nflTeam) =>
+        nflTeam is null ? null : ByeWeeks2025.TryGetValue(nflTeam, out var week) ? $"Wk {week}" : null;
+
+    private static readonly Dictionary<string, int> ByeWeeks2025 = new()
+    {
+        ["ARI"] = 11,
+        ["ATL"] = 12,
+        ["BAL"] = 14,
+        ["BUF"] = 12,
+        ["CAR"] = 11,
+        ["CHI"] = 7,
+        ["CIN"] = 12,
+        ["CLE"] = 10,
+        ["DAL"] = 7,
+        ["DEN"] = 14,
+        ["DET"] = 5,
+        ["GB"] = 6,
+        ["HOU"] = 14,
+        ["IND"] = 12,
+        ["JAX"] = 12,
+        ["KC"] = 6,
+        ["LAC"] = 5,
+        ["LAR"] = 6,
+        ["LV"] = 10,
+        ["MIA"] = 6,
+        ["MIN"] = 6,
+        ["NE"] = 14,
+        ["NO"] = 12,
+        ["NYG"] = 11,
+        ["NYJ"] = 12,
+        ["PHI"] = 5,
+        ["PIT"] = 9,
+        ["SEA"] = 10,
+        ["SF"] = 9,
+        ["TB"] = 11,
+        ["TEN"] = 5,
+        ["WAS"] = 14
     };
 }

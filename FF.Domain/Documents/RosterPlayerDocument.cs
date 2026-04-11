@@ -21,5 +21,9 @@ public class RosterPlayerDocument
     public List<string> StarterIds { get; set; } = [];
 
     public int Season { get; set; }
+    public int Wins { get; set; }
+    public int Losses { get; set; }
+    public int Ties { get; set; }
+    public int WaiverPosition { get; set; }
     public DateTime SyncedAt { get; set; } = DateTime.UtcNow;
 }

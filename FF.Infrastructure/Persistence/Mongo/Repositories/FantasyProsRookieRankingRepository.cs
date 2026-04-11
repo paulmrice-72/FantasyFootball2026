@@ -24,6 +24,17 @@ public class FantasyProsRookieRankingRepository(MongoDbContext context)
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<FantasyProsRookieRankingDocument>> GetAllBySeasonAsync(
+            int season, CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<FantasyProsRookieRankingDocument>.Filter
+            .Eq(x => x.Season, season);
+        return await _collection
+            .Find(filter)
+            .SortBy(x => x.FantasyProsRank)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task UpsertAsync(
         FantasyProsRookieRankingDocument document,
         CancellationToken cancellationToken = default)

@@ -1,5 +1,6 @@
 ﻿// FF.API/Controllers/PlayersController.cs
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Players.Commands.BackfillCollegeTeam;
 using FF.Application.Players.Commands.SyncPlayers;
 using FF.Application.Players.Queries.GetAllPlayers;
 using FF.Application.Players.Queries.GetPlayerNarrative;
@@ -140,5 +141,27 @@ public class PlayersController(
             return NotFound($"No usage metrics found for player {playerId} season {season}.");
 
         return Ok(result);
+    }
+
+    // POST /api/v1/players/backfill-college
+    // One-shot admin endpoint — upload nflverse roster CSV to backfill CollegeTeam
+    [HttpPost("backfill-college")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> BackfillCollegeTeam(
+        IFormFile file,
+        CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest("No file uploaded.");
+
+        using var reader = new StreamReader(file.OpenReadStream());
+        var csv = await reader.ReadToEndAsync(ct);
+
+        var result = await mediator.Send(
+            new BackfillCollegeTeamCommand(csv), ct);
+
+        return result.IsSuccess
+            ? Ok(result.Value)
+            : BadRequest(result.Error.Message);
     }
 }

@@ -88,7 +88,7 @@ else
             {
                 <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
             }
-            else if (_isOffSeason && _offSeasonRecs.Count == 0 && _vorpQueried)
+            else if (_isOffSeason && _offSeasonRecs.Count == 0 && _vorpQueried && !_vorpLoading)
             {
                 <MudAlert Severity="Severity.Info">
                     No available players found. Ensure dynasty valuations have been calculated.
@@ -123,7 +123,7 @@ else
                         <MudTd>
                             <MudButton Variant="Variant.Text"
                                        Style="font-weight:600; color: var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
-                                       OnClick="@(() => _ = OpenPlayerCard(offCtx.SleeperPlayerId, offCtx.PlayerName, offCtx.Position, offCtx.NflTeam))">
+                                       OnClick="@(() => _ = OpenPlayerCard(offCtx.SleeperPlayerId, offCtx.PlayerName, offCtx.Position, offCtx.NflTeam, offCtx.CollegeTeam))" >
                                 @context.PlayerName
                             </MudButton>
                         </MudTd>
@@ -364,6 +364,10 @@ else
     {
         await LoadContextAsync();
         await LoadAlertsAsync();
+
+        // Auto-load available players in off-season — no button click required
+        if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId))
+            await LoadOffSeasonAsync();
     }
 
     private async Task LoadContextAsync()
@@ -472,7 +476,7 @@ else
             _emergenceLoading = false;
         }
     }
-    private async Task OpenPlayerCard(string sleeperPlayerId, string playerName, string position, string? nflTeam)
+    private async Task OpenPlayerCard(string sleeperPlayerId, string playerName, string position, string? nflTeam, string? collegeTeam = null)
     {
         var data = new PlayerCardDialog.PlayerCardData(
             SleeperPlayerId: sleeperPlayerId,
@@ -482,7 +486,7 @@ else
             Age: null,
             DraftRound: null,
             DraftPick: null,
-            CollegeTeam: null,
+            CollegeTeam: collegeTeam,
             HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{sleeperPlayerId}.jpg",
             FantasyProsRank: null,
             FantasyProsTier: null,
@@ -547,12 +551,13 @@ else
         _ => string.Empty
     };
 
-    private record OffSeasonDto(
+private record OffSeasonDto(
         string SleeperPlayerId,
         string PlayerName,
         string Position,
         string? NflTeam,
         int Age,
         double TradeValue,
-    int Rank);
+        int Rank,
+        string? CollegeTeam);
 }

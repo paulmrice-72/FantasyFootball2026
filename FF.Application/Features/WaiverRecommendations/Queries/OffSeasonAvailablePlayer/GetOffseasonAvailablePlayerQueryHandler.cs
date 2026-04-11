@@ -1,14 +1,13 @@
-﻿using FF.Application.Features.WaiverRecommendations.Queries.OffSeasonAvailablePlayer;
-using FF.Application.Interfaces.Persistence;
+﻿using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using MediatR;
 
-namespace FF.Application.Features.WaiverRecommendations.Queries;
+namespace FF.Application.Features.WaiverRecommendations.Queries.OffSeasonAvailablePlayer;
 
 public class GetOffSeasonAvailablePlayersQueryHandler(
     IDynastyValuationRepository dynastyRepository,
-    IRosterPlayerRepository rosterPlayerRepository)
-    : IRequestHandler<GetOffSeasonAvailablePlayersQuery, IReadOnlyList<OffSeasonAvailablePlayerDto>>
+    IRosterPlayerRepository rosterPlayerRepository,
+    IPlayerRepository playerRepository)
 {
     public async Task<IReadOnlyList<OffSeasonAvailablePlayerDto>> Handle(
         GetOffSeasonAvailablePlayersQuery request,
@@ -28,9 +27,19 @@ public class GetOffSeasonAvailablePlayersQueryHandler(
 
         // 3 — Exclude rostered players, apply top N
         var available = valuations
-            .Where(v => !string.IsNullOrEmpty(v.SleeperPlayerId)
-                     && !rosteredIds.Contains(v.SleeperPlayerId))
-            .Take(request.Top)
+                    .Where(v => !string.IsNullOrEmpty(v.SleeperPlayerId)
+                                && !rosteredIds.Contains(v.SleeperPlayerId))
+                    .Take(request.Top)
+                    .ToList();
+
+        // Bulk load college data from SQL Players
+        var availableIds = available.Select(v => v.SleeperPlayerId).ToList();
+        var players = await playerRepository.GetBySleeperIdsAsync(availableIds, cancellationToken);
+        var collegeLookup = players
+            .Where(p => p.SleeperPlayerId != null && p.CollegeTeam != null)
+            .ToDictionary(p => p.SleeperPlayerId!, p => p.CollegeTeam);
+
+        return available
             .Select((v, i) => new OffSeasonAvailablePlayerDto(
                 SleeperPlayerId: v.SleeperPlayerId,
                 PlayerName: v.PlayerName,
@@ -38,9 +47,9 @@ public class GetOffSeasonAvailablePlayersQueryHandler(
                 NflTeam: v.NflTeam,
                 Age: v.Age,
                 TradeValue: v.TradeValue,
-                Rank: i + 1))
+                Rank: i + 1,
+                CollegeTeam: collegeLookup.TryGetValue(v.SleeperPlayerId, out var college)
+                    ? college : null))
             .ToList();
-
-        return available;
     }
 }
