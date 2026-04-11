@@ -52,4 +52,12 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
     => await DbSet.AsNoTracking()
         .Where(p => p.SleeperPlayerId != null && sleeperPlayerIds.Contains(p.SleeperPlayerId))
         .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Player>> GetPlayersNeedingCollegeBackfillAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await Context.Players
+            .Where(p => p.GsisId != null && p.CollegeTeam == null)
+            .ToListAsync(cancellationToken);
+    }
 }
