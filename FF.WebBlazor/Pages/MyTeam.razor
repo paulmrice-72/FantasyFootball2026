@@ -101,7 +101,9 @@
                                 </MudText>
                             </MudTd>
                             <MudTd>
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    @(context.ByeWeek ?? "—")
+                                </MudText>
                             </MudTd>
                             <MudTd>
                                 @if (context.IsStarter)
