@@ -37,7 +37,7 @@ public class LeagueConfiguration : IEntityTypeConfiguration<League>
 
         builder.Property(l => l.UpdatedAt);
 
-        // SleeperLeagueId + Season must be unique — same league can exist across seasons
+        // SleeperLeagueId + Season must be unique
         builder.HasIndex(l => new { l.SleeperLeagueId, l.Season })
             .IsUnique();
 
@@ -52,5 +52,12 @@ public class LeagueConfiguration : IEntityTypeConfiguration<League>
         builder.Property(l => l.CanTradePicks)
             .IsRequired()
             .HasDefaultValue(false);
+
+        // Sleeper roster_positions stored as comma-separated string
+        // e.g. "QB,RB,RB,WR,WR,TE,FLEX,SUPER_FLEX,BN,BN,BN,BN"
+        // Nullable — null means not yet synced from Sleeper
+        builder.Property(l => l.RosterPositions)
+            .HasMaxLength(500)
+            .IsRequired(false);
     }
 }

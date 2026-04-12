@@ -1,6 +1,5 @@
 ﻿@using Microsoft.JSInterop
 @using System.Net.Http.Json
-@using static System.Net.WebRequestMethods
 @inject AuthenticationStateProvider AuthStateProvider
 @inject AuthService AuthService
 @inject NavigationManager Navigation
@@ -8,6 +7,7 @@
 @inject IJSRuntime JS
 @inject IHttpClientFactory HttpClientFactory
 @inject LeagueStateService LeagueState
+@implements IDisposable
 
 <MudThemeProvider Theme="_theme" />
 <MudPopoverProvider />
@@ -27,6 +27,26 @@
         <MudText Typo="Typo.h6" Class="fc-logo ml-2">
             FantasyCombine<span class="fc-logo-accent">.AI</span>
         </MudText>
+
+        @* Mobile league pill — only visible xs/sm, sits in AppBar *@
+        <MudHidden Breakpoint="Breakpoint.MdAndUp">
+            @if (_leagues.Count > 0)
+            {
+                <MudSelect T="string"
+                           Value="_activeLeagueId"
+                           ValueChanged="OnLeagueChanged"
+                           Dense="true"
+                           Margin="Margin.Dense"
+                           Variant="Variant.Outlined"
+                           Class="fc-league-selector-mobile ml-2"
+                           Style="max-width:160px;">
+                    @foreach (var league in _leagues)
+                    {
+                        <MudSelectItem Value="@league.LeagueId">@league.LeagueName</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        </MudHidden>
 
         <MudSpacer />
 
@@ -52,53 +72,64 @@
         <MudDrawerHeader Class="fc-drawer-header">
             <MudText Typo="Typo.caption" Class="fc-drawer-label">NAVIGATION</MudText>
         </MudDrawerHeader>
-        <NavMenu OnNavItemClicked="CloseDrawerOnMobile" />
+        <NavMenu OnNavItemClicked="CloseDrawerOnMobile"
+                 SleeperLinked="@_sleeperLinked"
+                 CurrentPath="@_currentPath" />
     </MudDrawer>
 
     <MudMainContent Class="fc-main-content">
-        @if (_leagues.Count > 0)
-        {
-            <div class="fc-league-bar">
-                <MudSelect T="string"
-                           Value="_activeLeagueId"
-                           ValueChanged="OnLeagueChanged"
-                           Dense="true"
-                           Margin="Margin.Dense"
-                           Variant="Variant.Outlined"
-                           Class="fc-league-selector"
-                           AdornmentIcon="@Icons.Material.Filled.SportsSoccer"
-                           Adornment="Adornment.Start"
-                           AdornmentColor="Color.Primary">
-                    @foreach (var league in _leagues)
-                    {
-                        <MudSelectItem Value="@league.LeagueId">@league.LeagueName</MudSelectItem>
-                    }
-                </MudSelect>
-            </div>
-        }
+        @* Desktop league selector — hidden on mobile (pill is in AppBar instead) *@
+        <MudHidden Breakpoint="Breakpoint.SmAndDown">
+            @if (_leagues.Count > 0)
+            {
+                <div class="fc-league-bar">
+                    <MudSelect T="string"
+                               Value="_activeLeagueId"
+                               ValueChanged="OnLeagueChanged"
+                               Dense="true"
+                               Margin="Margin.Dense"
+                               Variant="Variant.Outlined"
+                               Class="fc-league-selector"
+                               AdornmentIcon="@Icons.Material.Filled.SportsSoccer"
+                               Adornment="Adornment.Start"
+                               AdornmentColor="Color.Primary">
+                        @foreach (var league in _leagues)
+                        {
+                            <MudSelectItem Value="@league.LeagueId">@league.LeagueName</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+            }
+        </MudHidden>
+
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-4 pb-16 pb-md-4">
             @Body
         </MudContainer>
     </MudMainContent>
 
+    @* Bottom nav — xs only *@
     <MudHidden Breakpoint="Breakpoint.SmAndUp">
         <div class="fc-bottom-nav">
             <MudIconButton Icon="@Icons.Material.Filled.Home"
-                           Color="Color.Inherit"
+                           Color="@NavColor("")"
                            title="Home"
                            OnClick='@(() => Navigate(""))' />
-            <MudIconButton Icon="@Icons.Material.Filled.Analytics"
+            <MudIconButton Icon="@Icons.Material.Filled.Groups"
+                           Color="@NavColor("my-team")"
+                           title="My Team"
+                           OnClick='@(() => Navigate("my-team"))' />
+            <MudIconButton Icon="@Icons.Material.Filled.SportsMma"
+                           Color="@NavColor("my-matchup")"
+                           title="My Matchup"
+                           OnClick='@(() => Navigate("my-matchup"))' />
+            <MudIconButton Icon="@Icons.Material.Filled.TrendingUp"
+                           Color="@NavColor("waiver-wire")"
+                           title="Waiver Wire"
+                           OnClick='@(() => Navigate("waiver-wire"))' />
+            <MudIconButton Icon="@Icons.Material.Filled.MoreHoriz"
                            Color="Color.Inherit"
-                           title="Projections"
-                           OnClick='@(() => Navigate("projections"))' />
-            <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome"
-                           Color="Color.Inherit"
-                           title="Optimizer"
-                           OnClick='@(() => Navigate("optimizer"))' />
-            <MudIconButton Icon="@Icons.Material.Filled.SportsSoccer"
-                           Color="Color.Inherit"
-                           title="DFS"
-                           OnClick='@(() => Navigate("dfs"))' />
+                           title="More"
+                           OnClick="ToggleDrawer" />
             <MudIconButton Icon="@Icons.Material.Filled.MoreHoriz"
                            Color="Color.Inherit"
                            title="More"
@@ -110,86 +141,56 @@
 
 @code {
     private bool _drawerOpen = true;
-
-    // md+ = permanent responsive drawer; below md = temporary overlay
+    private bool _isMobile = false;
     private DrawerVariant _drawerVariant = DrawerVariant.Responsive;
+    private string _currentPath = "";
+    private bool _sleeperLinked = false;
 
+    // ── theme unchanged ──────────────────────────────────────────────
     private readonly MudTheme _theme = new()
     {
         PaletteLight = new PaletteLight
         {
-            Background        = "#0A0F1E",
-            Surface           = "#111827",
-            DrawerBackground  = "#0D1424",
-            AppbarBackground  = "#0A0F1E",
-            Primary           = "#00C8F0",
+            Background = "#0A0F1E",
+            Surface = "#111827",
+            DrawerBackground = "#0D1424",
+            AppbarBackground = "#0A0F1E",
+            Primary = "#00C8F0",
             PrimaryContrastText = "#0A0F1E",
-            TextPrimary       = "#E8EAF0",
-            TextSecondary     = "#6B7280",
-            ActionDefault     = "#00C8F0",
-            Divider           = "#1F2937",
-            OverlayDark       = "rgba(0,0,0,0.7)"
+            TextPrimary = "#E8EAF0",
+            TextSecondary = "#6B7280",
+            ActionDefault = "#00C8F0",
+            Divider = "#1F2937",
+            OverlayDark = "rgba(0,0,0,0.7)"
         },
         PaletteDark = new PaletteDark
         {
-            Background        = "#0A0F1E",
-            Surface           = "#111827",
-            DrawerBackground  = "#0D1424",
-            AppbarBackground  = "#0A0F1E",
-            Primary           = "#00C8F0",
+            Background = "#0A0F1E",
+            Surface = "#111827",
+            DrawerBackground = "#0D1424",
+            AppbarBackground = "#0A0F1E",
+            Primary = "#00C8F0",
             PrimaryContrastText = "#0A0F1E",
-            TextPrimary       = "#E8EAF0",
-            TextSecondary     = "#6B7280",
-            ActionDefault     = "#00C8F0",
-            Divider           = "#1F2937",
-            OverlayDark       = "rgba(0,0,0,0.7)"
+            TextPrimary = "#E8EAF0",
+            TextSecondary = "#6B7280",
+            ActionDefault = "#00C8F0",
+            Divider = "#1F2937",
+            OverlayDark = "rgba(0,0,0,0.7)"
         },
         Typography = new Typography
         {
             Default = new Default { FontFamily = ["Inter", "Segoe UI", "sans-serif"] },
-            H6      = new H6      { FontFamily = ["Inter", "Segoe UI", "sans-serif"], FontWeight = 600 }
+            H6 = new H6 { FontFamily = ["Inter", "Segoe UI", "sans-serif"], FontWeight = 600 }
         }
     };
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            var width = await JS.InvokeAsync<int>("eval", "window.innerWidth");
-            _drawerOpen = width >= 960; // md breakpoint
-            StateHasChanged();
-        }
-    }
-
-    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
-
-    private void CloseDrawerOnMobile()
-    {
-        // Only auto-close on xs/sm — on md+ the drawer is permanent
-        _drawerOpen = false;
-    }
-
-    private void Navigate(string path)
-    {
-        Navigation.NavigateTo("/" + path);
-    }
-
-    private async Task HandleLogout()
-    {
-        var tokenStore = ((CustomAuthStateProvider)AuthStateProvider)
-            .GetTokenStore();
-
-        if (tokenStore.HasRefreshToken)
-            await AuthService.RevokeAsync(tokenStore.RefreshToken!);
-
-        ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsLoggedOut();
-        Navigation.NavigateTo("/login");
-    }
-    private List<LeagueItem> _leagues = [];
-    private string? _activeLeagueId;
+    // ────────────────────────────────────────────────────────────────
 
     protected override async Task OnInitializedAsync()
     {
+        // Track route changes for bottom nav active state
+        Navigation.LocationChanged += OnLocationChanged;
+        _currentPath = GetCurrentPath();
+
         try
         {
             var http = HttpClientFactory.CreateClient("AuthAPI");
@@ -199,16 +200,89 @@
             {
                 _leagues = context.Leagues ?? [];
                 _activeLeagueId = context.ActiveLeagueId;
+                _sleeperLinked = context.IsSleeperLinked;
             }
         }
         catch { }
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var width = await JS.InvokeAsync<int>("eval", "window.innerWidth");
+            _isMobile = width < 600;   // xs breakpoint
+            _drawerOpen = width >= 960;  // md breakpoint — permanent sidebar
+            StateHasChanged();
+        }
+    }
+
+    // ── Navigation helpers ───────────────────────────────────────────
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        _currentPath = GetCurrentPath();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetCurrentPath()
+    {
+        var uri = new Uri(Navigation.Uri);
+        // Strip leading slash → "my-team", "projections", "" for home
+        return uri.AbsolutePath.TrimStart('/').ToLower();
+    }
+
+    // Returns Primary color when the route matches, Inherit otherwise
+    private Color NavColor(string route)
+    {
+        if (route == "" && _currentPath == "") return Color.Primary;
+        if (route != "" && _currentPath.StartsWith(route)) return Color.Primary;
+        return Color.Inherit;
+    }
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private void CloseDrawerOnMobile()
+    {
+        // Only close on mobile — leave permanent sidebar open on desktop
+        if (_isMobile)
+            _drawerOpen = false;
+    }
+
+    private void Navigate(string path)
+    {
+        Navigation.NavigateTo("/" + path);
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    // ── Logout ───────────────────────────────────────────────────────
+
+    private async Task HandleLogout()
+    {
+        var tokenStore = ((CustomAuthStateProvider)AuthStateProvider)
+            .GetTokenStore();
+        if (tokenStore.HasRefreshToken)
+            await AuthService.RevokeAsync(tokenStore.RefreshToken!);
+        ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsLoggedOut();
+        Navigation.NavigateTo("/login");
+    }
+
+    // ── League selector ──────────────────────────────────────────────
+
+    private List<LeagueItem> _leagues = [];
+    private string? _activeLeagueId;
 
     private void OnLeagueChanged(string leagueId)
     {
         _activeLeagueId = leagueId;
         LeagueState.ActiveLeagueId = leagueId;
     }
+
+    // ── DTOs ─────────────────────────────────────────────────────────
 
     private record UserContextResponse(
         bool IsSleeperLinked,

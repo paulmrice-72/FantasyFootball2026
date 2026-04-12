@@ -1,8 +1,5 @@
 ﻿@using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Authorization
-@using System.Net.Http.Json
-@inject HttpClient Http
-@inject NavigationManager Nav
 
 <MudNavMenu Class="fc-navmenu pt-2">
 
@@ -14,46 +11,30 @@
         Home
     </MudNavLink>
 
-    <MudNavLink Href="projections"
-                Icon="@Icons.Material.Filled.Analytics"
+    <div class="fc-nav-section-label">MY TEAM</div>
+    <MudNavLink Href="my-team"
+                Icon="@Icons.Material.Filled.Groups"
                 IconColor="Color.Primary"
                 OnClick="NotifyNavClicked">
-        Projections
+        My Roster
     </MudNavLink>
-
-    <MudNavLink Href="optimizer"
-                Icon="@Icons.Material.Filled.AutoAwesome"
+    <MudNavLink Href="my-matchup"
+                Icon="@Icons.Material.Filled.SportsMma"
                 IconColor="Color.Primary"
                 OnClick="NotifyNavClicked">
-        Optimizer
+        My Matchup
     </MudNavLink>
-
     <MudNavLink Href="my-brief"
                 Icon="@Icons.Material.Filled.MilitaryTech"
                 IconColor="Color.Primary"
                 OnClick="NotifyNavClicked">
         War Room Brief
     </MudNavLink>
-    <MudNavLink Href="my-team"
-                Icon="@Icons.Material.Filled.Groups"
+    <MudNavLink Href="optimizer"
+                Icon="@Icons.Material.Filled.AutoAwesome"
                 IconColor="Color.Primary"
                 OnClick="NotifyNavClicked">
-        My Team
-    </MudNavLink>
-    <MudNavLink Href="my-matchup" Icon="@Icons.Material.Filled.SportsMma" IconColor="Color.Primary" OnClick="NotifyNavClicked">
-        My Matchup
-    </MudNavLink>
-    <MudNavLink Href="dynasty"
-                Icon="@Icons.Material.Filled.People"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
-        Dynasty
-    </MudNavLink>
-    <MudNavLink Href="waiver-wire"
-                Icon="@Icons.Material.Filled.TrendingUp"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
-        Waiver Wire
+        Lineup Optimizer
     </MudNavLink>
     <MudNavLink Href="trade"
                 Icon="@Icons.Material.Filled.SwapHoriz"
@@ -67,11 +48,45 @@
                 OnClick="NotifyNavClicked">
         Rookie Draft Board
     </MudNavLink>
+
+    <div class="fc-nav-section-label">LEAGUE</div>
+    <MudNavLink Href="league/standings"
+                Icon="@Icons.Material.Filled.EmojiEvents"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
+        League Standings
+    </MudNavLink>
+    <MudNavLink Href="dynasty"
+                Icon="@Icons.Material.Filled.People"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
+        Dynasty
+    </MudNavLink>
     <MudNavLink Href="injury-alerts"
                 Icon="@Icons.Material.Filled.LocalHospital"
                 IconColor="Color.Primary"
                 OnClick="NotifyNavClicked">
         Injury Alerts
+    </MudNavLink>
+    <MudNavLink Href="waiver-wire"
+                Icon="@Icons.Material.Filled.TrendingUp"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
+        Waiver Wire
+    </MudNavLink>
+
+    <div class="fc-nav-section-label">TOOLS</div>
+    <MudNavLink Href="projections"
+                Icon="@Icons.Material.Filled.Analytics"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
+        Projections
+    </MudNavLink>
+    <MudNavLink Href="projection-settings"
+                Icon="@Icons.Material.Filled.Tune"
+                IconColor="Color.Primary"
+                OnClick="NotifyNavClicked">
+        Projection Tuner
     </MudNavLink>
     <MudNavLink Href="dfs"
                 Icon="@Icons.Material.Filled.SportsSoccer"
@@ -80,17 +95,9 @@
         DFS
     </MudNavLink>
 
-    <MudNavLink Href="projection-settings"
-                Icon="@Icons.Material.Filled.Tune"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
-        Projection Tuner
-    </MudNavLink>
-
     <MudDivider Class="my-3" />
     <AuthorizeView Roles="Admin">
         <Authorized>
-            <MudDivider Class="my-2" />
             <MudNavLink Href="admin"
                         Icon="@Icons.Material.Filled.AdminPanelSettings"
                         IconColor="Color.Warning"
@@ -100,62 +107,23 @@
         </Authorized>
     </AuthorizeView>
 
-    <MudDivider Class="my-2" />
     <MudNavLink Href="settings/sleeper"
-                Icon="@(_sleeperLinked == true ? Icons.Material.Filled.Link : Icons.Material.Filled.LinkOff)"
-                IconColor="@(_sleeperLinked == true ? Color.Success : Color.Warning)"
+                Icon="@(SleeperLinked ? Icons.Material.Filled.Link : Icons.Material.Filled.LinkOff)"
+                IconColor="@(SleeperLinked ? Color.Success : Color.Warning)"
                 OnClick="NotifyNavClicked">
-        @(_sleeperLinked == true ? "Sleeper Account" : "Link Sleeper Account")
+        @(SleeperLinked ? "Sleeper Account" : "Link Sleeper Account")
     </MudNavLink>
 
 </MudNavMenu>
 
 @code {
     [Parameter] public EventCallback OnNavItemClicked { get; set; }
-
-    private List<LeagueItem> _leagues = new();
-    private string? _activeLeagueId;
-    private bool? _sleeperLinked;
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            var context = await Http.GetFromJsonAsync<UserContextResponse>(
-                "api/v1/identity/context");
-            if (context is not null)
-            {
-                _sleeperLinked = context.IsSleeperLinked;
-                _leagues = context.Leagues ?? [];
-                _activeLeagueId = context.ActiveLeagueId;
-            }
-        }
-        catch
-        {
-            // Not logged in or API unavailable — fail silently
-        }
-    }
-
-    private void OnLeagueChanged(string leagueId)
-    {
-        _activeLeagueId = leagueId;
-        NotifyNavClicked();
-    }
+    [Parameter] public bool SleeperLinked { get; set; }
+    [Parameter] public string CurrentPath { get; set; } = "";
 
     private void NotifyNavClicked()
     {
         if (OnNavItemClicked.HasDelegate)
             OnNavItemClicked.InvokeAsync();
     }
-
-    private record UserContextResponse(
-        bool IsSleeperLinked,
-        List<LeagueItem>? Leagues,
-        string? ActiveLeagueId);
-
-    private record LeagueItem(
-        string LeagueId,
-        string LeagueName,
-        int Season,
-        string Role);
 }
