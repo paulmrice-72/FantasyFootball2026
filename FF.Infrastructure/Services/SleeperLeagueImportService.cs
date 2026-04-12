@@ -87,6 +87,10 @@ public class SleeperLeagueImportService(
             var tradePickLimit = sleeperLeague.Settings?.TradePickLimit ?? 0;
             league.UpdateDraftSettings(draftRounds, tradePickLimit);
 
+            // Sync roster slot configuration from Sleeper
+            if (sleeperLeague.RosterPositions is { Count: > 0 })
+                league.UpdateRosterPositions(sleeperLeague.RosterPositions);
+
             _logger.LogInformation(
                 "Scoring settings synced for {LeagueName}: rec={Rec}, passTd={PassTd}, bonusRecTe={BonusRecTe}",
                 league.Name, rec, passTd, bonusRecTe);
@@ -146,10 +150,13 @@ public class SleeperLeagueImportService(
         if (sleeperLeague is not null)
         {
             league.UpdateLeagueType(MapLeagueType(sleeperLeague.Settings?.Type ?? 0));
-
             league.UpdateDraftSettings(
                 sleeperLeague.Settings?.DraftRounds ?? 3,
                 sleeperLeague.Settings?.TradePickLimit ?? 0);
+
+            // Sync roster slot configuration from Sleeper
+            if (sleeperLeague.RosterPositions is { Count: > 0 })
+                league.UpdateRosterPositions(sleeperLeague.RosterPositions);
 
             await _dbContext.SaveChangesAsync(cancellationToken);
         }

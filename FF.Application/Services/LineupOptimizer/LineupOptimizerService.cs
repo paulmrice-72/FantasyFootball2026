@@ -1,5 +1,6 @@
 ﻿// FF.Application/Services/LineupOptimizer/LineupOptimizerService.cs
 using FF.Domain.Enums;
+using FF.Domain.ValueObjects;
 using Google.OrTools.Sat;
 
 namespace FF.Application.Services.LineupOptimizer;
@@ -18,7 +19,9 @@ public static class LineupOptimizerService
             return LineupOptimizerResult.Failed("No eligible players available.");
 
         var config = input.RosterConfig;
+        var n = players.Count;
 
+        // ── Preflight checks ─────────────────────────────────────────────
         if (players.Count(p => p.Position == "QB") < config.QbSlots)
             return LineupOptimizerResult.Failed("Insufficient QB players available.");
         if (players.Count(p => p.Position == "RB") < config.RbSlots)
@@ -31,84 +34,155 @@ public static class LineupOptimizerService
         var model = new CpModel();
         var solver = new CpSolver();
 
-        var x = players.Select(_ => model.NewBoolVar("x")).ToArray();
+        // ── Decision variables ───────────────────────────────────────────
+        // x[i]         = player i is selected in the lineup (any slot)
+        // qbVar[i]     = player i fills a QB slot
+        // rbVar[i]     = player i fills an RB slot
+        // wrVar[i]     = player i fills a WR slot
+        // teVar[i]     = player i fills a TE slot
+        // flexVar[s][i] = player i fills flex slot s
 
+        var x = Enumerable.Range(0, n).Select(_ => model.NewBoolVar("x")).ToArray();
+        var qbVar = Enumerable.Range(0, n).Select(_ => model.NewBoolVar("qb")).ToArray();
+        var rbVar = Enumerable.Range(0, n).Select(_ => model.NewBoolVar("rb")).ToArray();
+        var wrVar = Enumerable.Range(0, n).Select(_ => model.NewBoolVar("wr")).ToArray();
+        var teVar = Enumerable.Range(0, n).Select(_ => model.NewBoolVar("te")).ToArray();
+
+        var flexCount = config.FlexSlotDefinitions.Count;
+        var flexVar = Enumerable.Range(0, flexCount)
+            .Select(_ => Enumerable.Range(0, n)
+                .Select(_ => model.NewBoolVar("fl"))
+                .ToArray())
+            .ToArray();
+
+        // ── Objective — maximize projected score ─────────────────────────
         var scaledScores = players
             .Select(p => (long)(GetEffectiveScore(p, input.Mode, input.RiskProfile) * ScaleFactor))
             .ToArray();
         model.Maximize(LinearExpr.WeightedSum(x, scaledScores));
 
-        var qbIdx = players.Select((p, i) => new { p, i }).Where(z => z.p.Position == "QB").Select(z => z.i).ToList();
-        var rbIdx = players.Select((p, i) => new { p, i }).Where(z => z.p.Position == "RB").Select(z => z.i).ToList();
-        var wrIdx = players.Select((p, i) => new { p, i }).Where(z => z.p.Position == "WR").Select(z => z.i).ToList();
-        var teIdx = players.Select((p, i) => new { p, i }).Where(z => z.p.Position == "TE").Select(z => z.i).ToList();
+        // ── Slot assignment constraints ──────────────────────────────────
+        // Each player can only be assigned to one slot type
+        for (var i = 0; i < n; i++)
+        {
+            var slotVars = new List<ILiteral> { qbVar[i], rbVar[i], wrVar[i], teVar[i] };
+            for (var s = 0; s < flexCount; s++)
+                slotVars.Add(flexVar[s][i]);
 
-        model.Add(LinearExpr.Sum([.. qbIdx.Select(i => x[i])]) == config.QbSlots);
-        model.Add(LinearExpr.Sum([.. rbIdx.Select(i => x[i])]) >= config.RbSlots);
-        model.Add(LinearExpr.Sum([.. wrIdx.Select(i => x[i])]) >= config.WrSlots);
-        model.Add(LinearExpr.Sum([.. teIdx.Select(i => x[i])]) >= config.TeSlots);
+            // Sum of all slot assignments == x[i] (selected or not)
+            model.Add(LinearExpr.Sum(slotVars.Cast<BoolVar>()) == x[i]);
+        }
+
+        // ── Position eligibility — dedicated slots ───────────────────────
+        // QB slot: only QBs
+        for (var i = 0; i < n; i++)
+            if (players[i].Position != "QB")
+                model.Add(qbVar[i] == 0);
+
+        // RB slot: only RBs
+        for (var i = 0; i < n; i++)
+            if (players[i].Position != "RB")
+                model.Add(rbVar[i] == 0);
+
+        // WR slot: only WRs
+        for (var i = 0; i < n; i++)
+            if (players[i].Position != "WR")
+                model.Add(wrVar[i] == 0);
+
+        // TE slot: only TEs
+        for (var i = 0; i < n; i++)
+            if (players[i].Position != "TE")
+                model.Add(teVar[i] == 0);
+
+        // ── Position eligibility — flex slots ────────────────────────────
+        // Each flex slot enforces its own EligiblePositions list
+        for (var s = 0; s < flexCount; s++)
+        {
+            var slotDef = config.FlexSlotDefinitions[s];
+            for (var i = 0; i < n; i++)
+                if (!slotDef.IsEligible(players[i].Position))
+                    model.Add(flexVar[s][i] == 0);
+        }
+
+        // ── Slot count constraints ────────────────────────────────────────
+        model.Add(LinearExpr.Sum(qbVar) == config.QbSlots);
+        model.Add(LinearExpr.Sum(rbVar) == config.RbSlots);
+        model.Add(LinearExpr.Sum(wrVar) == config.WrSlots);
+        model.Add(LinearExpr.Sum(teVar) == config.TeSlots);
+
+        // Each flex slot fills exactly 1 player
+        for (var s = 0; s < flexCount; s++)
+            model.Add(LinearExpr.Sum(flexVar[s]) == 1);
+
+        // Total starters
         model.Add(LinearExpr.Sum(x) == config.TotalStarters);
 
-        foreach (var i in Enumerable.Range(0, players.Count))
+        // ── Lock constraints ─────────────────────────────────────────────
+        for (var i = 0; i < n; i++)
             if (input.LockedPlayerIds.Contains(players[i].PlayerId))
                 model.Add(x[i] == 1);
 
+        // ── Solve ────────────────────────────────────────────────────────
         solver.StringParameters = "max_time_in_seconds:10.0";
         var status = solver.Solve(model);
 
         if (status is not (CpSolverStatus.Optimal or CpSolverStatus.Feasible))
             return LineupOptimizerResult.Failed($"Solver returned status: {status}");
 
-        var selected = Enumerable.Range(0, players.Count)
-            .Where(i => solver.BooleanValue(x[i]))
-            .Select(i => players[i])
-            .ToList();
-
+        // ── Build result — slot type from variable values ─────────────────
         var lineup = new List<OptimizedSlot>();
-        var rbFilled = 0;
-        var wrFilled = 0;
-        var teFilled = 0;
 
-        foreach (var p in selected.OrderByDescending(p => GetEffectiveScore(p, input.Mode, input.RiskProfile)))
+        for (var i = 0; i < n; i++)
         {
+            if (!solver.BooleanValue(x[i])) continue;
+
             string slotType;
 
-            if (p.Position == "QB")
-            {
+            if (solver.BooleanValue(qbVar[i]))
                 slotType = "QB";
-            }
-            else if (p.Position == "RB" && rbFilled < config.RbSlots)
-            {
+            else if (solver.BooleanValue(rbVar[i]))
                 slotType = "RB";
-                rbFilled++;
-            }
-            else if (p.Position == "WR" && wrFilled < config.WrSlots)
-            {
+            else if (solver.BooleanValue(wrVar[i]))
                 slotType = "WR";
-                wrFilled++;
-            }
-            else if (p.Position == "TE" && teFilled < config.TeSlots)
-            {
+            else if (solver.BooleanValue(teVar[i]))
                 slotType = "TE";
-                teFilled++;
-            }
             else
             {
-                slotType = "FLEX";
+                // Determine which flex slot this player filled
+                // and label it appropriately
+                var filledSlot = -1;
+                for (var s = 0; s < flexCount; s++)
+                {
+                    if (!solver.BooleanValue(flexVar[s][i])) continue;
+                    filledSlot = s;
+                    break;
+                }
+
+                // SUPERFLEX slot = flex slot whose eligible positions include QB
+                slotType = filledSlot >= 0 &&
+                           config.FlexSlotDefinitions[filledSlot].IsEligible("QB")
+                    ? "SUPERFLEX"
+                    : "FLEX";
             }
 
             lineup.Add(new OptimizedSlot
             {
-                PlayerId = p.PlayerId,
-                PlayerName = p.PlayerName,
-                Position = p.Position,
+                PlayerId = players[i].PlayerId,
+                PlayerName = players[i].PlayerName,
+                Position = players[i].Position,
                 SlotType = slotType,
-                ProjectedPoints = GetEffectiveScore(p, input.Mode, input.RiskProfile),
+                ProjectedPoints = GetEffectiveScore(players[i], input.Mode, input.RiskProfile),
                 RiskScore = input.RiskProfile.HasValue
-                    ? GetRiskScore(p, input.RiskProfile.Value)
+                    ? GetRiskScore(players[i], input.RiskProfile.Value)
                     : null
             });
         }
+
+        // Sort for display: QB → RB → WR → TE → FLEX → SUPERFLEX
+        lineup = lineup
+            .OrderBy(s => SlotOrder(s.SlotType))
+            .ThenByDescending(s => s.ProjectedPoints)
+            .ToList();
 
         return new LineupOptimizerResult
         {
@@ -120,10 +194,17 @@ public static class LineupOptimizerService
         };
     }
 
-    /// <summary>
-    /// Dispatches to risk scoring when a RiskProfile is set, otherwise falls back
-    /// to the legacy OptimizationMode score. RiskProfile always wins when present.
-    /// </summary>
+    private static int SlotOrder(string slotType) => slotType switch
+    {
+        "QB" => 0,
+        "RB" => 1,
+        "WR" => 2,
+        "TE" => 3,
+        "FLEX" => 4,
+        "SUPERFLEX" => 5,
+        _ => 6
+    };
+
     private static decimal GetEffectiveScore(
         PlayerSlot player,
         OptimizationMode mode,
@@ -132,7 +213,6 @@ public static class LineupOptimizerService
             ? GetRiskScore(player, riskProfile.Value)
             : GetModeScore(player, mode);
 
-    /// <summary>Legacy OptimizationMode scoring — unchanged from PBI-027.</summary>
     private static decimal GetModeScore(PlayerSlot player, OptimizationMode mode) =>
         mode switch
         {
@@ -141,21 +221,6 @@ public static class LineupOptimizerService
             _ => player.ProjectedMedian
         };
 
-    /// <summary>
-    /// Risk-adjusted scoring.
-    ///
-    /// Safe:        Floor  − (BustProbability × 10)
-    ///              Rewards consistent, high-floor players. Penalises bust risk.
-    ///
-    /// Ceiling:     Ceiling + (BoomProbability × 10)
-    ///              Rewards explosive upside. Accepts bust risk.
-    ///
-    /// Contrarian:  Ceiling + (BoomProbability × 8) − (OwnershipPct × 0.5)
-    ///              Seeks high-upside, low-ownership differentials.
-    ///
-    /// BoomProbability and BustProbability are 0-1 fractions from Monte Carlo output.
-    /// Multipliers (×10, ×8) are tunable — they express ~1 fantasy point per 10% probability.
-    /// </summary>
     private static decimal GetRiskScore(PlayerSlot player, RiskProfile profile) =>
         profile switch
         {
