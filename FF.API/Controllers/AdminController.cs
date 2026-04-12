@@ -1,5 +1,7 @@
 ﻿// FF.API/Controllers/AdminController.cs
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Repositories;
+using FF.Application.Interfaces.Services;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -14,7 +16,8 @@ namespace FF.API.Controllers;
 [Authorize(Roles = "Admin")]
 public class AdminController(
     UserManager<ApplicationUser> userManager,
-    IAppSettingsRepository appSettingsRepo) : ControllerBase
+    IAppSettingsRepository appSettingsRepo,
+    ILogger<AdminController> logger) : ControllerBase
 {
     // ── existing user endpoints unchanged ───────────────────────────────
 
@@ -122,6 +125,39 @@ public class AdminController(
         return Ok("Simulation override cleared.");
     }
 
+    // ── Job triggers ─────────────────────────────────────────────────────────
 
+    [HttpPost("jobs/run-career-sims")]
+    public async Task<IActionResult> RunCareerSims(
+        [FromBody] RunJobRequest request,
+        [FromServices] ICareerSimulationService careerSimService,
+        [FromServices] ICareerSimulationRepository careerSimRepository,
+        CancellationToken ct)
+    {
+        logger.LogInformation("Admin triggered career sims — season {Season}", request.Season);
+        var results = await careerSimService.SimulateAllPlayersAsync(request.Season, ct);
+
+        foreach (var sim in results)
+            await careerSimRepository.UpsertAsync(sim, ct);
+
+        return Ok(new { Message = $"Career sims complete.", Count = results.Count });
+    }
+
+    [HttpPost("jobs/run-dfv")]
+    public async Task<IActionResult> RunDfv(
+        [FromBody] RunJobRequest request,
+        [FromServices] IDfvCalculationService dfvService,
+        [FromServices] IDynastyValuationRepository valuationRepository,
+        CancellationToken ct)
+    {
+        logger.LogInformation("Admin triggered DFV calculation — season {Season}", request.Season);
+        var results = await dfvService.CalculateAllAsync(request.Season, ct);
+
+        await valuationRepository.UpsertBatchAsync(results, ct);
+
+        return Ok(new { Message = "DFV calculation complete.", Count = results.Count });
+    }
+
+    public record RunJobRequest(int Season);
     public record NflContextOverrideRequest(int? Season, int? Week);
 }

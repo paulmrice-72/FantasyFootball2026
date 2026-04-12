@@ -88,12 +88,13 @@
             Dynasty Score Breakdown
         </MudText>
 
-        @ScoreRow("Dynasty Score", Player.DynastyScore, "Composite — draft capital 35%, positional 25%, valuation 30%, FP rank 10%")
-        @ScoreRow("Draft Capital", Player.DraftCapitalScore, "Log-scaled pick slot — earlier picks score higher")
-        @ScoreRow("Positional Value", Player.PositionalScore, "QB 85 · WR 90 · TE 75 · RB 55 — dynasty scarcity weighting")
-        @ScoreRow("Valuation Blend", Player.ValuationBlendScore, "Blend of Career Value, Trade Value, and Discounted Future Value")
-        @ScoreRow("FP Score", Player.FantasyProsScore, "FantasyPros dynasty rookie rank — rank 1 = 100, rank 100+ = 0")
-
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 32px;">
+            @ScoreRow("Dynasty Score", Player.DynastyScore, "Composite — draft capital 35%, positional 25%, valuation 30%, FP rank 10%")
+            @ScoreRow("Draft Capital", Player.DraftCapitalScore, "Log-scaled pick slot — earlier picks score higher")
+            @ScoreRow("Positional Value", Player.PositionalScore, "QB 85 · WR 90 · TE 75 · RB 55 — dynasty scarcity weighting")
+            @ScoreRow("Valuation Blend", Player.ValuationBlendScore, "Blend of Career Value, Trade Value, and Discounted Future Value")
+            @ScoreRow("FP Score", Player.FantasyProsScore, "FantasyPros dynasty rookie rank — rank 1 = 100, rank 100+ = 0")
+        </div>
         <MudDivider Class="my-4" />
 
         @* ── AI Scout Report ─────────────────────────────────────────────── *@
@@ -189,13 +190,13 @@
     private RenderFragment ScoreRow(string label, double value, string tooltip) => __builder =>
     {
         <MudTooltip Text="@tooltip" Placement="Placement.Left">
-            <div class="d-flex align-center gap-2 mb-2">
-                <MudText Typo="Typo.body2" Style="min-width:130px;">@label</MudText>
+            <div class="d-flex align-center gap-2 mb-1">
+                <MudText Typo="Typo.body2" Style="min-width:110px; font-size:.8rem;">@label</MudText>
                 <MudProgressLinear Value="@value" Max="100"
                                    Color="@GetScoreColor(value)"
-                                   Style="flex:1;height:6px;border-radius:3px;" />
+                                   Style="flex:1;height:5px;border-radius:3px;" />
                 <MudText Typo="Typo.body2"
-                         Style="font-weight:600;min-width:36px;text-align:right;">
+                         Style="font-weight:600;min-width:36px;text-align:right;font-size:.8rem;">
                     @value.ToString("F1")
                 </MudText>
             </div>
