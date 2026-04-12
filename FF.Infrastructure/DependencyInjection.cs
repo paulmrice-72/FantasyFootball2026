@@ -164,6 +164,7 @@ public static class DependencyInjection
         services.AddScoped<IWriterPersonaRepository, WriterPersonaRepository>();
         services.AddScoped<IAppSettingsRepository, AppSettingsRepository>();
         services.AddScoped<INflContextService, NflContextService>();
+        services.AddScoped<IUserLeaguePreferenceRepository, UserLeaguePreferenceRepository>();
         services.AddSleeperApiClient();
 
         // Identity

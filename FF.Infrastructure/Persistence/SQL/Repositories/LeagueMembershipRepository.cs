@@ -14,13 +14,17 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
     {
         return await dbContext.LeagueMemberships
             .Where(m => m.UserId == userId && m.IsActive)
-            .Select(m => new LeagueContext(
-                m.LeagueId,
-                m.LeagueName,
-                m.Season,
-                m.Role,
-                m.IsActive,
-                m.LeagueType))              // ← add
+            .Join(
+                dbContext.Leagues.Where(l => l.IsActive),
+                m => m.LeagueId,
+                l => l.SleeperLeagueId,
+                (m, l) => new LeagueContext(
+                    m.LeagueId,
+                    m.LeagueName,
+                    m.Season,
+                    m.Role,
+                    m.IsActive,
+                    m.LeagueType))
             .ToListAsync(cancellationToken);
     }
 

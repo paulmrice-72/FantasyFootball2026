@@ -1,7 +1,10 @@
 ﻿using FF.Application.Identity.Interfaces;
 using FF.Application.Identity.Queries.GetUserContext;
+using FF.Application.Interfaces.Persistence;
+using FF.Domain.Entities;
 using FF.Domain.ValueObjects;
 using FluentAssertions;
+using Moq;
 using NSubstitute;
 
 namespace FF.Tests.Identity;
@@ -16,7 +19,22 @@ public class GetUserContextQueryHandlerTests
     {
         _userRepository = Substitute.For<IUserRepository>();
         _leagueMembershipRepository = Substitute.For<ILeagueMembershipRepository>();
-        _handler = new GetUserContextQueryHandler(_userRepository, _leagueMembershipRepository);
+
+        var leagueRepository = Substitute.For<ILeagueRepository>();
+        leagueRepository
+            .GetAllLeaguesAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<League>());
+
+        var preferenceRepository = Substitute.For<IUserLeaguePreferenceRepository>();
+        preferenceRepository
+            .GetByUserIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new List<UserLeaguePreference>());
+
+        _handler = new GetUserContextQueryHandler(
+            _userRepository,
+            _leagueMembershipRepository,
+            leagueRepository,
+            preferenceRepository);
     }
 
     [Fact]
