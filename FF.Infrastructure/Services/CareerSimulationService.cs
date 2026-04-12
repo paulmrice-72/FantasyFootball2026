@@ -254,25 +254,17 @@ public class CareerSimulationService(
     };
 
     private static double GetBaselineFppgWithContext(
-    string position, double simulationBaseline,
-    FF.Domain.Entities.Player player)
+        string position, double simulationBaseline,
+        FF.Domain.Entities.Player player)
     {
-        // If we got a real simulation result, use it
+        // Real simulation result exists — use it
         if (simulationBaseline > 0) return simulationBaseline;
 
-        var posAvg = GetPositionAverageFppg(position);
-
-        // QB with no simulation result and significant experience
-        // = almost certainly a backup/practice squad — heavily discount
-        if (position == "QB" && (player.YearsExperience ?? 0) > 1)
-            return posAvg * 0.25;   // backup QB floor
-
-        // FA skill players (RB/WR/TE) with no simulation result
-        // = unsigned players with lower probability of meaningful production
-        if (position != "QB" && string.IsNullOrEmpty(player.NflTeam))
-            return posAvg * 0.50;   // 50% of position average for unsigned skill players
-
-        return posAvg;
+        // No real data — return a near-zero baseline so this player
+        // gets rawDfv ≈ 0 and is excluded from position normalization.
+        // This prevents fringe/unsigned players from inflating dynasty rankings
+        // when career sim data is stale or missing.
+        return 0.1;
     }
 
     private static double GetFallbackMultiplier(string position, int age)
