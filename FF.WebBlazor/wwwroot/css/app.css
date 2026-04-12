@@ -53,16 +53,37 @@
     transition: background 0.15s ease;
 }
 
-    .fc-navmenu .mud-nav-link:hover {
-        background: rgba(0, 200, 240, 0.08) !important;
-    }
+.fc-navmenu .mud-nav-link:hover {
+    background: rgba(0, 200, 240, 0.08) !important;
+}
 
-    .fc-navmenu .mud-nav-link.active {
-        background: rgba(0, 200, 240, 0.15) !important;
-        color: var(--fc-cyan) !important;
-        font-weight: 600;
-    }
+.fc-navmenu .mud-nav-link.active {
+    background: rgba(0, 200, 240, 0.15) !important;
+    color: var(--fc-cyan) !important;
+    font-weight: 600;
+}
 
+/* Section labels in nav drawer */
+.fc-nav-section-label {
+    color: var(--fc-cyan);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    padding: 16px 16px 4px 20px;
+    display: block;
+    text-transform: uppercase;
+    opacity: 0.7;
+    border-left: 2px solid var(--fc-cyan);
+    margin: 4px 8px 0 8px;
+}
+
+/* Light mode — override page background for content area */
+.mud-theme-light .fc-main-content {
+    background-color: #F0F4F8;
+}
+
+/* Light mode — cards/surfaces pick up MudBlazor's Surface colour automatically */
+/* No extra CSS needed — MudBlazor handles it via the palette */
 /* ── Main Content ──────────────────────────────────────── */
 .fc-main-content {
     background-color: var(--fc-navy);
