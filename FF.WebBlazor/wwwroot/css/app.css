@@ -735,3 +735,25 @@ td.numeric,
     border-top: 1px solid var(--fc-border);
     background: rgba(0,200,240,0.03);
 }
+
+/* ── Playoff Projection Chips ───────────────────────────────── */
+.fc-chip-playoff-in {
+    background: rgba(0,200,240,0.15) !important;
+    color: #00C8F0 !important;
+    font-weight: 700 !important;
+    font-size: 0.65rem !important;
+}
+
+.fc-chip-playoff-bubble {
+    background: rgba(245,158,11,0.15) !important;
+    color: #F59E0B !important;
+    font-weight: 700 !important;
+    font-size: 0.65rem !important;
+}
+
+.fc-chip-playoff-out {
+    background: rgba(248,113,113,0.1) !important;
+    color: #F87171 !important;
+    font-weight: 700 !important;
+    font-size: 0.65rem !important;
+}
