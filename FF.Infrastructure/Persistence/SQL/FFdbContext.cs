@@ -15,6 +15,7 @@ public class FFDbContext(DbContextOptions<FFDbContext> options) : IdentityDbCont
     public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
     public DbSet<LeaguePrivacyRule> LeaguePrivacyRules => Set<LeaguePrivacyRule>();
     public DbSet<UserProjectionWeightProfile> UserProjectionWeightProfiles => Set<UserProjectionWeightProfile>();
+    public DbSet<UserLeaguePreference> UserLeaguePreferences => Set<UserLeaguePreference>();
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder); // Critical — must call base for Identity tables

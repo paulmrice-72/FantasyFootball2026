@@ -1,10 +1,11 @@
-using FF.Application.Leagues.Commands.SyncUserLeagues;
 using FF.Application.Leagues.Commands.ImportLeague;
+using FF.Application.Leagues.Commands.SetLeagueVisibility;
+using FF.Application.Leagues.Commands.SyncUserLeagues;
 using FF.Application.Leagues.Queries.GetAllLeagues;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 
 namespace FF.API.Controllers;
 
@@ -41,15 +42,13 @@ public class LeaguesController(IMediator mediator) : ControllerBase
         return Ok(result.Value);
     }
 
-    /// <summary>
-    /// Returns all leagues currently imported into the local database.
-    /// </summary>
     [HttpGet]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [Authorize]
     public async Task<IActionResult> GetLeagues(CancellationToken cancellationToken)
     {
-        var result = await _mediator.Send(new GetAllLeaguesQuery(), cancellationToken);
-        return Ok(result);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var result = await _mediator.Send(new GetAllLeaguesQuery(userId), cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
     /// <summary>
@@ -71,4 +70,22 @@ public class LeaguesController(IMediator mediator) : ControllerBase
 
         return Ok(result.Value);
     }
+
+    /// <summary>Sets league visibility preference for the authenticated user.</summary>
+    [HttpPost("{leagueId:guid}/visibility")]
+    [Authorize]
+    public async Task<IActionResult> SetVisibility(
+        Guid leagueId,
+        [FromBody] SetLeagueVisibilityRequest request,
+        CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null) return Unauthorized();
+
+        var result = await _mediator.Send(
+            new SetLeagueVisibilityCommand(userId, leagueId, request.IsHidden), ct);
+        return result.IsSuccess ? Ok() : BadRequest(result.Error);
+    }
+
+    public record SetLeagueVisibilityRequest(bool IsHidden);
 }

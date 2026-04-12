@@ -58,4 +58,10 @@ public class League : Entity
         PickYearsOut = tradePickLimit > 0 ? tradePickLimit : 0;
         SetUpdated();
     }
+
+    public void SetActiveStatus(bool isActive)
+    {
+        IsActive = isActive;
+        SetUpdated();
+    }
 }

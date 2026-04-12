@@ -162,6 +162,9 @@ public static class DependencyInjection
         });
         services.AddScoped<ISleeperMatchupService, SleeperMatchupService>();
         services.AddScoped<IWriterPersonaRepository, WriterPersonaRepository>();
+        services.AddScoped<IAppSettingsRepository, AppSettingsRepository>();
+        services.AddScoped<INflContextService, NflContextService>();
+        services.AddScoped<IUserLeaguePreferenceRepository, UserLeaguePreferenceRepository>();
         services.AddSleeperApiClient();
 
         // Identity
@@ -416,6 +419,17 @@ public static class DependencyInjection
                     cm.MapIdMember(c => c.Id)
                       .SetIdGenerator(StringObjectIdGenerator.Instance)
                       .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(AppSettingsDocument)))
+            {
+                BsonClassMap.RegisterClassMap<AppSettingsDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetSerializer(new StringSerializer(BsonType.String));
                 });
             }
 
