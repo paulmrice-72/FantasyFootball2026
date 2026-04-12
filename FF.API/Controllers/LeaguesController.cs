@@ -1,3 +1,4 @@
+using FF.Application.Features.Leagues.Queries.GetLeagueRosterGrades;
 using FF.Application.Features.Leagues.Queries.GetLeagueStandings;
 using FF.Application.Leagues.Commands.ImportLeague;
 using FF.Application.Leagues.Commands.SetLeagueVisibility;
@@ -106,6 +107,18 @@ public class LeaguesController(IMediator mediator) : ControllerBase
         return result is null
             ? NotFound("No roster data found for this league.")
             : Ok(result);
+    }
+
+    [HttpGet("{sleeperLeagueId}/roster-grades")]
+    public async Task<IActionResult> GetRosterGrades(
+    string sleeperLeagueId,
+    [FromQuery] int season,
+    CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetLeagueRosterGradesQuery(sleeperLeagueId, season), ct);
+
+        return result is null ? NotFound() : Ok(result);
     }
     public record SetLeagueVisibilityRequest(bool IsHidden);
 }

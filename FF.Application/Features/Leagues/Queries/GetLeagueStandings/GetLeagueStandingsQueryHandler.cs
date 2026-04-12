@@ -83,11 +83,16 @@ public class GetLeagueStandingsQueryHandler(
             .Select((t, index) =>
             {
                 var rank = index + 1;
-                var playoffProjection = rank <= playoffCutoff - 1
-                    ? "In"
-                    : rank == playoffCutoff || rank == playoffCutoff + 1
-                        ? "Bubble"
-                        : "Out";
+
+                // NEW
+                var isFinalized = request.Week >= 15 || request.Season < DateTime.UtcNow.Year;
+                var playoffProjection = isFinalized
+                    ? (rank <= playoffCutoff ? "Clinched" : "Eliminated")
+                    : rank <= playoffCutoff - 1
+                        ? "In"
+                        : rank == playoffCutoff || rank == playoffCutoff + 1
+                            ? "Bubble"
+                            : "Out";
 
                 return new TeamStandingDto(
                     SleeperRosterId: t.Roster.SleeperRosterId,
