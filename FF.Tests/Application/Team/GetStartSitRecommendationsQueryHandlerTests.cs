@@ -4,6 +4,7 @@ using FF.Application.Interfaces.Persistence;
 using FF.Domain.Documents;
 using FF.Domain.Entities;
 using FF.Domain.Enums;
+using FF.Domain.ValueObjects;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -67,7 +68,8 @@ public class GetStartSitRecommendationsQueryHandlerTests
         RosterPlayerDocument? rosterDoc,
         IEnumerable<SimulationResultDocument> sims,
         IEnumerable<Player> players,
-        IEnumerable<InjuryAlertDocument>? injuries = null)
+        IEnumerable<InjuryAlertDocument>? injuries = null,
+        RosterConfiguration? rosterConfig = null)
     {
         var rosterRepo = Substitute.For<IRosterPlayerRepository>();
         rosterRepo.GetBySleeperUserIdAsync(
@@ -89,8 +91,39 @@ public class GetStartSitRecommendationsQueryHandlerTests
             .Returns((injuries ?? []).ToList().AsReadOnly()
                 as IReadOnlyList<InjuryAlertDocument>);
 
+        // League repo — returns a league whose RosterConfiguration matches
+        // the supplied config (or Standard if none supplied)
+        var leagueRepo = Substitute.For<ILeagueRepository>();
+        var config = rosterConfig ?? RosterConfiguration.Standard;
+
+        // Build a league with the right RosterPositions string
+        // so GetRosterConfiguration() returns the expected config
+        League? leagueOrNull = null;
+        if (rosterConfig is not null)
+        {
+            // Build positions string from config for the mock league
+            var positions = new List<string>();
+            for (var i = 0; i < config.QbSlots; i++) positions.Add("QB");
+            for (var i = 0; i < config.RbSlots; i++) positions.Add("RB");
+            for (var i = 0; i < config.WrSlots; i++) positions.Add("WR");
+            for (var i = 0; i < config.TeSlots; i++) positions.Add("TE");
+            foreach (var flex in config.FlexSlotDefinitions)
+            {
+                // SUPERFLEX if QB eligible, FLEX otherwise
+                positions.Add(flex.IsEligible("QB") ? "SUPER_FLEX" : "FLEX");
+            }
+            for (var i = 0; i < config.BenchSlots; i++) positions.Add("BN");
+
+            leagueOrNull = League.Create("Test League", LeagueId, Season, 12);
+            leagueOrNull.UpdateRosterPositions(positions);
+        }
+
+        leagueRepo.GetBySleeperIdAsync(
+                Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(leagueOrNull);
+
         return new GetStartSitRecommendationsQueryHandler(
-            rosterRepo, playerRepo, simRepo, injuryRepo,
+            rosterRepo, playerRepo, simRepo, injuryRepo, leagueRepo,
             NullLogger<GetStartSitRecommendationsQueryHandler>.Instance);
     }
 
@@ -110,9 +143,9 @@ public class GetStartSitRecommendationsQueryHandlerTests
     [Fact]
     public async Task Returns_empty_decisions_when_no_position_battles()
     {
-        // Exactly 1 QB, 2 RB, 3 WR, 1 TE — no competition at any position
+        // Exactly 1 QB, 2 RB, 2 WR, 1 TE — no competition at any position
         var playerIds = new List<string>
-            { "QB1", "RB1", "RB2", "WR1", "WR2", "WR3", "TE1" };
+            { "QB1", "RB1", "RB2", "WR1", "WR2", "TE1" };
 
         var rosterDoc = MakeRosterDoc(playerIds, playerIds);
         var players = playerIds.Select(id => MakePlayer(id,
@@ -134,7 +167,6 @@ public class GetStartSitRecommendationsQueryHandlerTests
     [Fact]
     public async Task Higher_median_player_gets_start_verdict()
     {
-        // 3 RBs competing for 2 RB slots — RB1 and RB2 clearly ahead of RB3
         var playerIds = new List<string>
             { "QB1", "RB1", "RB2", "RB3", "WR1", "WR2", "WR3", "TE1" };
 
@@ -146,13 +178,13 @@ public class GetStartSitRecommendationsQueryHandlerTests
         var sims = new List<SimulationResultDocument>
         {
             MakeSim("QB1", "QB", 22, 14, 34),
-            MakeSim("RB1", "RB", 22, 16, 32, boom: 0.35m, bust: 0.08m),  // clear starter
-            MakeSim("RB2", "RB", 16, 11, 24, boom: 0.25m, bust: 0.12m),  // starter
-            MakeSim("RB3", "RB",  8,  4, 14, boom: 0.10m, bust: 0.30m),  // clear bench
+            MakeSim("RB1", "RB", 22, 16, 32, boom: 0.35m, bust: 0.08m),
+            MakeSim("RB2", "RB", 16, 11, 24, boom: 0.25m, bust: 0.12m),
+            MakeSim("RB3", "RB",  8,  4, 14, boom: 0.10m, bust: 0.30m),
             MakeSim("WR1", "WR", 18, 12, 28),
-            MakeSim("WR2", "WR", 14, 9,  22),
-            MakeSim("WR3", "WR", 10, 6,  16),
-            MakeSim("TE1", "TE", 12, 7,  20),
+            MakeSim("WR2", "WR", 14,  9, 22),
+            MakeSim("WR3", "WR", 10,  6, 16),
+            MakeSim("TE1", "TE", 12,  7, 20),
         };
 
         var handler = BuildHandler(rosterDoc, sims, players);
@@ -161,12 +193,9 @@ public class GetStartSitRecommendationsQueryHandlerTests
             CancellationToken.None);
 
         result.Should().NotBeNull();
-
-        // Should have an RB decision
         var rbDecision = result!.Decisions.FirstOrDefault(d => d.Position == "RB");
         rbDecision.Should().NotBeNull();
 
-        // Top option should be a Start or LeanStart
         var topOption = rbDecision!.Options.First();
         topOption.Verdict.Should().BeOneOf(
             StartSitVerdict.Start, StartSitVerdict.LeanStart);
@@ -188,7 +217,7 @@ public class GetStartSitRecommendationsQueryHandlerTests
             MakeSim("QB1", "QB", 22, 14, 34),
             MakeSim("RB1", "RB", 22, 16, 32),
             MakeSim("RB2", "RB", 16, 11, 24),
-            MakeSim("RB3", "RB",  6,  3, 10),  // clear bench
+            MakeSim("RB3", "RB",  6,  3, 10),
             MakeSim("WR1", "WR", 18, 12, 28),
             MakeSim("WR2", "WR", 14,  9, 22),
             MakeSim("WR3", "WR", 10,  6, 16),
@@ -204,7 +233,6 @@ public class GetStartSitRecommendationsQueryHandlerTests
         var rbDecision = result!.Decisions.FirstOrDefault(d => d.Position == "RB");
         rbDecision.Should().NotBeNull();
 
-        // Last option should be Sit or LeanSit
         var lastOption = rbDecision!.Options.Last();
         lastOption.Verdict.Should().BeOneOf(
             StartSitVerdict.Sit, StartSitVerdict.LeanSit);
@@ -220,14 +248,14 @@ public class GetStartSitRecommendationsQueryHandlerTests
         var players = playerIds.Select(id => MakePlayer(id,
             id.StartsWith("QB") ? "QB" : id.StartsWith("RB") ? "RB" :
             id.StartsWith("WR") ? "WR" : "TE")).ToList();
-
         var sims = playerIds.Select(id => MakeSim(id,
             id.StartsWith("QB") ? "QB" : id.StartsWith("RB") ? "RB" :
             id.StartsWith("WR") ? "WR" : "TE", 14, 8, 22)).ToList();
 
         var injuries = new List<InjuryAlertDocument>
         {
-            new() { SleeperPlayerId = "RB1", Designation = "Q", PlayerName = "Player RB1" }
+            new() { SleeperPlayerId = "RB1", Designation = "Q",
+                    PlayerName = "Player RB1" }
         };
 
         var handler = BuildHandler(rosterDoc, sims, players, injuries);
@@ -236,7 +264,6 @@ public class GetStartSitRecommendationsQueryHandlerTests
             CancellationToken.None);
 
         result.Should().NotBeNull();
-
         var allOptions = result!.Decisions.SelectMany(d => d.Options).ToList();
         var rb1Option = allOptions.FirstOrDefault(o => o.SleeperPlayerId == "RB1");
 
@@ -247,7 +274,6 @@ public class GetStartSitRecommendationsQueryHandlerTests
     [Fact]
     public async Task IR_players_are_excluded_from_decisions()
     {
-        // RB1 is on IR — should not appear in any decision
         var playerIds = new List<string>
             { "QB1", "RB1", "RB2", "RB3", "WR1", "WR2", "WR3", "TE1" };
 
@@ -255,14 +281,14 @@ public class GetStartSitRecommendationsQueryHandlerTests
         var players = playerIds.Select(id => MakePlayer(id,
             id.StartsWith("QB") ? "QB" : id.StartsWith("RB") ? "RB" :
             id.StartsWith("WR") ? "WR" : "TE")).ToList();
-
         var sims = playerIds.Select(id => MakeSim(id,
             id.StartsWith("QB") ? "QB" : id.StartsWith("RB") ? "RB" :
             id.StartsWith("WR") ? "WR" : "TE", 14, 8, 22)).ToList();
 
         var injuries = new List<InjuryAlertDocument>
         {
-            new() { SleeperPlayerId = "RB1", Designation = "IR", PlayerName = "Player RB1" }
+            new() { SleeperPlayerId = "RB1", Designation = "IR",
+                    PlayerName = "Player RB1" }
         };
 
         var handler = BuildHandler(rosterDoc, sims, players, injuries);
@@ -271,7 +297,6 @@ public class GetStartSitRecommendationsQueryHandlerTests
             CancellationToken.None);
 
         result.Should().NotBeNull();
-
         var allOptions = result!.Decisions.SelectMany(d => d.Options).ToList();
         allOptions.Should().NotContain(o => o.SleeperPlayerId == "RB1");
     }
@@ -279,7 +304,6 @@ public class GetStartSitRecommendationsQueryHandlerTests
     [Fact]
     public async Task Flex_decision_is_generated_when_bubble_players_exist()
     {
-        // Extra RB and WR create a FLEX battle
         var playerIds = new List<string>
             { "QB1", "RB1", "RB2", "RB3", "WR1", "WR2", "WR3", "WR4", "TE1" };
 
@@ -293,11 +317,11 @@ public class GetStartSitRecommendationsQueryHandlerTests
             MakeSim("QB1", "QB", 22, 14, 34),
             MakeSim("RB1", "RB", 22, 16, 32),
             MakeSim("RB2", "RB", 16, 11, 24),
-            MakeSim("RB3", "RB", 12,  7, 18),  // flex bubble RB
+            MakeSim("RB3", "RB", 12,  7, 18),
             MakeSim("WR1", "WR", 18, 12, 28),
             MakeSim("WR2", "WR", 14,  9, 22),
-            MakeSim("WR3", "WR", 10,  6, 16),  // last WR starter
-            MakeSim("WR4", "WR",  9,  5, 14),  // WR bench / flex battle
+            MakeSim("WR3", "WR", 10,  6, 16),
+            MakeSim("WR4", "WR",  9,  5, 14),
             MakeSim("TE1", "TE", 12,  7, 20),
         };
 
@@ -311,6 +335,40 @@ public class GetStartSitRecommendationsQueryHandlerTests
     }
 
     [Fact]
+    public async Task Superflex_decision_labels_slot_as_SUPERFLEX()
+    {
+        // Superflex league — extra QB creates SUPERFLEX battle
+        var playerIds = new List<string>
+            { "QB1", "QB2", "RB1", "RB2", "WR1", "WR2", "TE1" };
+
+        var rosterDoc = MakeRosterDoc(playerIds);
+        var players = playerIds.Select(id => MakePlayer(id,
+            id.StartsWith("QB") ? "QB" : id.StartsWith("RB") ? "RB" :
+            id.StartsWith("WR") ? "WR" : "TE")).ToList();
+
+        var sims = new List<SimulationResultDocument>
+        {
+            MakeSim("QB1", "QB", 32, 22, 48),
+            MakeSim("QB2", "QB", 26, 18, 40),
+            MakeSim("RB1", "RB", 20, 14, 30),
+            MakeSim("RB2", "RB", 15, 10, 24),
+            MakeSim("WR1", "WR", 18, 12, 28),
+            MakeSim("WR2", "WR", 14,  9, 22),
+            MakeSim("TE1", "TE", 12,  7, 20),
+        };
+
+        var handler = BuildHandler(rosterDoc, sims, players,
+            rosterConfig: RosterConfiguration.Superflex);
+        var result = await handler.Handle(
+            new GetStartSitRecommendationsQuery(SleeperUserId, LeagueId, Season, Week),
+            CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result!.Decisions.Should().Contain(d =>
+            d.Position == "SUPERFLEX" || d.Position == "FLEX");
+    }
+
+    [Fact]
     public async Task Each_option_has_non_empty_rationale()
     {
         var playerIds = new List<string>
@@ -320,7 +378,6 @@ public class GetStartSitRecommendationsQueryHandlerTests
         var players = playerIds.Select(id => MakePlayer(id,
             id.StartsWith("QB") ? "QB" : id.StartsWith("RB") ? "RB" :
             id.StartsWith("WR") ? "WR" : "TE")).ToList();
-
         var sims = playerIds.Select(id => MakeSim(id,
             id.StartsWith("QB") ? "QB" : id.StartsWith("RB") ? "RB" :
             id.StartsWith("WR") ? "WR" : "TE", 14, 8, 22)).ToList();
@@ -332,6 +389,7 @@ public class GetStartSitRecommendationsQueryHandlerTests
 
         result.Should().NotBeNull();
         var allOptions = result!.Decisions.SelectMany(d => d.Options);
-        allOptions.Should().OnlyContain(o => !string.IsNullOrWhiteSpace(o.Rationale));
+        allOptions.Should().OnlyContain(
+            o => !string.IsNullOrWhiteSpace(o.Rationale));
     }
 }
