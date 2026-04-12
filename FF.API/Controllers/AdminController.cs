@@ -3,6 +3,7 @@ using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Infrastructure.Identity;
+using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -158,6 +159,16 @@ public class AdminController(
         return Ok(new { Message = "DFV calculation complete.", Count = results.Count });
     }
 
+    [HttpPost("jobs/run-stats-sync")]
+    public async Task<IActionResult> RunStatsSync(
+    [FromBody] RunJobRequest request,
+    [FromServices] HistoricalStatsSyncJob statsSyncJob,
+    CancellationToken ct)
+    {
+        logger.LogInformation("Admin triggered stats sync — season {Season}", request.Season);
+        await statsSyncJob.SyncCurrentSeasonAsync(request.Season);
+        return Ok(new { Message = $"Stats sync complete for season {request.Season}." });
+    }
     public record RunJobRequest(int Season);
     public record NflContextOverrideRequest(int? Season, int? Week);
 }
