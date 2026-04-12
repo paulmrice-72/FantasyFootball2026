@@ -1,5 +1,6 @@
 ﻿@page "/league/standings"
 @attribute [Authorize]
+@implements IDisposable
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
 @inject IHttpClientFactory HttpClientFactory
@@ -23,164 +24,229 @@
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
 }
-else if (_standings is null)
-{
-    <MudAlert Severity="Severity.Info">
-        No standings data found. Make sure your league is synced.
-    </MudAlert>
-}
 else
 {
-    @* ── PLAYOFF PICTURE STRIP ─────────────────────────────── *@
-    <MudGrid Spacing="3" Class="mb-6">
-        <MudItem xs="6" sm="3">
-            <MudPaper Class="fc-stat-card" Elevation="0">
-                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents"
-                         Class="fc-stat-card-icon" />
-                <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-cyan">
-                    @_standings.Teams.Count(t => t.PlayoffProjection == "In")
-                </MudText>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Projected In
-                </MudText>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="6" sm="3">
-            <MudPaper Class="fc-stat-card" Elevation="0">
-                <MudIcon Icon="@Icons.Material.Filled.SwapVert"
-                         Class="fc-stat-card-icon" />
-                <MudText Typo="Typo.h4" Class="fc-stat-card-value"
-                         Style="color:#F59E0B;">
-                    @_standings.Teams.Count(t => t.PlayoffProjection == "Bubble")
-                </MudText>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    On the Bubble
-                </MudText>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="6" sm="3">
-            <MudPaper Class="fc-stat-card" Elevation="0">
-                <MudIcon Icon="@Icons.Material.Filled.Cancel"
-                         Class="fc-stat-card-icon" />
-                <MudText Typo="Typo.h4" Class="fc-stat-card-value"
-                         Style="color:#F87171;">
-                    @_standings.Teams.Count(t => t.PlayoffProjection == "Out")
-                </MudText>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Projected Out
-                </MudText>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="6" sm="3">
-            <MudPaper Class="fc-stat-card" Elevation="0">
-                <MudIcon Icon="@Icons.Material.Filled.Analytics"
-                         Class="fc-stat-card-icon" />
-                <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-boom"
-                         Style="font-size:1rem; line-height:1.3;">
-                    @_topProjected
-                </MudText>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Top Projected Week
-                </MudText>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
+    <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="false"
+             Class="mb-4" ActivePanelIndexChanged="OnTabChanged">
 
-    @* ── STANDINGS TABLE ──────────────────────────────────────── *@
-    <MudPaper Class="fc-table-paper" Elevation="0">
-        <MudTable Items="@_standings.Teams"
-                  Class="fc-table"
-                  Hover="true"
-                  Dense="true"
-                  Elevation="0">
-            <HeaderContent>
-                <MudTh Style="width:40px;">#</MudTh>
-                <MudTh>Team</MudTh>
-                <MudTh Style="text-align:center;">W</MudTh>
-                <MudTh Style="text-align:center;">L</MudTh>
-                <MudTh Style="text-align:center; width:40px;">T</MudTh>
-                <MudTh Style="text-align:right;">Proj Pts</MudTh>
-                <MudTh Style="text-align:center;">Waiver</MudTh>
-                <MudTh Style="text-align:center;">Playoff</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>
-                    <MudText Typo="Typo.body2" Class="font-mono"
-                             Style="@RankStyle(context.Rank)">
-                        @context.Rank
-                    </MudText>
-                </MudTd>
-                <MudTd>
-                    <div>
-                        <MudText Typo="Typo.body2" Style="font-weight:600;">
-                            @context.TeamName
-                        </MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            @context.OwnerName
-                        </MudText>
-                    </div>
-                </MudTd>
-                <MudTd Style="text-align:center;">
-                    <MudText Typo="Typo.body2" Class="font-mono fc-cyan">
-                        @context.Wins
-                    </MudText>
-                </MudTd>
-                <MudTd Style="text-align:center;">
-                    <MudText Typo="Typo.body2" Class="font-mono">
-                        @context.Losses
-                    </MudText>
-                </MudTd>
-                <MudTd Style="text-align:center;">
-                    <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
-                        @context.Ties
-                    </MudText>
-                </MudTd>
-                <MudTd Style="text-align:right;">
-                    @if (context.ProjectedPointsThisWeek > 0)
-                    {
-                        <MudText Typo="Typo.body2" Class="font-mono fc-boom">
-                            @context.ProjectedPointsThisWeek.ToString("F1")
-                        </MudText>
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                            —
-                        </MudText>
-                    }
-                </MudTd>
-                <MudTd Style="text-align:center;">
-                    <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
-                        @(context.WaiverPosition > 0 ? $"#{context.WaiverPosition}" : "—")
-                    </MudText>
-                </MudTd>
-                <MudTd Style="text-align:center;">
-                    <MudChip T="string"
-                             Size="Size.Small"
-                             Class="@PlayoffChipClass(context.PlayoffProjection)">
-                        @context.PlayoffProjection
-                    </MudChip>
-                </MudTd>
-            </RowTemplate>
-            <NoRecordsContent>
-                <MudText Class="mud-text-secondary pa-4">No teams found.</MudText>
-            </NoRecordsContent>
-        </MudTable>
-    </MudPaper>
+        @* ── TAB 0: STANDINGS ──────────────────────────────── *@
+        <MudTabPanel Text="Standings" Icon="@Icons.Material.Filled.EmojiEvents">
+            @if (_standings is null)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-4">
+                    No standings data found. Make sure your league is synced.
+                </MudAlert>
+            }
+            else
+            {
+                @* Playoff picture strip *@
+                <MudGrid Spacing="3" Class="mb-6 mt-2">
+                    <MudItem xs="6" sm="3">
+                        <MudPaper Class="fc-stat-card" Elevation="0">
+                            <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Class="fc-stat-card-icon" />
+                            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-cyan">
+                                @_standings.Teams.Count(t => t.PlayoffProjection is "In" or "Clinched")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                @(_seasonFinalized ? "Clinched" : "Projected In")
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudPaper Class="fc-stat-card" Elevation="0">
+                            <MudIcon Icon="@Icons.Material.Filled.SwapVert" Class="fc-stat-card-icon" />
+                            <MudText Typo="Typo.h4" Class="fc-stat-card-value" Style="color:#F59E0B;">
+                                @_standings.Teams.Count(t => t.PlayoffProjection == "Bubble")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                @(_seasonFinalized ? "—" : "On the Bubble")
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudPaper Class="fc-stat-card" Elevation="0">
+                            <MudIcon Icon="@Icons.Material.Filled.Cancel" Class="fc-stat-card-icon" />
+                            <MudText Typo="Typo.h4" Class="fc-stat-card-value" Style="color:#F87171;">
+                                @_standings.Teams.Count(t => t.PlayoffProjection is "Out" or "Eliminated")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                @(_seasonFinalized ? "Eliminated" : "Projected Out")
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="6" sm="3">
+                        <MudPaper Class="fc-stat-card" Elevation="0">
+                            <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="fc-stat-card-icon" />
+                            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-boom"
+                                     Style="font-size:1rem; line-height:1.3;">
+                                @_topProjected
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Top Projected Week</MudText>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
 
-    @* ── PLAYOFF CUTOFF LINE LEGEND ───────────────────────────── *@
-    <div class="mt-3 d-flex align-center gap-3">
-        <div style="width:12px; height:12px; border-radius:2px;
-        background:rgba(0,200,240,0.3);"></div>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-            Projected playoff teams
-        </MudText>
-        <div style="width:12px; height:12px; border-radius:2px;
-        background:rgba(245,158,11,0.3); margin-left:12px;"></div>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-            Bubble teams
-        </MudText>
-    </div>
+                @* Standings table *@
+                <MudPaper Class="fc-table-paper" Elevation="0">
+                    <MudTable Items="@_standings.Teams" Class="fc-table"
+                              Hover="true" Dense="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh Style="width:40px;">#</MudTh>
+                            <MudTh>Team</MudTh>
+                            <MudTh Style="text-align:center;">W</MudTh>
+                            <MudTh Style="text-align:center;">L</MudTh>
+                            <MudTh Style="text-align:center; width:40px;">T</MudTh>
+                            <MudTh Style="text-align:right;">Proj Pts</MudTh>
+                            <MudTh Style="text-align:center;">Waiver</MudTh>
+                            <MudTh Style="text-align:center;">Playoff</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Class="font-mono"
+                                         Style="@RankStyle(context.Rank)">
+                                    @context.Rank
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <div>
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.TeamName</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerName</MudText>
+                                </div>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudText Typo="Typo.body2" Class="font-mono fc-cyan">@context.Wins</MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudText Typo="Typo.body2" Class="font-mono">@context.Losses</MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">@context.Ties</MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:right;">
+                                @if (context.ProjectedPointsThisWeek > 0)
+                                {
+                                    <MudText Typo="Typo.body2" Class="font-mono fc-boom">
+                                        @context.ProjectedPointsThisWeek.ToString("F1")
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                                    @(context.WaiverPosition > 0 ? $"#{context.WaiverPosition}" : "—")
+                                </MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudChip T="string" Size="Size.Small"
+                                         Class="@PlayoffChipClass(context.PlayoffProjection)">
+                                    @context.PlayoffProjection
+                                </MudChip>
+                            </MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText Class="mud-text-secondary pa-4">No teams found.</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
+                </MudPaper>
+
+                <div class="mt-3 d-flex align-center gap-3">
+                    <div style="width:12px;height:12px;border-radius:2px;background:rgba(0,200,240,0.3);"></div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @(_seasonFinalized ? "Clinched playoff spot" : "Projected playoff teams")
+                    </MudText>
+                    @if (!_seasonFinalized)
+                    {
+                        <div style="width:12px;height:12px;border-radius:2px;background:rgba(245,158,11,0.3);margin-left:12px;"></div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Bubble teams</MudText>
+                    }
+                </div>
+            }
+        </MudTabPanel>
+
+        @* ── TAB 1: ROSTER GRADES ───────────────────────────── *@
+        <MudTabPanel Text="Roster Grades" Icon="@Icons.Material.Filled.Grading">
+            @if (_gradesLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
+            }
+            else if (_grades is null)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-4">
+                    No grade data available. Make sure dynasty valuations have been generated.
+                </MudAlert>
+            }
+            else
+            {
+                <MudPaper Class="fc-table-paper mt-2" Elevation="0">
+                    <MudTable Items="@_grades.Teams" Class="fc-table"
+                              Hover="true" Dense="true" Elevation="0"
+                              T="TeamRosterGradeDto">
+                        <HeaderContent>
+                            <MudTh>Team</MudTh>
+                            <MudTh Style="text-align:center;">Depth</MudTh>
+                            <MudTh Style="text-align:center; width:80px;">Score</MudTh>
+                            <MudTh Style="text-align:center;">Dynasty</MudTh>
+                            <MudTh Style="text-align:center; width:80px;">Score</MudTh>
+                            <MudTh>Top Assets</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <div>
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.TeamName</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerName</MudText>
+                                </div>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudText Typo="Typo.h6"
+                                         Style="@(GradeStyle(context.DepthGrade) + "font-weight:800;")">
+                                    @context.DepthGrade
+                                </MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                                    @context.DepthScore.ToString("F1")
+                                </MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudText Typo="Typo.h6"
+                                         Style="@(GradeStyle(context.DynastyGrade) + "font-weight:800;")">
+                                    @context.DynastyGrade
+                                </MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                                    @context.DynastyScore.ToString("F1")
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @foreach (var asset in context.TopAssets.Take(3))
+                                    {
+                                        <MudTooltip Text="@($"TV: {asset.TradeValue:F0} · BK: {asset.BreakoutScore:F0} · Age: {asset.Age?.ToString() ?? "—"}")">
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                                     Color="@PositionColor(asset.Position)">
+                                                @asset.PlayerName.Split(' ').Last() (@asset.Position)
+                                            </MudChip>
+                                        </MudTooltip>
+                                    }
+                                </div>
+                            </MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText Class="mud-text-secondary pa-4">No teams found.</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
+                </MudPaper>
+
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
+                    Depth grade based on top-15 trade values. Dynasty grade blends trade value (50%), breakout score (30%), and years of prime (20%).
+                </MudText>
+            }
+        </MudTabPanel>
+    </MudTabs>
 }
 
 @code {
@@ -189,9 +255,32 @@ else
     private int _week;
     private LeagueStandingsDto? _standings;
     private string _topProjected = "—";
+    private bool _seasonFinalized = false;
 
     protected override async Task OnInitializedAsync()
     {
+        LeagueState.OnLeagueChanged += HandleLeagueChanged;
+        await LoadAsync();
+    }
+
+    private async void HandleLeagueChanged()
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        LeagueState.OnLeagueChanged -= HandleLeagueChanged;
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _standings = null;
+        _topProjected = "—";
+        _grades = null;
+
         var http = HttpClientFactory.CreateClient("AuthAPI");
 
         // Get NFL context for season/week
@@ -213,7 +302,9 @@ else
             _week = 18;
         }
 
-        // Load standings for active league
+        // Week 15+ with no active games = season is finalized
+        _seasonFinalized = _week >= 15 || _season < DateTime.UtcNow.Year;
+
         var leagueId = LeagueState.ActiveLeagueId;
         if (!string.IsNullOrEmpty(leagueId))
         {
@@ -238,19 +329,70 @@ else
     // ── Helpers ───────────────────────────────────────────────────
     private static string RankStyle(int rank) => rank switch
     {
-        1 => "color:#F59E0B; font-weight:700;",  // gold
-        2 => "color:#9CA3AF; font-weight:700;",  // silver
-        3 => "color:#B45309; font-weight:700;",  // bronze
+        1 => "color:#F59E0B; font-weight:700;",
+        2 => "color:#9CA3AF; font-weight:700;",
+        3 => "color:#B45309; font-weight:700;",
         _ => ""
     };
 
     private static string PlayoffChipClass(string projection) => projection switch
     {
         "In" => "fc-chip-playoff-in",
+        "Clinched" => "fc-chip-playoff-in",
         "Bubble" => "fc-chip-playoff-bubble",
         _ => "fc-chip-playoff-out"
     };
+    // ── Grades state ──────────────────────────────────────────────
+    private bool _gradesLoading = false;
+    private LeagueRosterGradesDto? _grades;
 
+    private async Task OnTabChanged(int index)
+    {
+        // Lazy-load grades only when that tab is first opened
+        if (index == 1 && _grades is null && !_gradesLoading)
+            await LoadGradesAsync();
+    }
+
+    private async Task LoadGradesAsync()
+    {
+        _gradesLoading = true;
+        StateHasChanged();
+
+        var http = HttpClientFactory.CreateClient("AuthAPI");
+        var leagueId = LeagueState.ActiveLeagueId;
+
+        if (!string.IsNullOrEmpty(leagueId))
+        {
+            try
+            {
+                _grades = await http.GetFromJsonAsync<LeagueRosterGradesDto>(
+                    $"api/v1/leagues/{leagueId}/roster-grades?season={_season}");
+            }
+            catch { }
+        }
+
+        _gradesLoading = false;
+        StateHasChanged();
+    }
+
+    // ── Grade helpers ─────────────────────────────────────────────
+    private static string GradeStyle(string grade) => grade switch
+    {
+        "A" => "color:#22C55E;",
+        "B" => "color:#00C8F0;",
+        "C" => "color:#F59E0B;",
+        "D" => "color:#F87171;",
+        _ => "color:#6B7280;"
+    };
+
+    private static Color PositionColor(string pos) => pos switch
+    {
+        "QB" => Color.Warning,
+        "WR" => Color.Primary,
+        "TE" => Color.Secondary,
+        "RB" => Color.Success,
+        _ => Color.Default
+    };
     // ── DTOs ──────────────────────────────────────────────────────
     private record NflContextResponse(
         int CalendarSeason,
@@ -278,4 +420,26 @@ else
         decimal PointsFor,
         decimal PointsAgainst,
         string PlayoffProjection);
+
+    private record LeagueRosterGradesDto(
+string SleeperLeagueId,
+int Season,
+List<TeamRosterGradeDto> Teams);
+
+    private record TeamRosterGradeDto(
+        string SleeperRosterId,
+        string TeamName,
+        string OwnerName,
+        string DepthGrade,
+        double DepthScore,
+        string DynastyGrade,
+        double DynastyScore,
+        List<TeamAssetDto> TopAssets);
+
+    private record TeamAssetDto(
+        string PlayerName,
+        string Position,
+        double TradeValue,
+        double BreakoutScore,
+        int? Age);
 }

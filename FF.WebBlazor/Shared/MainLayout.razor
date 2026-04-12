@@ -204,6 +204,9 @@
             }
         }
         catch { }
+
+        // Subscribe so dropdown stays in sync when other pages change the active league
+        LeagueState.OnLeagueChanged += HandleLeagueStateChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -257,6 +260,7 @@
     public void Dispose()
     {
         Navigation.LocationChanged -= OnLocationChanged;
+        LeagueState.OnLeagueChanged -= HandleLeagueStateChanged;
     }
 
     // ── Logout ───────────────────────────────────────────────────────
@@ -280,6 +284,12 @@
     {
         _activeLeagueId = leagueId;
         LeagueState.ActiveLeagueId = leagueId;
+    }
+
+    private void HandleLeagueStateChanged()
+    {
+        _activeLeagueId = LeagueState.ActiveLeagueId;
+        InvokeAsync(StateHasChanged);
     }
 
     // ── DTOs ─────────────────────────────────────────────────────────
