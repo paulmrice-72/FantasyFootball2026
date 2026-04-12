@@ -1,11 +1,14 @@
 ﻿// FF.Tests/Infrastructure/ProjectionRefreshJobTests.cs
 using FF.Application.Features.Projections.Commands.CalculateProjections;
 using FF.Application.Features.Simulations.Commands.RunSimulations;
+using FF.Application.Interfaces.Services;
 using FF.Infrastructure.Jobs;
 using FF.SharedKernel.Common;
 using FluentAssertions;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using NSubstitute;
 using Xunit;
 
@@ -13,8 +16,12 @@ namespace FF.Tests.Infrastructure;
 
 public class ProjectionRefreshJobTests
 {
-    private static ProjectionRefreshJob BuildJob(IMediator mediator) =>
-        new(mediator, NullLogger<ProjectionRefreshJob>.Instance);
+    private static ProjectionRefreshJob BuildJob(IMediator mediator, int season = 2024, int week = 1)
+    {
+        var nflContext = new Mock<INflContextService>();
+        nflContext.Setup(x => x.GetContextAsync()).ReturnsAsync((season, week));
+        return new ProjectionRefreshJob(mediator, nflContext.Object, Mock.Of<ILogger<ProjectionRefreshJob>>());
+    }
 
     private static IMediator BuildMediator(bool projSuccess = true, bool simSuccess = true)
     {

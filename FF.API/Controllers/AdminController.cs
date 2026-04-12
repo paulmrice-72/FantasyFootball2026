@@ -1,5 +1,9 @@
 ﻿// FF.API/Controllers/AdminController.cs
+using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
+using FF.Domain.Documents;
 using FF.Infrastructure.Identity;
+using FF.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -11,17 +15,15 @@ namespace FF.API.Controllers;
 [Route("api/v1/admin")]
 [Authorize(Roles = "Admin")]
 public class AdminController(
-    UserManager<ApplicationUser> userManager) : ControllerBase
+    UserManager<ApplicationUser> userManager,
+    IAppSettingsRepository appSettingsRepo) : ControllerBase
 {
-    /// <summary>
-    /// Returns all registered users with role and Sleeper link status.
-    /// Admin only.
-    /// </summary>
+    // ── existing user endpoints unchanged ───────────────────────────────
+
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers(CancellationToken ct)
     {
         var users = await userManager.Users.ToListAsync(ct);
-
         var result = new List<object>();
         foreach (var u in users)
         {
@@ -37,46 +39,90 @@ public class AdminController(
                 Roles = roles
             });
         }
-
         return Ok(result);
     }
 
-    /// <summary>
-    /// Assigns the Admin role to a user by email.
-    /// Can only be called by an existing Admin.
-    /// </summary>
     [HttpPost("users/{email}/make-admin")]
     public async Task<IActionResult> MakeAdmin(string email)
     {
         var user = await userManager.FindByEmailAsync(email);
         if (user is null) return NotFound($"User {email} not found.");
-
         if (await userManager.IsInRoleAsync(user, "Admin"))
             return Ok($"{email} is already an Admin.");
-
         await userManager.AddToRoleAsync(user, "Admin");
         return Ok($"{email} is now an Admin.");
     }
 
-    /// <summary>
-    /// Removes Admin role from a user.
-    /// </summary>
     [HttpPost("users/{email}/remove-admin")]
     public async Task<IActionResult> RemoveAdmin(string email)
     {
         var user = await userManager.FindByEmailAsync(email);
         if (user is null) return NotFound($"User {email} not found.");
-
         await userManager.RemoveFromRoleAsync(user, "Admin");
         return Ok($"Admin role removed from {email}.");
     }
-    //[HttpPost("reset-password-temp")]
-    //[AllowAnonymous]
-    //public async Task<IActionResult> ResetPasswordTemp()
-    //{
-    //    var user = await userManager.FindByEmailAsync("paulmrice@gmail.com");
-    //    var token = await userManager.GeneratePasswordResetTokenAsync(user);
-    //    var result = await userManager.ResetPasswordAsync(user, token, "ScoobyBoots1!");
-    //    return Ok(result.Succeeded);
-    //}
+
+    // ── NEW: NFL Context simulation override ─────────────────────────────
+
+    /// <summary>Returns current app settings including any active simulation override.</summary>
+    [HttpGet("nfl-context")]
+    public async Task<IActionResult> GetNflContext()
+    {
+        var settings = await appSettingsRepo.GetAsync();
+        var calendarSeason = NflContextService.CalcSeason(DateTime.UtcNow);
+        var calendarWeek = NflContextService.CalcWeek(DateTime.UtcNow, calendarSeason);
+
+        return Ok(new
+        {
+            CalendarSeason = calendarSeason,
+            CalendarWeek = calendarWeek,
+            OverrideSeason = settings.SimulationSeasonOverride,
+            OverrideWeek = settings.SimulationWeekOverride,
+            IsOverrideActive = settings.SimulationSeasonOverride.HasValue || settings.SimulationWeekOverride.HasValue,
+            UpdatedAt = settings.UpdatedAt,
+            UpdatedBy = settings.UpdatedBy
+        });
+    }
+
+    /// <summary>
+    /// Sets a simulation override for season and/or week.
+    /// Pass null for either field to clear that override.
+    /// </summary>
+    [HttpPost("nfl-context")]
+    public async Task<IActionResult> SetNflContext([FromBody] NflContextOverrideRequest request)
+    {
+        if (request.Season.HasValue && (request.Season < 2020 || request.Season > 2030))
+            return BadRequest("Season must be between 2020 and 2030.");
+        if (request.Week.HasValue && (request.Week < 1 || request.Week > 18))
+            return BadRequest("Week must be between 1 and 18.");
+
+        var settings = await appSettingsRepo.GetAsync();
+        settings.SimulationSeasonOverride = request.Season;
+        settings.SimulationWeekOverride = request.Week;
+        settings.UpdatedBy = User.Identity?.Name ?? "admin";
+        await appSettingsRepo.UpsertAsync(settings);
+
+        return Ok(new
+        {
+            Message = request.Season.HasValue || request.Week.HasValue
+                ? $"Override set: Season {request.Season}, Week {request.Week}"
+                : "Override cleared — using calendar values.",
+            OverrideSeason = settings.SimulationSeasonOverride,
+            OverrideWeek = settings.SimulationWeekOverride
+        });
+    }
+
+    /// <summary>Clears all simulation overrides — reverts to calendar-based season/week.</summary>
+    [HttpDelete("nfl-context")]
+    public async Task<IActionResult> ClearNflContext()
+    {
+        var settings = await appSettingsRepo.GetAsync();
+        settings.SimulationSeasonOverride = null;
+        settings.SimulationWeekOverride = null;
+        settings.UpdatedBy = User.Identity?.Name ?? "admin";
+        await appSettingsRepo.UpsertAsync(settings);
+        return Ok("Simulation override cleared.");
+    }
 }
+
+public record NflContextOverrideRequest(int? Season, int? Week);

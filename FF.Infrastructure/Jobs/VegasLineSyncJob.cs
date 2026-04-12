@@ -1,4 +1,6 @@
-﻿using FF.Application.Interfaces.Persistence;
+﻿using Castle.Components.DictionaryAdapter.Xml;
+using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using FF.Infrastructure.ExternalServices.OddsAPI;
 using FF.SharedKernel;
@@ -11,6 +13,7 @@ public class VegasLineSyncJob(
     IOddsApiClient oddsApiClient,
     IVegasLineRepository vegasLineRepository,
     IOptions<OddsApiSettings> settings,
+    INflContextService nflContext,
     ILogger<VegasLineSyncJob> logger)
 {
     // Preferred bookmaker priority for spread selection
@@ -38,8 +41,7 @@ public class VegasLineSyncJob(
             return;
         }
 
-        var season = GetCurrentNflSeason();
-        var nflWeek = GetCurrentNflWeek();
+        var (season, nflWeek) = await nflContext.GetContextAsync();
         var docs = new List<VegasLineDocument>();
 
         foreach (var game in games)
