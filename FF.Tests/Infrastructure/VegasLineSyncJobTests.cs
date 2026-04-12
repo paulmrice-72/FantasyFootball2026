@@ -1,5 +1,6 @@
 ﻿// FF.Tests/Infrastructure/VegasLineSyncJobTests.cs
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using FF.Infrastructure.ExternalServices.OddsAPI;
 using FF.Infrastructure.Jobs;
@@ -49,7 +50,10 @@ public class VegasLineSyncJobTests
 
         var repo = Substitute.For<IVegasLineRepository>();
         var settings = Options.Create(new OddsApiSettings { ApiKey = "test" });
-        var job = new VegasLineSyncJob(oddsClient, repo, settings,
+        var nflContext = Substitute.For<INflContextService>();
+        nflContext.GetContextAsync().Returns((2024, 1));
+
+        var job = new VegasLineSyncJob(oddsClient, repo, settings, nflContext,
             NullLogger<VegasLineSyncJob>.Instance);
 
         await job.RunAsync();
@@ -72,7 +76,10 @@ public class VegasLineSyncJobTests
 
         var repo = Substitute.For<IVegasLineRepository>();
         var settings = Options.Create(new OddsApiSettings { ApiKey = "test" });
-        var job = new VegasLineSyncJob(oddsClient, repo, settings,
+        var nflContext = Substitute.For<INflContextService>();
+        nflContext.GetContextAsync().Returns((2024, 1));
+
+        var job = new VegasLineSyncJob(oddsClient, repo, settings, nflContext,
             NullLogger<VegasLineSyncJob>.Instance);
 
         await job.RunAsync();
@@ -93,7 +100,10 @@ public class VegasLineSyncJobTests
 
         var repo = Substitute.For<IVegasLineRepository>();
         var settings = Options.Create(new OddsApiSettings { ApiKey = "test" });
-        var job = new VegasLineSyncJob(oddsClient, repo, settings,
+        var nflContext = Substitute.For<INflContextService>();
+        nflContext.GetContextAsync().Returns((2024, 1));
+
+        var job = new VegasLineSyncJob(oddsClient, repo, settings, nflContext,
             NullLogger<VegasLineSyncJob>.Instance);
 
         await job.RunAsync();
