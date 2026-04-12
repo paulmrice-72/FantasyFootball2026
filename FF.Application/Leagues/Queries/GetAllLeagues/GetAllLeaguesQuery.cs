@@ -1,13 +1,16 @@
 // FF.Application/Leagues/Queries/GetAllLeagues/GetAllLeaguesQuery.cs
 
+using FF.Application.Features.Admin.Queries.GetAllLeagues;
 using FF.Application.Interfaces.Persistence;
+using FF.SharedKernel.Common;
 using MediatR;
 
 namespace FF.Application.Leagues.Queries.GetAllLeagues;
 
 // ── Query ─────────────────────────────────────────────────────────────────────
 
-public record GetAllLeaguesQuery : IRequest<List<LeagueSummaryDto>>;
+public record GetAllLeaguesQuery(string? UserId = null)
+    : IRequest<Result<IReadOnlyList<AdminLeagueDto>>>;
 
 public record LeagueSummaryDto(
     Guid Id,
@@ -21,24 +24,37 @@ public record LeagueSummaryDto(
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-public class GetAllLeaguesQueryHandler(IUnitOfWork unitOfWork) : IRequestHandler<GetAllLeaguesQuery, List<LeagueSummaryDto>>
+public class GetAllLeaguesQueryHandler(
+    ILeagueRepository leagueRepository,
+    IUserLeaguePreferenceRepository preferenceRepository)
+    : IRequestHandler<GetAllLeaguesQuery, Result<IReadOnlyList<AdminLeagueDto>>>
 {
-    private readonly IUnitOfWork _unitOfWork = unitOfWork;
-
-    public async Task<List<LeagueSummaryDto>> Handle(
+    public async Task<Result<IReadOnlyList<AdminLeagueDto>>> Handle(
         GetAllLeaguesQuery request,
         CancellationToken cancellationToken)
     {
-        var leagues = await _unitOfWork.Leagues.GetAllAsync(cancellationToken);
+        var leagues = await leagueRepository.GetAllLeaguesAsync(cancellationToken);
 
-        return [.. leagues.Select(l => new LeagueSummaryDto(
-                Id: l.Id,
-                Name: l.Name,
-                SleeperLeagueId: l.SleeperLeagueId,
-                Season: l.Season,
-                TotalTeams: l.TotalTeams,
-                IsActive: l.IsActive,
-                LeagueType: l.LeagueType
-            ))];
+        HashSet<Guid> hiddenIds = [];
+        if (request.UserId is not null)
+        {
+            var prefs = await preferenceRepository.GetByUserIdAsync(
+                request.UserId, cancellationToken);
+            hiddenIds = prefs.Where(p => p.IsHidden).Select(p => p.LeagueId).ToHashSet();
+        }
+
+        var dtos = leagues
+            .Select(l => new AdminLeagueDto(
+                l.Id,
+                l.Name,
+                l.SleeperLeagueId,
+                l.Season,
+                l.LeagueType,
+                l.TotalTeams,
+                l.IsActive,
+                hiddenIds.Contains(l.Id)))
+            .ToList();
+
+        return Result.Success<IReadOnlyList<AdminLeagueDto>>(dtos);
     }
 }

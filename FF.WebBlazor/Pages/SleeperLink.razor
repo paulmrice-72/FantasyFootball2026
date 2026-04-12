@@ -152,27 +152,30 @@
             {
                 foreach (var league in _leagues.OrderByDescending(l => l.Season))
                 {
-                    <div class="d-flex align-center justify-space-between mb-3">
+                    <div class="d-flex align-center justify-space-between mb-2">
                         <div>
-                            <MudText Typo="Typo.body1" Style="font-weight:600;">@league.Name</MudText>
+                            <MudText Typo="Typo.body1"
+                                     Style="@(league.IsHidden ? "font-weight:600; opacity:0.45;" : "font-weight:600;")">
+                                @league.Name
+                            </MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">
                                 @league.Season · @league.TotalTeams teams
                             </MudText>
                         </div>
                         <div class="d-flex align-center gap-2">
-                            <MudChip T="string"
-                                     Size="Size.Small"
+                            <MudChip T="string" Size="Size.Small"
                                      Color="@GetLeagueTypeColor(league.LeagueType)"
                                      Variant="Variant.Filled">
                                 @league.LeagueType
                             </MudChip>
-                            @if (!league.IsActive)
-                            {
-                                <MudChip T="string" Size="Size.Small"
-                                         Color="Color.Default" Variant="Variant.Outlined">
-                                    Inactive
-                                </MudChip>
-                            }
+                            <MudTooltip Text="@(league.IsHidden ? "Show in app" : "Hide from app")">
+                                <MudIconButton Size="Size.Small"
+                                               Icon="@(league.IsHidden
+                                                                                                  ? Icons.Material.Filled.VisibilityOff
+                                                                                              : Icons.Material.Filled.Visibility)"
+                                               Color="@(league.IsHidden ? Color.Default : Color.Primary)"
+                                               OnClick="@(() => ToggleVisibility(league))" />
+                            </MudTooltip>
                         </div>
                     </div>
                     <MudDivider Class="mb-3" />
@@ -262,7 +265,8 @@
         int Season,
         int TotalTeams,
         bool IsActive,
-        string LeagueType);
+        string LeagueType,
+        bool IsHidden);  // ← add this
 
     private record UserContextDto(
         string UserId,
@@ -279,4 +283,28 @@
         "Keeper" => Color.Warning,
         _ => Color.Primary   // Redraft
     };
+
+    private async Task ToggleVisibility(LeagueSummaryDto league)
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                $"api/v1/leagues/{league.Id}/visibility",
+                new { IsHidden = !league.IsHidden });
+
+            if (response.IsSuccessStatusCode)
+            {
+                _leagues = await Http.GetFromJsonAsync<List<LeagueSummaryDto>>("api/v1/leagues");
+                Snackbar.Add(!league.IsHidden ? "League hidden." : "League visible.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to update visibility.", Severity.Error);
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Error updating league visibility.", Severity.Error);
+        }
+    }
 }

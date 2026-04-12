@@ -1,7 +1,5 @@
 ﻿// FF.API/Controllers/AdminController.cs
 using FF.Application.Interfaces.Persistence;
-using FF.Application.Interfaces.Services;
-using FF.Domain.Documents;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -123,6 +121,7 @@ public class AdminController(
         await appSettingsRepo.UpsertAsync(settings);
         return Ok("Simulation override cleared.");
     }
-}
 
-public record NflContextOverrideRequest(int? Season, int? Week);
+
+    public record NflContextOverrideRequest(int? Season, int? Week);
+}

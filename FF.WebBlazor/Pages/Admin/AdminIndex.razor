@@ -90,7 +90,7 @@
 
         <MudDivider Class="mb-3" />
 
-        <MudGrid Spacing="2" AlignItems="Center">
+        <MudGrid Spacing="2">
             <MudItem xs="12" sm="4">
                 <MudNumericField T="int?" @bind-Value="_overrideSeason"
                                  Label="Override Season"
@@ -125,7 +125,6 @@
         }
     }
 </MudPaper>
-
 @code {
     [Inject] NavigationManager Nav { get; set; } = default!;
     [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
@@ -137,8 +136,15 @@
     private int? _overrideWeek;
     private string _statusMessage = string.Empty;
     private Severity _statusSeverity = Severity.Info;
+    // ── League management ────────────────────────────────────────────────────
+    private bool _leaguesLoading = true;
+    private string _leagueStatusMessage = string.Empty;
+    private Severity _leagueStatusSeverity = Severity.Info;
 
-    protected override async Task OnInitializedAsync() => await LoadContext();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadContext();
+    }
 
     private async Task LoadContext()
     {
@@ -210,4 +216,5 @@
         int? OverrideSeason, int? OverrideWeek,
         bool IsOverrideActive,
         DateTime UpdatedAt, string UpdatedBy);
+
 }
