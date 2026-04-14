@@ -109,48 +109,6 @@ else if (!_loading)
     </MudAlert>
 }
 
-@* ── LEAGUE-WIDE PULSE ────────────────────────────────────── *@
-<MudText Typo="Typo.overline" Class="fc-section-label mb-3 d-block">LEAGUE PULSE</MudText>
-<MudGrid Spacing="3" Class="mb-6">
-    <MudItem xs="6" sm="3">
-        <MudPaper Class="fc-stat-card" Elevation="0">
-            <MudIcon Icon="@Icons.Material.Filled.People" Class="fc-stat-card-icon" />
-            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-cyan">@_playerCount</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Players Projected</MudText>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="6" sm="3">
-        <MudPaper Class="fc-stat-card" Elevation="0">
-            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="fc-stat-card-icon" />
-            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-boom"
-                     Style="font-size:1rem; line-height:1.3;">
-                @_topBoomPlayer
-            </MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Top Boom Candidate</MudText>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="6" sm="3">
-        <MudPaper Class="fc-stat-card" Elevation="0">
-            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="fc-stat-card-icon" />
-            <MudText Typo="Typo.h4" Class="fc-stat-card-value fc-ceiling"
-                     Style="font-size:1rem; line-height:1.3;">
-                @_topCeilingPlayer
-            </MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Highest Ceiling</MudText>
-        </MudPaper>
-    </MudItem>
-    <MudItem xs="6" sm="3">
-        <MudPaper Class="fc-stat-card" Elevation="0">
-            <MudIcon Icon="@Icons.Material.Filled.Warning" Class="fc-stat-card-icon" />
-            <MudText Typo="Typo.h4" Class="fc-stat-card-value"
-                     Style="@(_leagueInjuryCount > 0 ? "color:#F87171;" : "")">
-                @_leagueInjuryCount
-            </MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Active Injuries</MudText>
-        </MudPaper>
-    </MudItem>
-</MudGrid>
-
 @* ── QUICK ACCESS ─────────────────────────────────────────── *@
 <MudText Typo="Typo.overline" Class="fc-section-label mb-3 d-block">QUICK ACCESS</MudText>
 <MudGrid Spacing="3">
@@ -332,7 +290,7 @@ else if (!_loading)
     private void NavigateToLeague(string sleeperLeagueId)
     {
         LeagueState.ActiveLeagueId = sleeperLeagueId;
-        Nav.NavigateTo("/my-team");
+        Nav.NavigateTo("/my-league");
     }
 
     // ── View models ──────────────────────────────────────────────────

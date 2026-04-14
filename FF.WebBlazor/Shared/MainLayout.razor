@@ -30,7 +30,7 @@
 
         @* Mobile league pill — only visible xs/sm, sits in AppBar *@
         <MudHidden Breakpoint="Breakpoint.MdAndUp">
-            @if (_leagues.Count > 0)
+            @if (_leagues.Count > 0 && _currentPath != "")
             {
                 <MudSelect T="string"
                            Value="_activeLeagueId"
@@ -80,7 +80,7 @@
     <MudMainContent Class="fc-main-content">
         @* Desktop league selector — hidden on mobile (pill is in AppBar instead) *@
         <MudHidden Breakpoint="Breakpoint.SmAndDown">
-            @if (_leagues.Count > 0)
+            @if (_leagues.Count > 0 && _currentPath != "")
             {
                 <div class="fc-league-bar">
                     <MudSelect T="string"
