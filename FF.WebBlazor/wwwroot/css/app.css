@@ -757,3 +757,18 @@ td.numeric,
     font-weight: 700 !important;
     font-size: 0.65rem !important;
 }
+
+/* ── Bottom Nav (xs only) ──────────────────────────────── */
+.fc-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    background-color: var(--fc-surface) !important;
+    border-top: 1px solid var(--fc-border) !important;
+    z-index: 1300;
+}
