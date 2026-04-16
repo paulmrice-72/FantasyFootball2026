@@ -266,10 +266,13 @@ else
         await LoadAsync();
     }
 
-    private async void HandleLeagueChanged()
+    private void HandleLeagueChanged()
     {
-        await LoadAsync();
-        await InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
     }
 
     public void Dispose()

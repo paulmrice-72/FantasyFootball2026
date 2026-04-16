@@ -4,6 +4,7 @@
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject LeagueStateService LeagueState
 
 <MudText Typo="Typo.h5" Class="mb-1" Style="color: var(--fc-cyan);">
     <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="mr-2" />
@@ -25,33 +26,12 @@ else if (_context?.IsSleeperLinked != true)
 }
 else
 {
-    <!-- League + week selector — shared across tabs -->
     <MudGrid Class="mb-3">
-        <MudItem xs="12" sm="4">
-            <MudSelect T="string" @bind-Value="_selectedLeagueId"
-                       Label="League"
-                       Variant="Variant.Outlined"
-                       AnchorOrigin="Origin.BottomCenter">
-                @foreach (var league in _context.Leagues)
-                {
-                    <MudSelectItem T="string" Value="@league.LeagueId">
-                        @league.LeagueName
-                    </MudSelectItem>
-                }
-            </MudSelect>
-        </MudItem>
         <MudItem xs="6" sm="2">
-            <MudNumericField @bind-Value="_week"
-                             Label="Week"
-                             Variant="Variant.Outlined"
-                             Min="1" Max="18" />
+            <MudNumericField @bind-Value="_week" Label="Week" Variant="Variant.Outlined" Min="1" Max="18" />
         </MudItem>
         <MudItem xs="6" sm="2" Class="d-flex align-center">
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       OnClick="LoadAllAsync"
-                       Disabled="_vorpLoading"
-                       FullWidth="true">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAllAsync" Disabled="_vorpLoading" FullWidth="true">
                 @(_vorpLoading ? "Loading..." : "Load")
             </MudButton>
         </MudItem>
@@ -362,14 +342,33 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        LeagueState.OnLeagueChanged += OnLeagueChangedHandler;
         await LoadContextAsync();
         await LoadAlertsAsync();
-
-        // Auto-load available players in off-season — no button click required
         if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId))
             await LoadOffSeasonAsync();
     }
 
+    private void OnLeagueChangedHandler()
+    {
+        // Update selected league and reload
+        _selectedLeagueId = LeagueState.ActiveLeagueId ?? _selectedLeagueId;
+        _offSeasonRecs = [];
+        _vorpRecs = [];
+        _fitRecs = [];
+        _vorpQueried = false;
+        _ = InvokeAsync(async () =>
+        {
+            if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId))
+                await LoadOffSeasonAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        LeagueState.OnLeagueChanged -= OnLeagueChangedHandler;
+    }
     private async Task LoadContextAsync()
     {
         _contextLoading = true;
@@ -378,9 +377,10 @@ else
             _context = await Http.GetFromJsonAsync<UserContext>(
                 "api/v1/identity/context");
 
-            // Default to active league
-            if (_context?.ActiveLeagueId is not null)
-                _selectedLeagueId = _context.ActiveLeagueId;
+            // Use global LeagueState — falls back to context's active league
+            _selectedLeagueId = !string.IsNullOrEmpty(LeagueState.ActiveLeagueId)
+                ? LeagueState.ActiveLeagueId
+                : _context?.ActiveLeagueId ?? string.Empty;
 
             _isOffSeason = DateTime.UtcNow.Month is >= 3 and < 9;
         }

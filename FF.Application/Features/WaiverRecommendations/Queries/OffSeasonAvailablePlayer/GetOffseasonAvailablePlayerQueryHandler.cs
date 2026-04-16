@@ -8,6 +8,7 @@ public class GetOffSeasonAvailablePlayersQueryHandler(
     IDynastyValuationRepository dynastyRepository,
     IRosterPlayerRepository rosterPlayerRepository,
     IPlayerRepository playerRepository)
+    : IRequestHandler<GetOffSeasonAvailablePlayersQuery, IReadOnlyList<OffSeasonAvailablePlayerDto>>
 {
     public async Task<IReadOnlyList<OffSeasonAvailablePlayerDto>> Handle(
         GetOffSeasonAvailablePlayersQuery request,

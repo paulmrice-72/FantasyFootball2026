@@ -104,6 +104,27 @@
           "Microsoft.EntityFrameworkCore.Design": "9.0.0"
         }
       },
+      "Microsoft.Extensions.AI": {
+        "type": "Direct",
+        "requested": "[9.3.0-preview.1.25161.3, )",
+        "resolved": "9.3.0-preview.1.25161.3",
+        "contentHash": "i1LLMJucYogyImy91Fm+eJv+AfsQ3gdpQnDcrsweWg6SWoa/xFlVnqYRtifsHwucRxv2da/JET1RMRiVB6rIug==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "9.3.0-preview.1.25161.3",
+          "Microsoft.Extensions.Caching.Abstractions": "9.0.3",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.3",
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.3",
+          "System.Diagnostics.DiagnosticSource": "9.0.3",
+          "System.Text.Json": "9.0.3",
+          "System.Threading.Channels": "9.0.3"
+        }
+      },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Direct",
+        "requested": "[9.3.0-preview.1.25161.3, )",
+        "resolved": "9.3.0-preview.1.25161.3",
+        "contentHash": "1BGoGmGQKwDOkf4I5/Ybt3GL5O+/3JPlZ/AM0uLspHn5DpPb2Wpi9HYKEMjTECFvW+pk+vtFaBYQmNdudl26fw=="
+      },
       "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": {
         "type": "Direct",
         "requested": "[9.0.4, )",
@@ -1023,8 +1044,8 @@
       },
       "System.Threading.Channels": {
         "type": "Transitive",
-        "resolved": "7.0.0",
-        "contentHash": "qmeeYNROMsONF6ndEZcIQ+VxR4Q/TX/7uIVLJqtwIWL7dDWeh0l1UIqgo4wYyjG//5lUNhwkLDSFl+pAWO6oiA=="
+        "resolved": "9.0.3",
+        "contentHash": "Ao0iegVONKYVw0eWxJv0ArtMVfkFjgyyYKtUXru6xX5H95flSZWW3QCavD4PAgwpc0ETP38kGHaYbPzSE7sw2w=="
       },
       "ZstdSharp.Port": {
         "type": "Transitive",

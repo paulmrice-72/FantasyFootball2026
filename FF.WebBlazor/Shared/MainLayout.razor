@@ -74,7 +74,8 @@
         </MudDrawerHeader>
         <NavMenu OnNavItemClicked="CloseDrawerOnMobile"
                  SleeperLinked="@_sleeperLinked"
-                 CurrentPath="@_currentPath" />
+                 CurrentPath="@_currentPath"
+                 IsDynastyLeague="@_isDynastyLeague" />
     </MudDrawer>
 
     <MudMainContent Class="fc-main-content">
@@ -141,8 +142,9 @@
     private DrawerVariant _drawerVariant = DrawerVariant.Responsive;
     private string _currentPath = "";
     private bool _sleeperLinked = false;
+    private bool _isDynastyLeague = false;
 
-    // ── theme unchanged ──────────────────────────────────────────────
+    // ── theme unchanged ────────────────────────────────────────────────
     private readonly MudTheme _theme = new()
     {
         PaletteLight = new PaletteLight
@@ -179,19 +181,16 @@
             H6 = new H6 { FontFamily = ["Inter", "Segoe UI", "sans-serif"], FontWeight = 600 }
         }
     };
-    // ────────────────────────────────────────────────────────────────
 
     protected override async Task OnInitializedAsync()
     {
-        // Track route changes for bottom nav active state
         Navigation.LocationChanged += OnLocationChanged;
         _currentPath = GetCurrentPath();
 
         try
         {
             var http = HttpClientFactory.CreateClient("AuthAPI");
-            var context = await http.GetFromJsonAsync<UserContextResponse>(
-                "api/v1/identity/context");
+            var context = await http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
             if (context is not null)
             {
                 _leagues = context.Leagues ?? [];
@@ -201,7 +200,16 @@
         }
         catch { }
 
-        // Subscribe so dropdown stays in sync when other pages change the active league
+        // LeagueState wins if already set (e.g. user clicked a home card)
+        if (!string.IsNullOrEmpty(LeagueState.ActiveLeagueId))
+            _activeLeagueId = LeagueState.ActiveLeagueId;
+        else if (!string.IsNullOrEmpty(_activeLeagueId))
+            LeagueState.ActiveLeagueId = _activeLeagueId;
+
+        _isDynastyLeague = _leagues
+            .FirstOrDefault(l => l.LeagueId == _activeLeagueId)
+            ?.LeagueType == "Dynasty";
+
         LeagueState.OnLeagueChanged += HandleLeagueStateChanged;
     }
 
@@ -210,13 +218,11 @@
         if (firstRender)
         {
             var width = await JS.InvokeAsync<int>("eval", "window.innerWidth");
-            _isMobile = width < 600;   // xs breakpoint
-            _drawerOpen = width >= 960;  // md breakpoint — permanent sidebar
+            _isMobile = width < 600;
+            _drawerOpen = width >= 960;
             StateHasChanged();
         }
     }
-
-    // ── Navigation helpers ───────────────────────────────────────────
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
@@ -227,11 +233,9 @@
     private string GetCurrentPath()
     {
         var uri = new Uri(Navigation.Uri);
-        // Strip leading slash → "my-team", "projections", "" for home
         return uri.AbsolutePath.TrimStart('/').ToLower();
     }
 
-    // Returns Primary color when the route matches, Inherit otherwise
     private Color NavColor(string route)
     {
         if (route == "" && _currentPath == "") return Color.Primary;
@@ -243,15 +247,10 @@
 
     private void CloseDrawerOnMobile()
     {
-        // Only close on mobile — leave permanent sidebar open on desktop
-        if (_isMobile)
-            _drawerOpen = false;
+        if (_isMobile) _drawerOpen = false;
     }
 
-    private void Navigate(string path)
-    {
-        Navigation.NavigateTo("/" + path);
-    }
+    private void Navigate(string path) => Navigation.NavigateTo("/" + path);
 
     public void Dispose()
     {
@@ -259,37 +258,39 @@
         LeagueState.OnLeagueChanged -= HandleLeagueStateChanged;
     }
 
-    // ── Logout ───────────────────────────────────────────────────────
-
     private async Task HandleLogout()
     {
-        var tokenStore = ((CustomAuthStateProvider)AuthStateProvider)
-            .GetTokenStore();
+        var tokenStore = ((CustomAuthStateProvider)AuthStateProvider).GetTokenStore();
         if (tokenStore.HasRefreshToken)
             await AuthService.RevokeAsync(tokenStore.RefreshToken!);
         ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsLoggedOut();
         Navigation.NavigateTo("/login");
     }
 
-    // ── League selector ──────────────────────────────────────────────
-
+    // ── League selector ───────────────────────────────────────────────
     private List<LeagueItem> _leagues = [];
     private string? _activeLeagueId;
 
     private void OnLeagueChanged(string leagueId)
     {
         _activeLeagueId = leagueId;
+        _isDynastyLeague = _leagues
+            .FirstOrDefault(l => l.LeagueId == leagueId)
+            ?.LeagueType == "Dynasty";
         LeagueState.ActiveLeagueId = leagueId;
+        StateHasChanged();   // ← add this
     }
 
     private void HandleLeagueStateChanged()
     {
         _activeLeagueId = LeagueState.ActiveLeagueId;
+        _isDynastyLeague = _leagues
+            .FirstOrDefault(l => l.LeagueId == _activeLeagueId)
+            ?.LeagueType == "Dynasty";
         InvokeAsync(StateHasChanged);
     }
 
-    // ── DTOs ─────────────────────────────────────────────────────────
-
+    // ── DTOs ──────────────────────────────────────────────────────────
     private record UserContextResponse(
         bool IsSleeperLinked,
         List<LeagueItem>? Leagues,
@@ -299,5 +300,7 @@
         string LeagueId,
         string LeagueName,
         int Season,
-        string Role);
+        string Role,
+        bool IsActive = false,
+        string LeagueType = "Redraft");
 }
