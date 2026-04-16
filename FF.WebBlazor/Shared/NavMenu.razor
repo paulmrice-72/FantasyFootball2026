@@ -2,124 +2,83 @@
 @using Microsoft.AspNetCore.Components.Authorization
 
 <MudNavMenu Class="fc-navmenu pt-2">
-
-    <MudNavLink Href=""
-                Match="NavLinkMatch.All"
-                Icon="@Icons.Material.Filled.Home"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         Home
     </MudNavLink>
 
     <div class="fc-nav-section-label">MY TEAM</div>
-    <MudNavLink Href="my-team"
-                Icon="@Icons.Material.Filled.Groups"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="my-league" Icon="@Icons.Material.Filled.Leaderboard" IconColor="Color.Primary" OnClick="NotifyNavClicked">
+        My League
+    </MudNavLink>
+    <MudNavLink Href="my-team" Icon="@Icons.Material.Filled.Groups" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         My Roster
     </MudNavLink>
-    <MudNavLink Href="my-matchup"
-                Icon="@Icons.Material.Filled.SportsMma"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="my-matchup" Icon="@Icons.Material.Filled.SportsMma" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         My Matchup
     </MudNavLink>
-    <MudNavLink Href="my-brief"
-                Icon="@Icons.Material.Filled.MilitaryTech"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="my-brief" Icon="@Icons.Material.Filled.MilitaryTech" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         War Room Brief
     </MudNavLink>
-    <MudNavLink Href="optimizer"
-                Icon="@Icons.Material.Filled.AutoAwesome"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="optimizer" Icon="@Icons.Material.Filled.AutoAwesome" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         Lineup Optimizer
     </MudNavLink>
-    <MudNavLink Href="trade"
-                Icon="@Icons.Material.Filled.SwapHoriz"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="trade" Icon="@Icons.Material.Filled.SwapHoriz" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         Trade Analyzer
     </MudNavLink>
-    <MudNavLink Href="dynasty/rookie-draft"
-                Icon="@Icons.Material.Filled.SportsFootball"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
-        Rookie Draft Board
+    <MudNavLink Href="dynasty/rookie-draft" Icon="@Icons.Material.Filled.SportsFootball" IconColor="Color.Primary" OnClick="NotifyNavClicked">
+        Draft Board
     </MudNavLink>
 
     <div class="fc-nav-section-label">LEAGUE</div>
-    <MudNavLink Href="league/standings"
-                Icon="@Icons.Material.Filled.EmojiEvents"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="league/standings" Icon="@Icons.Material.Filled.EmojiEvents" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         League Standings
     </MudNavLink>
-    <MudNavLink Href="dynasty"
-                Icon="@Icons.Material.Filled.People"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
-        Dynasty
-    </MudNavLink>
-    <MudNavLink Href="injury-alerts"
-                Icon="@Icons.Material.Filled.LocalHospital"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+
+    <MudNavLink Href="injury-alerts" Icon="@Icons.Material.Filled.LocalHospital" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         Injury Alerts
     </MudNavLink>
-    <MudNavLink Href="waiver-wire"
-                Icon="@Icons.Material.Filled.TrendingUp"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="waiver-wire" Icon="@Icons.Material.Filled.TrendingUp" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         Waiver Wire
     </MudNavLink>
 
     <div class="fc-nav-section-label">TOOLS</div>
-    <MudNavLink Href="projections"
-                Icon="@Icons.Material.Filled.Analytics"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="dynasty" Icon="@Icons.Material.Filled.People" IconColor="Color.Primary" OnClick="NotifyNavClicked">
+        Dynasty Rankings
+    </MudNavLink>
+    <MudNavLink Href="redraft-rankings" Icon="@Icons.Material.Filled.FormatListNumbered" IconColor="Color.Primary" OnClick="NotifyNavClicked">
+        Redraft Rankings
+    </MudNavLink>
+    <MudNavLink Href="projections" Icon="@Icons.Material.Filled.Analytics" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         Projections
     </MudNavLink>
-    <MudNavLink Href="projection-settings"
-                Icon="@Icons.Material.Filled.Tune"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="projection-settings" Icon="@Icons.Material.Filled.Tune" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         Projection Tuner
     </MudNavLink>
-    <MudNavLink Href="dfs"
-                Icon="@Icons.Material.Filled.SportsSoccer"
-                IconColor="Color.Primary"
-                OnClick="NotifyNavClicked">
+    <MudNavLink Href="dfs" Icon="@Icons.Material.Filled.SportsSoccer" IconColor="Color.Primary" OnClick="NotifyNavClicked">
         DFS
     </MudNavLink>
 
     <MudDivider Class="my-3" />
     <AuthorizeView Roles="Admin">
         <Authorized>
-            <MudNavLink Href="admin"
-                        Icon="@Icons.Material.Filled.AdminPanelSettings"
-                        IconColor="Color.Warning"
-                        OnClick="NotifyNavClicked">
+            <MudNavLink Href="admin" Icon="@Icons.Material.Filled.AdminPanelSettings" IconColor="Color.Warning" OnClick="NotifyNavClicked">
                 Admin Console
             </MudNavLink>
         </Authorized>
     </AuthorizeView>
-
     <MudNavLink Href="settings/sleeper"
                 Icon="@(SleeperLinked ? Icons.Material.Filled.Link : Icons.Material.Filled.LinkOff)"
                 IconColor="@(SleeperLinked ? Color.Success : Color.Warning)"
                 OnClick="NotifyNavClicked">
         @(SleeperLinked ? "Sleeper Account" : "Link Sleeper Account")
     </MudNavLink>
-
 </MudNavMenu>
 
 @code {
     [Parameter] public EventCallback OnNavItemClicked { get; set; }
     [Parameter] public bool SleeperLinked { get; set; }
     [Parameter] public string CurrentPath { get; set; } = "";
+    [Parameter] public bool IsDynastyLeague { get; set; }
 
     private void NotifyNavClicked()
     {
