@@ -1,31 +1,32 @@
-﻿@page "/dynasty/rookie-draft"
+@page "/dynasty/rookie-draft"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject LeagueStateService LeagueState
+@implements IDisposable
 
-<PageTitle>Rookie Draft Board — FantasyCombine.AI</PageTitle>
+<PageTitle>Draft Board — FantasyCombine.AI</PageTitle>
 
 @* ── HEADER ──────────────────────────────────────────────────────────── *@
 <div class="fc-page-header mb-4">
     <MudText Typo="Typo.h5" Class="fc-page-title">
-        <MudIcon Icon="@Icons.Material.Filled.SportsFootball"
-                 Class="mr-2" Style="vertical-align:middle;" />
-        Rookie Draft Board
+        <MudIcon Icon="@Icons.Material.Filled.SportsFootball" Class="mr-2" Style="vertical-align:middle;" />
+        Draft Board
     </MudText>
     <MudText Typo="Typo.body2" Class="mud-text-secondary">
-        Dynasty composite scores · Draft capital · FantasyPros rankings
+        @(_isRedraftMode
+            ? "Available players ranked by dynasty trade value · Scoring-adjusted"
+            : "Dynasty composite scores · Draft capital · FantasyPros rankings")
     </MudText>
 </div>
 
 @* ── SESSION BAR ─────────────────────────────────────────────────────── *@
 <MudPaper Class="fc-card pa-3 mb-4" Elevation="0">
     <div class="d-flex align-center gap-3 flex-wrap">
-
-        <MudSelect T="string"
-                   Label="League"
+        <MudSelect T="string" Label="League"
                    Value="_selectedLeagueId"
                    ValueChanged="OnLeagueChanged"
                    Variant="Variant.Outlined"
@@ -40,33 +41,40 @@
             }
         </MudSelect>
 
-        @if (_sessionId is null)
+        @* Mode badge — shows current mode, not a toggle (auto-set by league type) *@
+        <MudChip T="string"
+                 Color="@(_isRedraftMode ? Color.Warning : Color.Primary)"
+                 Size="Size.Small"
+                 Variant="Variant.Filled">
+            @(_isRedraftMode ? "Redraft Mode" : "Dynasty / Rookie Mode")
+        </MudChip>
+
+        @* Session controls — dynasty mode only *@
+        @if (!_isRedraftMode)
         {
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.PlayArrow"
-                       OnClick="StartSession"
-                       Size="Size.Medium"
-                       Disabled="@(string.IsNullOrEmpty(_selectedLeagueId) || _startingSession)">
-                @if (_startingSession)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                }
-                Start Draft Session
-            </MudButton>
-        }
-        else
-        {
-            <div class="d-flex align-center gap-2">
-                <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord"
-                         Style="color:#34D399; font-size:0.9rem;" />
-                <MudText Typo="Typo.body2" Style="color:#34D399; font-weight:600;">
-                    Session Active
-                </MudText>
-                <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">
-                    @_picks.Count picked
-                </MudText>
-            </div>
+            @if (_sessionId is null)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.PlayArrow"
+                           OnClick="StartSession"
+                           Size="Size.Medium"
+                           Disabled="@(string.IsNullOrEmpty(_selectedLeagueId) || _startingSession)">
+                    @if (_startingSession)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Start Draft Session
+                </MudButton>
+            }
+            else
+            {
+                <div class="d-flex align-center gap-2">
+                    <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Style="color:#34D399; font-size:0.9rem;" />
+                    <MudText Typo="Typo.body2" Style="color:#34D399; font-weight:600;">Session Active</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">@_picks.Count picked</MudText>
+                </div>
+            }
         }
 
         <MudSpacer />
@@ -81,33 +89,17 @@
                       Clearable="true"
                       Immediate="true"
                       Style="min-width:240px;" />
-
     </div>
 </MudPaper>
+
 @* ── POSITION FILTER ─────────────────────────────────────────────────── *@
 <MudPaper Class="fc-card pa-3 mb-4" Elevation="0">
-    <MudChipSet T="string" SelectedValueChanged="OnPositionChanged"
-                SelectionMode="SelectionMode.SingleSelection">
-        <MudChip T="string" Value="@((string?)null)" Variant="Variant.Filled"
-                 Color="@(_selectedPosition is null ? Color.Primary : Color.Default)">
-            All
-        </MudChip>
-        <MudChip T="string" Value="@("WR")" Variant="Variant.Filled"
-                 Color="@(_selectedPosition == "WR" ? Color.Primary : Color.Default)">
-            WR
-        </MudChip>
-        <MudChip T="string" Value="@("QB")" Variant="Variant.Filled"
-                 Color="@(_selectedPosition == "QB" ? Color.Primary : Color.Default)">
-            QB
-        </MudChip>
-        <MudChip T="string" Value="@("TE")" Variant="Variant.Filled"
-                 Color="@(_selectedPosition == "TE" ? Color.Primary : Color.Default)">
-            TE
-        </MudChip>
-        <MudChip T="string" Value="@("RB")" Variant="Variant.Filled"
-                 Color="@(_selectedPosition == "RB" ? Color.Primary : Color.Default)">
-            RB
-        </MudChip>
+    <MudChipSet T="string" SelectedValueChanged="OnPositionChanged" SelectionMode="SelectionMode.SingleSelection">
+        <MudChip T="string" Value="@((string?)null)" Variant="Variant.Filled" Color="@(_selectedPosition is null ? Color.Primary : Color.Default)">All</MudChip>
+        <MudChip T="string" Value="@("WR")" Variant="Variant.Filled" Color="@(_selectedPosition == "WR" ? Color.Primary : Color.Default)">WR</MudChip>
+        <MudChip T="string" Value="@("QB")" Variant="Variant.Filled" Color="@(_selectedPosition == "QB" ? Color.Primary : Color.Default)">QB</MudChip>
+        <MudChip T="string" Value="@("TE")" Variant="Variant.Filled" Color="@(_selectedPosition == "TE" ? Color.Primary : Color.Default)">TE</MudChip>
+        <MudChip T="string" Value="@("RB")" Variant="Variant.Filled" Color="@(_selectedPosition == "RB" ? Color.Primary : Color.Default)">RB</MudChip>
     </MudChipSet>
 </MudPaper>
 
@@ -117,136 +109,187 @@
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
     }
-    else if (_filtered is null || _filtered.Count == 0)
+    else if (_isRedraftMode)
     {
-        <div class="pa-6 d-flex flex-column align-center">
-            <MudIcon Icon="@Icons.Material.Filled.SportsFootball"
-                     Style="color:var(--fc-cyan); font-size:3rem;" Class="mb-2" />
-            <MudText Typo="Typo.body1" Style="font-weight:600;">No rookies found</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                @if (_allRookies.Count == 0)
-                {
-                    <span>Rookie pool loads after NFL draft (April 24–26).</span>
-                }
-                else
-                {
-                    <span>Try adjusting the position filter or search.</span>
-                }
-            </MudText>
-        </div>
+        @* ── REDRAFT TABLE ─────────────────────────────────────────── *@
+        @if (_filteredRedraft.Count == 0)
+        {
+            <div class="pa-6 d-flex flex-column align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Analytics" Style="color:var(--fc-cyan); font-size:3rem;" Class="mb-2" />
+                <MudText Typo="Typo.body1" Style="font-weight:600;">No players found</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Try adjusting your position filter or search. Dynasty valuations must be calculated first.
+                </MudText>
+            </div>
+        }
+        else
+        {
+            <MudTable Items="@_filteredRedraft"
+                      Hover="true"
+                      Dense="true"
+                      Breakpoint="Breakpoint.Sm"
+                      Elevation="0"
+                      Class="fc-table">
+                <HeaderContent>
+                    <MudTh>Rank</MudTh>
+                    <MudTh>Player</MudTh>
+                    <MudTh>Pos</MudTh>
+                    <MudTh>Team</MudTh>
+                    <MudTh>Age</MudTh>
+                    <MudTh Style="text-align:right">Dynasty Value</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Rank">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">#@context.Rank</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Player">
+                        <MudText Typo="Typo.body2" Style="font-weight:600; color:var(--fc-cyan);">
+                            @context.PlayerName
+                        </MudText>
+                        @if (!string.IsNullOrEmpty(context.CollegeTeam))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.CollegeTeam</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Pos">
+                        <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(context.Position)" Variant="Variant.Filled">
+                            @context.Position
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Team">
+                        <MudText Typo="Typo.body2">@(context.NflTeam ?? "FA")</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Age">
+                        <MudText Typo="Typo.body2">@context.Age</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Dynasty Value" Style="text-align:right; font-family:'JetBrains Mono',monospace; color:var(--fc-cyan);">
+                        @context.TradeValue.ToString("F1")
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
     }
     else
     {
-        <MudTable Items="@_filtered"
-                  Hover="true"
-                  Dense="true"
-                  Breakpoint="Breakpoint.Sm"
-                  Elevation="0"
-                  Class="fc-table"
-                  RowClassFunc="@RowClass">
-            <HeaderContent>
-                <MudTh>Rank</MudTh>
-                <MudTh>Player</MudTh>
-                <MudTh>Pos</MudTh>
-                <MudTh>Team</MudTh>
-                <MudTh>Age</MudTh>
-                <MudTh>Pick</MudTh>
-                <MudTh>
-                    <MudTooltip Text="Composite dynasty score — draft capital 35%, positional value 25%, dynasty valuation 30%, FP rank 10%">
-                        Score ⓘ
-                    </MudTooltip>
-                </MudTh>
-                <MudTh>FP Rank</MudTh>
-                <MudTh>Action</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Rank">
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                        @(_filtered.IndexOf(context) + 1)
-                    </MudText>
-                </MudTd>
-                <MudTd DataLabel="Player">
-                    <MudButton Variant="Variant.Text"
-                               Class="pa-0"
-                               Style="font-weight:600; text-transform:none; min-width:0;"
-                               OnClick="@(() => OpenPlayerCard(context))">
-                        @context.FullName
-                    </MudButton>
-                    @if (!string.IsNullOrEmpty(context.CollegeTeam))
+        @* ── DYNASTY / ROOKIE TABLE ────────────────────────────────── *@
+        @if (_filtered is null || _filtered.Count == 0)
+        {
+            <div class="pa-6 d-flex flex-column align-center">
+                <MudIcon Icon="@Icons.Material.Filled.SportsFootball" Style="color:var(--fc-cyan); font-size:3rem;" Class="mb-2" />
+                <MudText Typo="Typo.body1" Style="font-weight:600;">No rookies found</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    @if (_allRookies.Count == 0)
                     {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            @context.CollegeTeam
-                        </MudText>
-                    }
-                </MudTd>
-                <MudTd DataLabel="Pos">
-                    <MudChip T="string" Size="Size.Small"
-                             Color="@GetPositionColor(context.Position)"
-                             Variant="Variant.Filled">
-                        @context.Position
-                    </MudChip>
-                </MudTd>
-                <MudTd DataLabel="Team">
-                    <MudText Typo="Typo.body2">@(context.NflTeam ?? "—")</MudText>
-                </MudTd>
-                <MudTd DataLabel="Age">
-                    <MudText Typo="Typo.body2">@(context.Age.HasValue? context.Age.ToString() : "—")</MudText>
-                </MudTd>
-                <MudTd DataLabel="Pick">
-                    @if (context.DraftRound.HasValue && context.DraftPick.HasValue)
-                    {
-                        <MudText Typo="Typo.body2">
-                            R@(context.DraftRound) P@(context.DraftPick)
-                        </MudText>
+                        <span>Rookie pool loads after NFL draft (April 24–26).</span>
                     }
                     else
                     {
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
+                        <span>Try adjusting the position filter or search.</span>
                     }
-                </MudTd>
-                <MudTd DataLabel="Score">
-                    <div class="d-flex align-center gap-2">
-                        <MudProgressLinear Value="@context.DynastyScore"
-                                           Max="100"
-                                           Color="@GetScoreColor(context.DynastyScore)"
-                                           Style="width:60px; height:6px; border-radius:3px;" />
-                        <MudText Typo="Typo.body2" Style="font-weight:600; min-width:36px;">
-                            @context.DynastyScore.ToString("F1")
-                        </MudText>
-                    </div>
-                </MudTd>
-                <MudTd DataLabel="FP Rank">
-                    <MudText Typo="Typo.body2">
-                        @(context.FantasyProsRank.HasValue ? $"#{context.FantasyProsRank}" : "—")
-                    </MudText>
-                </MudTd>
-                <MudTd DataLabel="Action">
-                    @if (IsDrafted(context.SleeperPlayerId))
-                    {
-                        <MudChip T="string" Size="Size.Small"
-                                 Color="Color.Default"
-                                 Variant="Variant.Outlined">
-                            Drafted
-                        </MudChip>
-                    }
-                    else if (_sessionId is not null)
-                    {
-                        <MudTooltip Text="Mark as drafted">
-                            <MudIconButton Icon="@Icons.Material.Filled.HowToVote"
-                                           Size="Size.Small"
-                                           Color="Color.Primary"
-                                           OnClick="@(() => MarkDrafted(context))" />
+                </MudText>
+            </div>
+        }
+        else
+        {
+            <MudTable Items="@_filtered"
+                      Hover="true"
+                      Dense="true"
+                      Breakpoint="Breakpoint.Sm"
+                      Elevation="0"
+                      Class="fc-table"
+                      RowClassFunc="@RowClass">
+                <HeaderContent>
+                    <MudTh>Rank</MudTh>
+                    <MudTh>Player</MudTh>
+                    <MudTh>Pos</MudTh>
+                    <MudTh>Team</MudTh>
+                    <MudTh>Age</MudTh>
+                    <MudTh>Pick</MudTh>
+                    <MudTh>
+                        <MudTooltip Text="Composite dynasty score — draft capital 35%, positional value 25%, dynasty valuation 30%, FP rank 10%">
+                            Score ⓘ
                         </MudTooltip>
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            Start session
+                    </MudTh>
+                    <MudTh>FP Rank</MudTh>
+                    <MudTh>Action</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Rank">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @(_filtered.IndexOf(context) + 1)
                         </MudText>
-                    }
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
+                    </MudTd>
+                    <MudTd DataLabel="Player">
+                        <MudButton Variant="Variant.Text"
+                                   Class="pa-0"
+                                   Style="font-weight:600; text-transform:none; min-width:0;"
+                                   OnClick="@(() => OpenPlayerCard(context))">
+                            @context.FullName
+                        </MudButton>
+                        @if (!string.IsNullOrEmpty(context.CollegeTeam))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.CollegeTeam</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Pos">
+                        <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(context.Position)" Variant="Variant.Filled">
+                            @context.Position
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Team">
+                        <MudText Typo="Typo.body2">@(context.NflTeam ?? "—")</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Age">
+                        <MudText Typo="Typo.body2">@(context.Age.HasValue ? context.Age.ToString() : "—")</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Pick">
+                        @if (context.DraftRound.HasValue && context.DraftPick.HasValue)
+                        {
+                            <MudText Typo="Typo.body2">R@(context.DraftRound) P@(context.DraftPick)</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Score">
+                        <div class="d-flex align-center gap-2">
+                            <MudProgressLinear Value="@context.DynastyScore"
+                                               Max="100"
+                                               Color="@GetScoreColor(context.DynastyScore)"
+                                               Style="width:60px; height:6px; border-radius:3px;" />
+                            <MudText Typo="Typo.body2" Style="font-weight:600; min-width:36px;">
+                                @context.DynastyScore.ToString("F1")
+                            </MudText>
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="FP Rank">
+                        <MudText Typo="Typo.body2">
+                            @(context.FantasyProsRank.HasValue ? $"#{context.FantasyProsRank}" : "—")
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Action">
+                        @if (IsDrafted(context.SleeperPlayerId))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">Drafted</MudChip>
+                        }
+                        else if (_sessionId is not null)
+                        {
+                            <MudTooltip Text="Mark as drafted">
+                                <MudIconButton Icon="@Icons.Material.Filled.HowToVote"
+                                               Size="Size.Small"
+                                               Color="Color.Primary"
+                                               OnClick="@(() => MarkDrafted(context))" />
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Start session</MudText>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
     }
 </MudPaper>
 
@@ -262,38 +305,24 @@
         @if (_pendingPick is not null)
         {
             <MudText Typo="Typo.body1" Class="mb-3">
-                <strong>@_pendingPick.FullName</strong>
-                · @_pendingPick.Position
-                · @(_pendingPick.NflTeam ?? "—")
+                <strong>@_pendingPick.FullName</strong> · @_pendingPick.Position · @(_pendingPick.NflTeam ?? "—")
             </MudText>
             <MudGrid Spacing="2">
                 <MudItem xs="6">
-                    <MudNumericField @bind-Value="_pickRound"
-                                     Label="Round"
-                                     Variant="Variant.Outlined"
-                                     Margin="Margin.Dense"
-                                     Min="1" Max="20" />
+                    <MudNumericField @bind-Value="_pickRound" Label="Round" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="20" />
                 </MudItem>
                 <MudItem xs="6">
-                    <MudNumericField @bind-Value="_pickSlot"
-                                     Label="Pick Slot"
-                                     Variant="Variant.Outlined"
-                                     Margin="Margin.Dense"
-                                     Min="1" Max="20" />
+                    <MudNumericField @bind-Value="_pickSlot" Label="Pick Slot" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="20" />
                 </MudItem>
                 <MudItem xs="12">
-                    <MudCheckBox @bind-Value="_isMyPick"
-                                 Label="This is my pick" />
+                    <MudCheckBox @bind-Value="_isMyPick" Label="This is my pick" />
                 </MudItem>
             </MudGrid>
         }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _showPickDialog = false)">Cancel</MudButton>
-        <MudButton Color="Color.Primary"
-                   Variant="Variant.Filled"
-                   OnClick="ConfirmPick"
-                   Disabled="_recordingPick">
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmPick" Disabled="_recordingPick">
             @if (_recordingPick)
             {
                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
@@ -304,84 +333,98 @@
 </MudDialog>
 
 @code {
-    // ── State ─────────────────────────────────────────────────────────────
-    private List<RookiePlayerDto> _allRookies = [];
-    private List<RookiePlayerDto> _filtered = [];
-    private List<LeagueItem> _leagues = [];
-    private HashSet<string> _picks = [];   // SleeperPlayerIds drafted
+    // ── State ───────────────────────────────────────────────────────────
+    private List<RookiePlayerDto> _allRookies   = [];
+    private List<RookiePlayerDto> _filtered     = [];
+    private List<OffSeasonPlayerDto> _redraftPlayers  = [];
+    private List<OffSeasonPlayerDto> _filteredRedraft = [];
+    private List<LeagueItem> _leagues           = [];
+    private HashSet<string> _picks              = [];
 
     private string? _selectedLeagueId;
     private string? _selectedLeagueName;
     private string? _sessionId;
     private string? _selectedPosition;
-    private string _searchText = string.Empty;
+    private string  _searchText    = string.Empty;
+    private bool    _loading       = true;
+    private bool    _isRedraftMode = false;
 
-    private bool _loading = true;
+    // Session dialog state
     private bool _startingSession = false;
-    private bool _recordingPick = false;
-    private bool _showPickDialog = false;
-
-    // Pick dialog state
+    private bool _recordingPick   = false;
+    private bool _showPickDialog  = false;
     private RookiePlayerDto? _pendingPick;
-    private int _pickRound = 1;
-    private int _pickSlot = 1;
-    private bool _isMyPick = true;
+    private int  _pickRound = 1;
+    private int  _pickSlot  = 1;
+    private bool _isMyPick  = true;
 
-    private async Task OpenPlayerCard(RookiePlayerDto player)
-    {
-        var cardData = new PlayerCardDialog.PlayerCardData(
-            SleeperPlayerId: player.SleeperPlayerId,
-            FullName: player.FullName,
-            Position: player.Position,
-            NflTeam: player.NflTeam,
-            Age: player.Age,
-            DraftRound: player.DraftRound,
-            DraftPick: player.DraftPick,
-            CollegeTeam: player.CollegeTeam,
-            HeadshotUrl: player.HeadshotUrl,
-            FantasyProsRank: player.FantasyProsRank,
-            FantasyProsTier: player.FantasyProsTier,
-            DynastyScore: player.DynastyScore,
-            DraftCapitalScore: player.DraftCapitalScore,
-            PositionalScore: player.PositionalScore,
-            ValuationBlendScore: player.ValuationBlendScore,
-            FantasyProsScore: player.FantasyProsScore);
-
-        var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, cardData }
-    };
-
-        var options = new DialogOptions
-        {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true,
-            CloseButton = true,
-            BackdropClick = true
-        };
-
-        await DialogService.ShowAsync<PlayerCardDialog>(player.FullName, parameters, options);
-    }
-    // ── Lifecycle ─────────────────────────────────────────────────────────
+    // ── Lifecycle ───────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
+        LeagueState.OnLeagueChanged += OnLeagueChangedHandler;
         await LoadLeagues();
-        await LoadRookies();
+
+        // Sync local selector to global LeagueState
+        if (!string.IsNullOrEmpty(LeagueState.ActiveLeagueId))
+        {
+            _selectedLeagueId   = LeagueState.ActiveLeagueId;
+            _selectedLeagueName = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId)?.LeagueName;
+        }
+
+        var league = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId);
+        _isRedraftMode = league?.LeagueType != "Dynasty";
+
+        await LoadCurrentMode();
     }
 
-    // ── Data loading ──────────────────────────────────────────────────────
+    private void OnLeagueChangedHandler()
+    {
+        var league = _leagues.FirstOrDefault(l => l.LeagueId == LeagueState.ActiveLeagueId);
+        if (league is null) return;
+
+        _selectedLeagueId   = league.LeagueId;
+        _selectedLeagueName = league.LeagueName;
+        _isRedraftMode      = league.LeagueType != "Dynasty";
+        _sessionId          = null;
+        _picks              = [];
+        // Clear cached data so switching leagues forces a fresh load
+        _allRookies      = [];
+        _filtered        = [];
+        _redraftPlayers  = [];
+        _filteredRedraft = [];
+
+        _ = InvokeAsync(async () =>
+        {
+            await LoadCurrentMode();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        LeagueState.OnLeagueChanged -= OnLeagueChangedHandler;
+    }
+
+    // ── Data loading ────────────────────────────────────────────────────
+    private async Task LoadCurrentMode()
+    {
+        if (_isRedraftMode)
+            await LoadRedraftPlayers();
+        else
+            await LoadRookies();
+    }
+
     private async Task LoadLeagues()
     {
         try
         {
-            var ctx = await Http.GetFromJsonAsync<UserContextResponse>(
-                "api/v1/identity/context");
+            var ctx = await Http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
             if (ctx is not null)
             {
                 _leagues = ctx.Leagues ?? [];
-                if (_leagues.Count > 0)
+                if (_leagues.Count > 0 && string.IsNullOrEmpty(_selectedLeagueId))
                 {
-                    _selectedLeagueId = _leagues[0].LeagueId;
+                    _selectedLeagueId   = _leagues[0].LeagueId;
                     _selectedLeagueName = _leagues[0].LeagueName;
                 }
             }
@@ -401,16 +444,14 @@
             var url = string.IsNullOrEmpty(_selectedPosition)
                 ? "api/v1/drafttools/rookies"
                 : $"api/v1/drafttools/rookies?position={_selectedPosition}";
-
-            _allRookies = await Http.GetFromJsonAsync<List<RookiePlayerDto>>(url)
-                          ?? [];
-            ApplyFilter();
+            _allRookies = await Http.GetFromJsonAsync<List<RookiePlayerDto>>(url) ?? [];
+            ApplyRookieFilter();
         }
         catch
         {
             Snackbar.Add("Failed to load rookie pool.", Severity.Error);
             _allRookies = [];
-            _filtered = [];
+            _filtered   = [];
         }
         finally
         {
@@ -418,67 +459,99 @@
         }
     }
 
-    // ── Filtering ─────────────────────────────────────────────────────────
-    private void ApplyFilter()
+    private async Task LoadRedraftPlayers()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var posParam = string.IsNullOrEmpty(_selectedPosition) ? "" : $"&position={_selectedPosition}";
+            var url = $"api/v1/waiver/available/offseason?leagueId={_selectedLeagueId}&top=150{posParam}";
+            _redraftPlayers = await Http.GetFromJsonAsync<List<OffSeasonPlayerDto>>(url) ?? [];
+            ApplyRedraftFilter();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load redraft rankings.", Severity.Error);
+            _redraftPlayers  = [];
+            _filteredRedraft = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // ── Filtering ───────────────────────────────────────────────────────
+    private void ApplyRookieFilter()
     {
         var query = _allRookies.AsEnumerable();
-
         if (!string.IsNullOrWhiteSpace(_searchText))
             query = query.Where(r =>
                 r.FullName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
                 (r.NflTeam?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
                 (r.CollegeTeam?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false));
-
         _filtered = query.ToList();
+    }
+
+    private void ApplyRedraftFilter()
+    {
+        var query = _redraftPlayers.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(_searchText))
+            query = query.Where(r =>
+                r.PlayerName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                (r.NflTeam?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false));
+        _filteredRedraft = query.ToList();
     }
 
     private async Task OnPositionChanged(string? position)
     {
         _selectedPosition = position;
-        // Position filter hits the API (server-side) so we re-fetch
-        await LoadRookies();
+        await LoadCurrentMode();
     }
 
-    // Immediate search — client-side only, no re-fetch needed
-    // Triggered by @bind-Value Immediate="true" but MudTextField doesn't
-    // auto-call a method — wire it via a property setter:
+    // SearchText property — client-side filter, no re-fetch
     private string SearchText
     {
         get => _searchText;
-        set { _searchText = value; ApplyFilter(); }
+        set
+        {
+            _searchText = value;
+            if (_isRedraftMode) ApplyRedraftFilter();
+            else ApplyRookieFilter();
+        }
     }
 
+    // In-page league selector changed
     private async Task OnLeagueChanged(string leagueId)
     {
-        _selectedLeagueId = leagueId;
+        _selectedLeagueId   = leagueId;
         _selectedLeagueName = _leagues.FirstOrDefault(l => l.LeagueId == leagueId)?.LeagueName;
-        _sessionId = null;   // reset session when league changes
-        _picks = [];
-        await Task.CompletedTask;
+        var league          = _leagues.FirstOrDefault(l => l.LeagueId == leagueId);
+        _isRedraftMode      = league?.LeagueType != "Dynasty";
+        _sessionId          = null;
+        _picks              = [];
+        _allRookies         = [];
+        _filtered           = [];
+        _redraftPlayers     = [];
+        _filteredRedraft    = [];
+        await LoadCurrentMode();
     }
 
-    // ── Session management ────────────────────────────────────────────────
+    // ── Session management ──────────────────────────────────────────────
     private async Task StartSession()
     {
         if (string.IsNullOrEmpty(_selectedLeagueId)) return;
-
         _startingSession = true;
         StateHasChanged();
         try
         {
             var response = await Http.PostAsJsonAsync(
                 "api/v1/drafttools/sessions",
-                new
-                {
-                    leagueId = _selectedLeagueId,
-                    leagueName = _selectedLeagueName ?? _selectedLeagueId,
-                    season = 2026
-                });
-
+                new { leagueId = _selectedLeagueId, leagueName = _selectedLeagueName ?? _selectedLeagueId, season = 2026 });
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content
-                    .ReadFromJsonAsync<SessionStartResponse>();
+                var result = await response.Content.ReadFromJsonAsync<SessionStartResponse>();
                 _sessionId = result?.SessionId;
                 Snackbar.Add("Draft session started!", Severity.Success);
             }
@@ -497,20 +570,19 @@
         }
     }
 
-    // ── Pick management ───────────────────────────────────────────────────
+    // ── Pick management ─────────────────────────────────────────────────
     private void MarkDrafted(RookiePlayerDto player)
     {
-        _pendingPick = player;
-        _pickRound = 1;
-        _pickSlot = _picks.Count + 1;
-        _isMyPick = true;
-        _showPickDialog = true;
+        _pendingPick     = player;
+        _pickRound       = 1;
+        _pickSlot        = _picks.Count + 1;
+        _isMyPick        = true;
+        _showPickDialog  = true;
     }
 
     private async Task ConfirmPick()
     {
         if (_pendingPick is null || _sessionId is null) return;
-
         _recordingPick = true;
         try
         {
@@ -518,22 +590,19 @@
                 $"api/v1/drafttools/sessions/{_sessionId}/picks",
                 new
                 {
-                    sleeperPlayerId = _pendingPick.SleeperPlayerId,
-                    playerName = _pendingPick.FullName,
-                    position = _pendingPick.Position,
-                    round = _pickRound,
-                    slot = _pickSlot,
+                    sleeperPlayerId  = _pendingPick.SleeperPlayerId,
+                    playerName       = _pendingPick.FullName,
+                    position         = _pendingPick.Position,
+                    round            = _pickRound,
+                    slot             = _pickSlot,
                     pickedByTeamName = (string?)null,
-                    isMyPick = _isMyPick
+                    isMyPick         = _isMyPick
                 });
-
             if (response.IsSuccessStatusCode)
             {
                 _picks.Add(_pendingPick.SleeperPlayerId);
                 _showPickDialog = false;
-                Snackbar.Add(
-                    $"{_pendingPick.FullName} marked as drafted.",
-                    Severity.Success);
+                Snackbar.Add($"{_pendingPick.FullName} marked as drafted.", Severity.Success);
             }
             else
             {
@@ -550,10 +619,34 @@
         }
     }
 
-    private bool IsDrafted(string sleeperPlayerId)
-        => _picks.Contains(sleeperPlayerId);
+    private bool IsDrafted(string sleeperPlayerId) => _picks.Contains(sleeperPlayerId);
 
-    // ── Styling helpers ───────────────────────────────────────────────────
+    private async Task OpenPlayerCard(RookiePlayerDto player)
+    {
+        var cardData = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId:     player.SleeperPlayerId,
+            FullName:            player.FullName,
+            Position:            player.Position,
+            NflTeam:             player.NflTeam,
+            Age:                 player.Age,
+            DraftRound:          player.DraftRound,
+            DraftPick:           player.DraftPick,
+            CollegeTeam:         player.CollegeTeam,
+            HeadshotUrl:         player.HeadshotUrl,
+            FantasyProsRank:     player.FantasyProsRank,
+            FantasyProsTier:     player.FantasyProsTier,
+            DynastyScore:        player.DynastyScore,
+            DraftCapitalScore:   player.DraftCapitalScore,
+            PositionalScore:     player.PositionalScore,
+            ValuationBlendScore: player.ValuationBlendScore,
+            FantasyProsScore:    player.FantasyProsScore);
+
+        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, cardData } };
+        var options    = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, BackdropClick = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(player.FullName, parameters, options);
+    }
+
+    // ── Styling helpers ─────────────────────────────────────────────────
     private string RowClass(RookiePlayerDto row, int index)
         => IsDrafted(row.SleeperPlayerId) ? "mud-table-row-disabled" : string.Empty;
 
@@ -563,7 +656,7 @@
         "WR" => Color.Primary,
         "TE" => Color.Secondary,
         "RB" => Color.Success,
-        _ => Color.Default
+        _    => Color.Default
     };
 
     private static Color GetScoreColor(double score) => score switch
@@ -571,43 +664,55 @@
         >= 75 => Color.Success,
         >= 50 => Color.Primary,
         >= 25 => Color.Warning,
-        _ => Color.Default
+        _     => Color.Default
     };
 
-    // ── Local DTOs ────────────────────────────────────────────────────────
+    // ── DTOs ────────────────────────────────────────────────────────────
     private record RookiePlayerDto(
-        string SleeperPlayerId,
-        string FullName,
-        string Position,
+        string  SleeperPlayerId,
+        string  FullName,
+        string  Position,
         string? NflTeam,
-        int? Age,
-        int? DraftRound,
-        int? DraftPick,
+        int?    Age,
+        int?    DraftRound,
+        int?    DraftPick,
         string? CollegeTeam,
         string? HeadshotUrl,
         double? CareerValueScore,
         double? TradeValue,
         double? DiscountedFutureValue,
         double? BreakoutScore,
-        int? FantasyProsRank,
-        int? FantasyProsPositionRank,
+        int?    FantasyProsRank,
+        int?    FantasyProsPositionRank,
         string? FantasyProsTier,
-        double DynastyScore,
-        double DraftCapitalScore,
-        double PositionalScore,
-        double ValuationBlendScore,
-        double FantasyProsScore);
+        double  DynastyScore,
+        double  DraftCapitalScore,
+        double  PositionalScore,
+        double  ValuationBlendScore,
+        double  FantasyProsScore);
+
+    private record OffSeasonPlayerDto(
+        string  SleeperPlayerId,
+        string  PlayerName,
+        string  Position,
+        string? NflTeam,
+        int     Age,
+        double  TradeValue,
+        int     Rank,
+        string? CollegeTeam);
 
     private record LeagueItem(
         string LeagueId,
         string LeagueName,
-        int Season,
-        string Role);
+        int    Season,
+        string Role,
+        bool   IsActive   = false,
+        string LeagueType = "Redraft");
 
     private record UserContextResponse(
-        bool IsSleeperLinked,
+        bool             IsSleeperLinked,
         List<LeagueItem>? Leagues,
-        string? ActiveLeagueId);
+        string?          ActiveLeagueId);
 
     private record SessionStartResponse(string SessionId);
 }

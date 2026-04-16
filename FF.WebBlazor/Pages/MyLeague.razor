@@ -1,0 +1,252 @@
+﻿@page "/my-league"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
+@inject LeagueStateService LeagueState
+@implements IDisposable
+
+<PageTitle>My League — FantasyCombine.AI</PageTitle>
+
+@* ── HEADER ──────────────────────────────────────────────── *@
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.Leaderboard" Class="mr-2" Style="vertical-align:middle;" />
+        @(_leagueName ?? "My League")
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Season @_season · Week @_week
+    </MudText>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-6" />
+}
+else
+{
+    @* ── RECORD + WAIVER ROW ─────────────────────────────────── *@
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="6" sm="3">
+            <MudPaper Class="fc-stat-card" Elevation="0">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Record</MudText>
+                <MudText Typo="Typo.h4" Class="fc-cyan font-mono">@_wins-@_losses</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Class="fc-stat-card" Elevation="0">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Waiver Priority</MudText>
+                <MudText Typo="Typo.h4" Class="fc-cyan font-mono">
+                    @(_waiverPosition > 0 ? $"#{_waiverPosition}" : "—")
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Class="fc-stat-card" Elevation="0">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Active Injuries</MudText>
+                <MudText Typo="Typo.h4" Class="font-mono"
+                         Style="@(_injuryCount > 0 ? "color:#F87171;" : "color:#E8EAF0;")">
+                    @_injuryCount
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Class="fc-stat-card" Elevation="0">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">On IR</MudText>
+                <MudText Typo="Typo.h4" Class="font-mono mud-text-secondary">@_irCount</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ── LEAGUE PULSE ─────────────────────────────────────────── *@
+    <MudText Typo="Typo.overline" Class="fc-section-label mb-3 d-block">LEAGUE PULSE</MudText>
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="fc-stat-card" Elevation="0">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Projected Players</MudText>
+                <MudText Typo="Typo.h4" Class="fc-cyan font-mono">@_playerCount</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="fc-stat-card" Elevation="0">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Top Boom Candidate</MudText>
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600; color:#E8EAF0;">@_topBoomPlayer</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="fc-stat-card" Elevation="0">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Top Ceiling Player</MudText>
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600; color:#E8EAF0;">@_topCeilingPlayer</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ── QUICK LINKS ──────────────────────────────────────────── *@
+    <MudText Typo="Typo.overline" Class="fc-section-label mb-3 d-block">QUICK ACCESS</MudText>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="fc-quick-link" Elevation="0" @onclick='@(() => Nav.NavigateTo("/my-team"))'>
+                <MudIcon Icon="@Icons.Material.Filled.Groups" Class="fc-quick-link-icon" />
+                <div>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;">My Roster</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Depth · Grades · Dynasty</MudText>
+                </div>
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="ml-auto mud-text-secondary" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="fc-quick-link" Elevation="0" @onclick='@(() => Nav.NavigateTo("/my-matchup"))'>
+                <MudIcon Icon="@Icons.Material.Filled.SportsMma" Class="fc-quick-link-icon" />
+                <div>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;">My Matchup</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Win probability · Sim</MudText>
+                </div>
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="ml-auto mud-text-secondary" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="fc-quick-link" Elevation="0" @onclick='@(() => Nav.NavigateTo("/league/standings"))'>
+                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Class="fc-quick-link-icon" />
+                <div>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;">League Standings</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Rankings · History</MudText>
+                </div>
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="ml-auto mud-text-secondary" />
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="fc-quick-link" Elevation="0" @onclick='@(() => Nav.NavigateTo("/waiver-wire"))'>
+                <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="fc-quick-link-icon" />
+                <div>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Waiver Wire</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Targets · Adds · Value</MudText>
+                </div>
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="ml-auto mud-text-secondary" />
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private int _season;
+    private int _week;
+    private string? _leagueName;
+    private string? _activeLeagueId;
+    private int _wins;
+    private int _losses;
+    private int _waiverPosition;
+    private int _injuryCount;
+    private int _irCount;
+    private int _playerCount;
+    private string _topBoomPlayer = "—";
+    private string _topCeilingPlayer = "—";
+
+    protected override async Task OnInitializedAsync()
+    {
+        LeagueState.OnLeagueChanged += OnLeagueChangedHandler;
+        await LoadAsync();
+    }
+
+    private void OnLeagueChangedHandler()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        LeagueState.OnLeagueChanged -= OnLeagueChangedHandler;
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _leagueName = null;
+        _wins = 0; _losses = 0; _waiverPosition = 0;
+        _injuryCount = 0; _irCount = 0;
+        _playerCount = 0; _topBoomPlayer = "—"; _topCeilingPlayer = "—";
+
+        var http = HttpClientFactory.CreateClient("AuthAPI");
+
+        // ── 1. NFL context ────────────────────────────────────────────
+        try
+        {
+            var ctx = await http.GetFromJsonAsync<NflContextResponse>("api/v1/admin/nfl-context");
+            if (ctx is not null) { _season = ctx.ActiveSeason; _week = ctx.ActiveWeek; }
+        }
+        catch
+        {
+            _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+            _week = 18;
+        }
+
+        // ── 2. Resolve active league ──────────────────────────────────
+        _activeLeagueId = LeagueState.ActiveLeagueId;
+        try
+        {
+            var ctx = await http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
+            if (string.IsNullOrEmpty(_activeLeagueId))
+            {
+                _activeLeagueId = ctx?.Leagues?.FirstOrDefault()?.LeagueId;
+                _leagueName = ctx?.Leagues?.FirstOrDefault()?.LeagueName;
+            }
+            else
+            {
+                _leagueName = ctx?.Leagues?
+                    .FirstOrDefault(l => l.LeagueId == _activeLeagueId)?.LeagueName;
+            }
+        }
+        catch { }
+
+        if (string.IsNullOrEmpty(_activeLeagueId))
+        {
+            _loading = false;
+            return;
+        }
+
+        // ── 3. Roster snapshot ────────────────────────────────────────
+        try
+        {
+            var roster = await http.GetFromJsonAsync<MyRosterDto>(
+                $"api/v1/team/roster?sleeperLeagueId={_activeLeagueId}");
+            if (roster is not null)
+            {
+                _wins = roster.Wins;
+                _losses = roster.Losses;
+                _waiverPosition = roster.WaiverPosition;
+                _injuryCount = roster.Players.Count(p => p.InjuryDesignation != null && !p.IsOnIr);
+                _irCount = roster.Players.Count(p => p.IsOnIr);
+            }
+        }
+        catch { }
+
+        // ── 4. League pulse ───────────────────────────────────────────
+        try
+        {
+            var sims = await http.GetFromJsonAsync<List<SimSummary>>(
+                $"api/v1/projections/simulations?season={_season}&week={_week}");
+            if (sims is { Count: > 0 })
+            {
+                _playerCount = sims.Count;
+                _topBoomPlayer = sims.MaxBy(s => s.BoomProbability)?.PlayerName ?? "—";
+                _topCeilingPlayer = sims.MaxBy(s => s.Ceiling)?.PlayerName ?? "—";
+            }
+        }
+        catch { }
+
+        _loading = false;
+    }
+
+    // ── DTOs ──────────────────────────────────────────────────────────
+    private record NflContextResponse(int CalendarSeason, int CalendarWeek, int ActiveSeason, int ActiveWeek, bool IsOverrideActive);
+    private record UserContextResponse(bool IsSleeperLinked, List<LeagueItem>? Leagues, string? ActiveLeagueId);
+    private record LeagueItem(string LeagueId, string LeagueName, int Season, string Role);
+    private record MyRosterDto(string TeamName, string OwnerName, string LeagueId, int Wins, int Losses, int WaiverPosition, List<MyRosterPlayerDto> Players);
+    private record MyRosterPlayerDto(string SleeperPlayerId, string PlayerName, string Position, string NflTeam, int? Age, string? InjuryDesignation, bool IsStarter, bool IsOnIr, double? MedianProjectedPoints, string? ByeWeek);
+    private record SimSummary(string PlayerName, string Position, decimal Ceiling, decimal BoomProbability);
+}

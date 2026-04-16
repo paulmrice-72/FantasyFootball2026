@@ -24,7 +24,7 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
                     m.Season,
                     m.Role,
                     m.IsActive,
-                    m.LeagueType))
+                    l.LeagueType))   // ← was m.LeagueType, now l.LeagueType
             .ToListAsync(cancellationToken);
     }
 

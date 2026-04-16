@@ -1,0 +1,352 @@
+@page "/redraft-rankings"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Redraft Rankings — FantasyCombine.AI</PageTitle>
+
+@* ── HEADER ──────────────────────────────────────────────────────────── *@
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.FormatListNumbered" Class="mr-2" Style="vertical-align:middle;" />
+        Redraft Rankings
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Scoring-adjusted projections · Floor · Median · Ceiling · Boom/Bust probability
+    </MudText>
+</div>
+
+@* ── CONTROLS BAR ────────────────────────────────────────────────────── *@
+<MudPaper Class="fc-controls-bar mb-4 pa-3" Elevation="0">
+    <MudGrid Spacing="2" AlignItems="AlignItems.End">
+        <MudItem xs="6" sm="3" md="2">
+            <MudNumericField @bind-Value="_season"
+                             Label="Season"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="2022" Max="2030" />
+        </MudItem>
+        <MudItem xs="6" sm="3" md="2">
+            <MudNumericField @bind-Value="_week"
+                             Label="Week"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Min="1" Max="18" />
+        </MudItem>
+        <MudItem xs="6" sm="3" md="2" Class="d-flex align-end">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       FullWidth="true"
+                       Disabled="_loading"
+                       OnClick="LoadRankings"
+                       Style="height:40px;">
+                Load
+            </MudButton>
+        </MudItem>
+        <MudItem xs="12" sm="3" md="6" Class="d-flex align-end">
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Search player or team..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          DebounceInterval="200"
+                          FullWidth="true" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@* ── POSITION TABS ───────────────────────────────────────────────────── *@
+<MudTabs @bind-ActivePanelIndex="_activeTab"
+         Rounded="true"
+         Border="true"
+         Class="mb-4 fc-tabs"
+         PanelClass="pa-0">
+    <MudTabPanel Text="All" />
+    <MudTabPanel Text="QB" />
+    <MudTabPanel Text="RB" />
+    <MudTabPanel Text="WR" />
+    <MudTabPanel Text="TE" />
+</MudTabs>
+
+@* ── STATE ───────────────────────────────────────────────────────────── *@
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+}
+
+@if (!_loading && !_queried)
+{
+    <MudAlert Severity="Severity.Info">
+        Select a season and week then click <strong>Load</strong> to see rankings.
+        Rankings reflect scoring-adjusted median projections from your simulation engine.
+    </MudAlert>
+}
+else if (!_loading && _filtered.Count == 0 && _queried && _error is null)
+{
+    <MudAlert Severity="Severity.Info">
+        No projection data found for Season @_season Week @_week.
+        Run projections and simulations from the Admin console first.
+    </MudAlert>
+}
+else if (_filtered.Count > 0)
+{
+    @* ── RANKINGS TABLE ──────────────────────────────────────────── *@
+    <MudPaper Elevation="0" Class="fc-table-paper">
+        <MudTable Items="@_filtered"
+                  Dense="true"
+                  Hover="true"
+                  Striped="false"
+                  FixedHeader="true"
+                  Height="calc(100vh - 380px)"
+                  SortLabel="Sort"
+                  Class="fc-table"
+                  OnRowClick="@((TableRowClickEventArgs<SimRow> args) => { if (args.Item is not null) _ = OpenPlayerCard(args.Item); })">
+            <HeaderContent>
+                <MudTh Style="width:44px;">#</MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.PlayerName)">Player</MudTableSortLabel>
+                </MudTh>
+                <MudTh>Pos</MudTh>
+                <MudTh>Team</MudTh>
+                <MudTh>Opp</MudTh>
+                <MudTh Style="text-align:right;">
+                    <MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.Floor)">Floor</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="text-align:right;">
+                    <MudTableSortLabel InitialDirection="SortDirection.Descending"
+                                       SortBy="new Func<SimRow, object>(x => x.Median)">Median</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="text-align:right;">
+                    <MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.Ceiling)">Ceiling</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="text-align:right;">
+                    <MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.BoomProbability)">Boom%</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="text-align:right;">
+                    <MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.BustProbability)">Bust%</MudTableSortLabel>
+                </MudTh>
+                <MudTh>Spread</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="#">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary font-mono">
+                        @(_filtered.IndexOf(context) + 1)
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Player">
+                    <MudText Typo="Typo.body2" Style="font-weight:600; color:var(--fc-cyan); cursor:pointer;">
+                        @context.PlayerName
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Pos">
+                    <MudChip T="string" Size="Size.Small" Class="@PositionClass(context.Position)">
+                        @context.Position
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Team">
+                    <MudText Typo="Typo.body2">@context.NflTeam</MudText>
+                </MudTd>
+                <MudTd DataLabel="Opp">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@context.OpponentTeam</MudText>
+                </MudTd>
+                <MudTd DataLabel="Floor" Style="text-align:right;">
+                    <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                        @context.Floor.ToString("F1")
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Median" Style="text-align:right;">
+                    <MudText Typo="Typo.body2" Class="font-mono fc-cyan" Style="font-weight:600;">
+                        @context.Median.ToString("F1")
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Ceiling" Style="text-align:right;">
+                    <MudText Typo="Typo.body2" Class="font-mono fc-ceiling">
+                        @context.Ceiling.ToString("F1")
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Boom%" Style="text-align:right;">
+                    @{ var boom = context.BoomProbability * 100; }
+                    <MudText Typo="Typo.body2" Class="@($"font-mono {(boom >= 30 ? "fc-boom" : "mud-text-secondary")}")">
+                        @boom.ToString("F0")%
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Bust%" Style="text-align:right;">
+                    @{ var bust = context.BustProbability * 100; }
+                    <MudText Typo="Typo.body2" Class="@($"font-mono {(bust >= 30 ? "fc-bust" : "mud-text-secondary")}")">
+                        @bust.ToString("F0")%
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Spread">
+                    <MudText Typo="Typo.body2" Class="@($"font-mono {(context.Spread > 0 ? "fc-favoured" : context.Spread < 0 ? "fc-dog" : "mud-text-secondary")}")">
+                        @(context.Spread == 0 ? "—" : context.Spread > 0 ? $"+{context.Spread:F1}" : $"{context.Spread:F1}")
+                    </MudText>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 25, 50, 100, 250 }" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    // ── State ─────────────────────────────────────────────────────────
+    private int     _season;
+    private int     _week;
+    private string  _search    = string.Empty;
+    private int     _activeTab = 0;
+    private bool    _loading   = false;
+    private bool    _queried   = false;
+    private string? _error;
+
+    private List<SimRow> _all      = [];
+    private List<SimRow> _filtered = [];
+
+    private static readonly string[] Positions = ["", "QB", "RB", "WR", "TE"];
+
+    // ── Lifecycle ──────────────────────────────────────────────────────
+    protected override void OnInitialized()
+    {
+        var now = DateTime.UtcNow;
+        _season = now.Month >= 3 ? now.Year : now.Year - 1;
+        _week   = GetCurrentNflWeek();
+    }
+
+    // ── Data loading ───────────────────────────────────────────────────
+    private async Task LoadRankings()
+    {
+        _loading = true;
+        _queried = true;
+        _error   = null;
+        _all     = [];
+        StateHasChanged();
+
+        try
+        {
+            var position = Positions[_activeTab];
+            var posParam = string.IsNullOrEmpty(position) ? "" : $"&position={position}";
+
+            var rows = await Http.GetFromJsonAsync<List<SimRow>>(
+                $"api/v1/projections/simulations?season={_season}&week={_week}{posParam}");
+
+            _all = rows ?? [];
+
+            if (_all.Count == 0)
+                Snackbar.Add($"No simulation data for {_season} Week {_week}. Run simulate first.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load rankings: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            ApplyFilters();
+        }
+    }
+
+    // ── Filtering ──────────────────────────────────────────────────────
+    private void ApplyFilters()
+    {
+        var position = Positions[_activeTab];
+
+        _filtered = _all
+            .Where(p => string.IsNullOrEmpty(position) || p.Position == position)
+            .Where(p => string.IsNullOrEmpty(_search)  ||
+                        p.PlayerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                        p.NflTeam.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(p => p.Median)
+            .ToList();
+
+        StateHasChanged();
+    }
+
+    private int    _prevTab    = 0;
+    private string _prevSearch = string.Empty;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_activeTab != _prevTab || _search != _prevSearch)
+        {
+            _prevTab    = _activeTab;
+            _prevSearch = _search;
+            ApplyFilters();
+        }
+    }
+
+    // ── Player card ────────────────────────────────────────────────────
+    private async Task OpenPlayerCard(SimRow row)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId:     row.SleeperPlayerId,
+            FullName:            row.PlayerName,
+            Position:            row.Position,
+            NflTeam:             row.NflTeam,
+            Age:                 null,
+            DraftRound:          null,
+            DraftPick:           null,
+            CollegeTeam:         null,
+            HeadshotUrl:         $"https://sleepercdn.com/content/nfl/players/thumb/{row.SleeperPlayerId}.jpg",
+            FantasyProsRank:     null,
+            FantasyProsTier:     null,
+            DynastyScore:        0,
+            DraftCapitalScore:   0,
+            PositionalScore:     0,
+            ValuationBlendScore: 0,
+            FantasyProsScore:    0);
+
+        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, data } };
+        var options    = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(row.PlayerName, parameters, options);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────
+    private static int GetCurrentNflWeek()
+    {
+        var now    = DateTime.UtcNow;
+        var season = now.Month >= 3 ? now.Year : now.Year - 1;
+        var sept1  = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var offset = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+        var start  = sept1.AddDays(offset);
+        if (now < start) return 1;
+        return Math.Clamp((int)((now - start).TotalDays / 7) + 1, 1, 18);
+    }
+
+    private static string PositionClass(string pos) => pos switch
+    {
+        "QB" => "fc-chip-qb",
+        "RB" => "fc-chip-rb",
+        "WR" => "fc-chip-wr",
+        "TE" => "fc-chip-te",
+        _    => ""
+    };
+
+    // ── DTO — mirrors SimRow from Projections.razor exactly ────────────
+    private record SimRow(
+        string  PlayerId,
+        string  SleeperPlayerId,
+        string  PlayerName,
+        string  Position,
+        string  NflTeam,
+        string  OpponentTeam,
+        decimal Floor,
+        decimal Median,
+        decimal Ceiling,
+        decimal BoomProbability,
+        decimal BustProbability,
+        string  PlayerRole,
+        string  ScoringFormat,
+        decimal Spread,
+        string  GameScript);
+}

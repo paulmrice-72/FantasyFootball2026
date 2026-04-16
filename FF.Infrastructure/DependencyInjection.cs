@@ -10,6 +10,7 @@ using FF.Application.Interfaces.Services;
 using FF.Application.Interfaces.Services.Usage;
 using FF.Application.Services;
 using FF.Domain.Documents;
+using FF.Infrastructure.Agents;
 using FF.Infrastructure.ExternalApis.CsvImport;
 using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
 using FF.Infrastructure.ExternalApis.Nflverse;
@@ -91,6 +92,11 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
         });
+        services.AddHttpClient("AnthropicAgent", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI/1.0");
+        });
         services.AddScoped<IEmergenceAlertRepository, EmergenceAlertRepository>();
         services.AddScoped<EmergenceDetectionJob>();
         services.AddScoped<IAgingCurveRepository, AgingCurveRepository>();
@@ -126,6 +132,8 @@ public static class DependencyInjection
             AllowAutoRedirect = true // GitHub releases use redirects
         });
 
+
+        services.AddScoped<IAgentOrchestrationService, AgentOrchestrationService>();
         services.AddScoped<INflverseDownloadService, NflverseDownloadService>();
 
         // Health Checks
