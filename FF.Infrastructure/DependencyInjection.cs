@@ -113,7 +113,8 @@ public static class DependencyInjection
         services.AddScoped<InjuryAlertSyncJob>();
         services.AddScoped<IPickValueRepository, PickValueRepository>();
         services.AddScoped<SeedPickValuesJob>();
-
+        services.AddScoped<IPffDraftGradeRepository, PffDraftGradeRepository>();
+        services.AddScoped<IConsensusAdpRepository, ConsensusAdpRepository>();
         services.AddHttpClient("NflverseClient", client =>
         {
             client.DefaultRequestHeaders.UserAgent.ParseAdd("FantasyCombineAI/1.0");
@@ -380,9 +381,9 @@ public static class DependencyInjection
                 BsonClassMap.RegisterClassMap<FantasyProsRookieRankingDocument>(cm =>
                 {
                     cm.AutoMap();
-                    cm.SetIdMember(cm.GetMemberMap(x => x.Id));
-                    cm.IdMemberMap.SetSerializer(new StringSerializer(BsonType.String));
                     cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                        .SetSerializer(new StringSerializer(BsonType.String));
                 });
             }
 

@@ -23,10 +23,22 @@ public record RookiePlayerDto(
     int? FantasyProsPositionRank,
     string? FantasyProsTier,
 
-    // ── E10 Composite score ───────────────────────────────────────────────
+    // From pff_draft_grades
+    double? PffGrade,
+    int? PffRank,
+
+    // From consensus_adp
+    double? ConsensusAdp,
+    int? ConsensusAdpRank,
+    string? AdpSource,
+
+    // Composite score + per-signal breakdown
     double DynastyScore,
     double DraftCapitalScore,
-    double PositionalScore,
+    double FantasyProsScore,
+    double PffGradeScore,
+    double ConsensusAdpScore,
     double ValuationBlendScore,
-    double FantasyProsScore
+    double PositionalScore,
+    List<string> ActiveSignals
 );
