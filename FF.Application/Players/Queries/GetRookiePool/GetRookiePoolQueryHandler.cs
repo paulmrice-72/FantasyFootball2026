@@ -11,11 +11,12 @@ namespace FF.Application.Players.Queries.GetRookiePool;
 public class GetRookiePoolQueryHandler(
     IPlayerRepository playerRepository,
     IDynastyValuationRepository dynastyValuationRepository,
-    IFantasyProsRookieRankingRepository fantasyProsRepository)
+    IFantasyProsRookieRankingRepository fantasyProsRepository,
+    IPffDraftGradeRepository pffRepository,
+    IConsensusAdpRepository adpRepository)
     : IRequestHandler<GetRookiePoolQuery, Result<List<RookiePlayerDto>>>
 {
-    private const string HeadshotBaseUrl =
-        "https://sleepercdn.com/content/nfl/players/thumb/";
+    private const string HeadshotBaseUrl = "https://sleepercdn.com/content/nfl/players/thumb/";
 
     public async Task<Result<List<RookiePlayerDto>>> Handle(
         GetRookiePoolQuery request,
@@ -33,22 +34,26 @@ public class GetRookiePoolQueryHandler(
             .Select(p => p.SleeperPlayerId!)
             .ToList();
 
-        // 2 — Dynasty valuations from MongoDB (batch)
-        var valuations = await dynastyValuationRepository
-            .GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
+        // 2 — All signal sources from MongoDB (batch, parallel)
+        var valuationsTask = dynastyValuationRepository.GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
+        var fpTask = fantasyProsRepository.GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
+        var pffTask = pffRepository.GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
+        var adpTask = adpRepository.GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
 
-        // 3 — FantasyPros rankings from MongoDB (batch)
-        var fpRankings = await fantasyProsRepository
-            .GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
+        await Task.WhenAll(valuationsTask, fpTask, pffTask, adpTask);
 
-        // 4 — Join, score, project
+        var valuations = await valuationsTask;
+        var fpRankings = await fpTask;
+        var pffGrades = await pffTask;
+        var adpData = await adpTask;
+
+        // 3 — Join, score, project
         var result = rookies.Select(player =>
         {
-            var val = valuations.FirstOrDefault(
-                v => v.SleeperPlayerId == player.SleeperPlayerId);
-
-            var fp = fpRankings.FirstOrDefault(
-                r => r.SleeperPlayerId == player.SleeperPlayerId);
+            var val = valuations.FirstOrDefault(v => v.SleeperPlayerId == player.SleeperPlayerId);
+            var fp = fpRankings.FirstOrDefault(r => r.SleeperPlayerId == player.SleeperPlayerId);
+            var pff = pffGrades.FirstOrDefault(g => g.SleeperPlayerId == player.SleeperPlayerId);
+            var adp = adpData.FirstOrDefault(a => a.SleeperPlayerId == player.SleeperPlayerId);
 
             var overallPick = player.DraftRound.HasValue && player.DraftPick.HasValue
                 ? ((player.DraftRound.Value - 1) * 32) + player.DraftPick.Value
@@ -58,9 +63,10 @@ public class GetRookiePoolQueryHandler(
                 overallPick: overallPick,
                 position: player.Position.ToString(),
                 valuation: val,
-                fantasyProsRank: fp?.FantasyProsRank);
+                fantasyProsRank: fp?.FantasyProsRank,
+                pffGrade: pff?.PffGrade,
+                consensusAdp: adp?.Adp);
 
-            // Headshot: Sleeper CDN — returns a placeholder image if not found
             var headshotUrl = player.SleeperPlayerId is not null
                 ? $"{HeadshotBaseUrl}{player.SleeperPlayerId}.jpg"
                 : null;
@@ -82,12 +88,19 @@ public class GetRookiePoolQueryHandler(
                 FantasyProsRank: fp?.FantasyProsRank,
                 FantasyProsPositionRank: fp?.PositionRank,
                 FantasyProsTier: fp?.Tier,
+                PffGrade: pff?.PffGrade,
+                PffRank: pff?.PffRank,
+                ConsensusAdp: adp?.Adp,
+                ConsensusAdpRank: adp?.AdpRank,
+                AdpSource: adp?.Source,
                 DynastyScore: breakdown.DynastyScore,
                 DraftCapitalScore: breakdown.DraftCapitalScore,
-                PositionalScore: breakdown.PositionalScore,
+                FantasyProsScore: breakdown.FantasyProsScore,
+                PffGradeScore: breakdown.PffGradeScore,
+                ConsensusAdpScore: breakdown.ConsensusAdpScore,
                 ValuationBlendScore: breakdown.ValuationBlendScore,
-                FantasyProsScore: breakdown.FantasyProsScore
-            );
+                PositionalScore: breakdown.PositionalScore,
+                ActiveSignals: breakdown.ActiveSignals);
         })
         .OrderByDescending(r => r.DynastyScore)
         .ThenBy(r => r.FantasyProsRank ?? 999)

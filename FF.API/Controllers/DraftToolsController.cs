@@ -10,7 +10,9 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-
+// add to usings at top
+using FF.Application.Features.DraftTools.Commands.ImportPffDraftGrades;
+using FF.Application.Features.DraftTools.Commands.ImportConsensusAdp;
 namespace FF.API.Controllers;
 
 [ApiController]
@@ -132,7 +134,35 @@ public class DraftToolsController(IMediator mediator) : ControllerBase
 
         return Ok(new { message = $"Draft pick sync queued for season {season}" });
     }
-}
+
+
+// ── PFF Draft Grades import (Admin only) ────────────────────────────
+[HttpPost("pff/import")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ImportPffGrades(
+    [FromBody] ImportPffRequest request,
+    CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new ImportPffDraftGradesCommand(request.CsvContent, request.Season),
+            cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    // ── Consensus ADP import (Admin only) ───────────────────────────────
+    [HttpPost("adp/import")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ImportConsensusAdp(
+        [FromBody] ImportAdpRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new ImportConsensusAdpCommand(request.CsvContent, request.Season, request.Source),
+            cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
 // ── Request DTOs (thin, controller-layer only) ────────────────────────────────
 public record StartSessionRequest(string LeagueId, string LeagueName, int Season);
 public record ImportFantasyProsRequest(string CsvContent, int Season);
@@ -144,3 +174,8 @@ public record RecordPickRequest(
     int Slot,
     string? PickedByTeamName,
     bool IsMyPick);
+
+public record ImportPffRequest(string CsvContent, int Season);
+public record ImportAdpRequest(string CsvContent, int Season, string Source);
+
+}

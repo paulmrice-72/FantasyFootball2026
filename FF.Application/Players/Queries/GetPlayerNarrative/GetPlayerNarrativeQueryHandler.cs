@@ -60,7 +60,9 @@ public class GetPlayerNarrativeQueryHandler(
             overallPick: overallPick,
             position: player.Position.ToString(),
             valuation: val,
-            fantasyProsRank: fp?.FantasyProsRank);
+            fantasyProsRank: fp?.FantasyProsRank,
+            pffGrade: null,
+            consensusAdp: null);
 
         // 4 — Generate via Anthropic
         var narrative = await scoutService.GeneratePlayerNarrativeAsync(
