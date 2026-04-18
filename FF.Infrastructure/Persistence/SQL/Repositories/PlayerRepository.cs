@@ -60,4 +60,8 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
             .Where(p => p.GsisId != null && p.CollegeTeam == null)
             .ToListAsync(cancellationToken);
     }
+
+    public async new Task<IReadOnlyList<Player>> GetAllAsync(
+    CancellationToken cancellationToken = default) =>
+    await DbSet.AsNoTracking().ToListAsync(cancellationToken);
 }

@@ -1,5 +1,6 @@
 ﻿using FF.Application;
 using FF.Application.Common.Settings;
+using FF.Application.Features.DraftTools.Commands.SyncCombineData;
 using FF.Application.Identity.Interfaces;
 using FF.Application.Interfaces.Auth;
 using FF.Application.Interfaces.External;
@@ -115,6 +116,8 @@ public static class DependencyInjection
         services.AddScoped<SeedPickValuesJob>();
         services.AddScoped<IPffDraftGradeRepository, PffDraftGradeRepository>();
         services.AddScoped<IConsensusAdpRepository, ConsensusAdpRepository>();
+        services.AddScoped<ICombineResultRepository, CombineResultRepository>();
+        services.AddScoped<SyncCombineDataCommandHandler>();
         services.AddHttpClient("NflverseClient", client =>
         {
             client.DefaultRequestHeaders.UserAgent.ParseAdd("FantasyCombineAI/1.0");
@@ -136,6 +139,8 @@ public static class DependencyInjection
 
         services.AddScoped<IAgentOrchestrationService, AgentOrchestrationService>();
         services.AddScoped<INflverseDownloadService, NflverseDownloadService>();
+        services.AddScoped<ICombineResultRepository, CombineResultRepository>();
+        services.AddScoped<SyncCombineDataCommandHandler>();
 
         // Health Checks
         services.AddHealthChecks()
@@ -441,7 +446,16 @@ public static class DependencyInjection
                       .SetSerializer(new StringSerializer(BsonType.String));
                 });
             }
-
+            if (!BsonClassMap.IsClassMapRegistered(typeof(CombineResultDocument)))
+            {
+                BsonClassMap.RegisterClassMap<CombineResultDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                        .SetSerializer(new StringSerializer(BsonType.String));
+                });
+            }
         }
         catch (Exception ex)
         {

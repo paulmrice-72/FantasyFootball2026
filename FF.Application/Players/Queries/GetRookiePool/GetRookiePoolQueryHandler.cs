@@ -13,7 +13,8 @@ public class GetRookiePoolQueryHandler(
     IDynastyValuationRepository dynastyValuationRepository,
     IFantasyProsRookieRankingRepository fantasyProsRepository,
     IPffDraftGradeRepository pffRepository,
-    IConsensusAdpRepository adpRepository)
+    IConsensusAdpRepository adpRepository,
+    ICombineResultRepository combineRepository)
     : IRequestHandler<GetRookiePoolQuery, Result<List<RookiePlayerDto>>>
 {
     private const string HeadshotBaseUrl = "https://sleepercdn.com/content/nfl/players/thumb/";
@@ -39,13 +40,15 @@ public class GetRookiePoolQueryHandler(
         var fpTask = fantasyProsRepository.GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
         var pffTask = pffRepository.GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
         var adpTask = adpRepository.GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
+        var combineTask = combineRepository.GetBySleeperPlayerIdsAsync(sleeperIds, cancellationToken);
 
-        await Task.WhenAll(valuationsTask, fpTask, pffTask, adpTask);
+        await Task.WhenAll(valuationsTask, fpTask, pffTask, adpTask, combineTask);
 
         var valuations = await valuationsTask;
         var fpRankings = await fpTask;
         var pffGrades = await pffTask;
         var adpData = await adpTask;
+        var combineData = await combineTask;
 
         // 3 — Join, score, project
         var result = rookies.Select(player =>
@@ -54,6 +57,7 @@ public class GetRookiePoolQueryHandler(
             var fp = fpRankings.FirstOrDefault(r => r.SleeperPlayerId == player.SleeperPlayerId);
             var pff = pffGrades.FirstOrDefault(g => g.SleeperPlayerId == player.SleeperPlayerId);
             var adp = adpData.FirstOrDefault(a => a.SleeperPlayerId == player.SleeperPlayerId);
+            var combine = combineData.FirstOrDefault(c => c.SleeperPlayerId == player.SleeperPlayerId);
 
             var overallPick = player.DraftRound.HasValue && player.DraftPick.HasValue
                 ? ((player.DraftRound.Value - 1) * 32) + player.DraftPick.Value
@@ -66,7 +70,8 @@ public class GetRookiePoolQueryHandler(
                 fantasyProsRank: fp?.FantasyProsRank,
                 pffGrade: pff?.PffGrade,
                 consensusAdp: adp?.Adp,
-                age: player.Age);
+                age: player.Age,
+                athleticismScore: combine?.AthleticismScore > 0 ? combine.AthleticismScore : null);
 
             var headshotUrl = player.SleeperPlayerId is not null
                 ? $"{HeadshotBaseUrl}{player.SleeperPlayerId}.jpg"
@@ -77,7 +82,7 @@ public class GetRookiePoolQueryHandler(
                 FullName: player.FullName,
                 Position: player.Position.ToString(),
                 NflTeam: player.NflTeam,
-                Age: player.Age,
+                Age: player.ComputedAge,
                 DraftRound: player.DraftRound,
                 DraftPick: player.DraftPick,
                 CollegeTeam: player.CollegeTeam,
@@ -99,10 +104,17 @@ public class GetRookiePoolQueryHandler(
                 FantasyProsScore: breakdown.FantasyProsScore,
                 PffGradeScore: breakdown.PffGradeScore,
                 ConsensusAdpScore: breakdown.ConsensusAdpScore,
+                AthleticismSignalScore: breakdown.AthleticismScore,
                 ValuationBlendScore: breakdown.ValuationBlendScore,
                 PositionalScore: breakdown.PositionalScore,
                 AgeMultiplier: breakdown.AgeMultiplier,
-                ActiveSignals: breakdown.ActiveSignals);
+                ActiveSignals: breakdown.ActiveSignals,
+                AthleticismScore: combine?.AthleticismScore > 0 ? combine.AthleticismScore : null,
+                SpeedScore: combine?.SpeedScore,
+                FortyYard: combine?.FortyYard,
+                Vertical: combine?.Vertical,
+                BroadJump: combine?.BroadJump,
+                CombineSchool: combine?.School);
         })
         .OrderByDescending(r => r.DynastyScore)
         .ThenBy(r => r.FantasyProsRank ?? 999)

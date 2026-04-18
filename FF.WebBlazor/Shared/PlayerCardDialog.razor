@@ -92,6 +92,30 @@
                     <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.ConsensusAdp.Value.ToString("F1")</MudText>
                 </div>
             }
+            @if (Player.FortyYard.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">40-Yard</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.FortyYard.Value.ToString("F2")s</MudText>
+                </div>
+            }
+            @if (Player.AthleticismScore.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Athleticism</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.AthleticismScore.Value.ToString("F1")</MudText>
+                </div>
+            }
+            @if (Player.SpeedScore.HasValue && Player.Position == "RB")
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Speed Score</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.SpeedScore.Value.ToString("F1")</MudText>
+                </div>
+            }
             @if (!string.IsNullOrEmpty(Player.FantasyProsTier))
             {
                 <div style="min-width:80px;">
@@ -291,7 +315,11 @@
         double FantasyProsScore,
         double PffGradeScore,
         double ConsensusAdpScore,
-        double AgeMultiplier);
+        double AgeMultiplier,
+        double AthleticismSignalScore,
+        double? AthleticismScore,
+        double? SpeedScore,
+        double? FortyYard);
 
     private record NarrativeResponse(string Narrative);
 }

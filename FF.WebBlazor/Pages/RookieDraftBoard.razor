@@ -645,7 +645,11 @@
             FantasyProsScore: player.FantasyProsScore,
             PffGradeScore: player.PffGradeScore,
             ConsensusAdpScore: player.ConsensusAdpScore,
-            AgeMultiplier: player.AgeMultiplier);
+            AgeMultiplier: player.AgeMultiplier,
+            AthleticismSignalScore: player.AthleticismSignalScore,
+            AthleticismScore: player.AthleticismScore,
+            SpeedScore: player.SpeedScore,
+            FortyYard: player.FortyYard);
 
         var parameters = new DialogParameters<PlayerCardDialog>
     {
@@ -712,7 +716,13 @@
         double FantasyProsScore,
         double PffGradeScore,
         double ConsensusAdpScore,
-        double AgeMultiplier);
+        double AgeMultiplier,
+        double AthleticismSignalScore,
+        double? AthleticismScore,
+        double? SpeedScore,
+        double? FortyYard,
+        double? BroadJump,
+        string? CombineSchool);
 
     private record OffSeasonPlayerDto(
         string  SleeperPlayerId,
