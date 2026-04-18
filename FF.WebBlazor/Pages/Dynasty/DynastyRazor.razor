@@ -305,14 +305,28 @@ else if (_filtered.Count > 0)
             HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg",
             FantasyProsRank: null,
             FantasyProsTier: null,
+            PffGrade: null,
+            PffRank: null,
+            ConsensusAdp: null,
             DynastyScore: player.TradeValue,
             DraftCapitalScore: 0,
             PositionalScore: 0,
             ValuationBlendScore: player.CareerValue,
-            FantasyProsScore: player.BreakoutScore);
+            FantasyProsScore: player.BreakoutScore,
+            PffGradeScore: 0,
+            ConsensusAdpScore: 0,
+            AgeMultiplier: 0);
 
-        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, data } };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, data }
+    };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true
+        };
         await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
     }
 

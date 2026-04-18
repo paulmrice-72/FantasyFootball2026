@@ -11,27 +11,22 @@ public record RookiePlayerDto(
     int? DraftPick,
     string? CollegeTeam,
     string? HeadshotUrl,
-
     // From dynasty_valuations
     double? CareerValueScore,
     double? TradeValue,
     double? DiscountedFutureValue,
     double? BreakoutScore,
-
     // From fantasyPros_rookie_rankings
     int? FantasyProsRank,
     int? FantasyProsPositionRank,
     string? FantasyProsTier,
-
     // From pff_draft_grades
     double? PffGrade,
     int? PffRank,
-
     // From consensus_adp
     double? ConsensusAdp,
     int? ConsensusAdpRank,
     string? AdpSource,
-
     // Composite score + per-signal breakdown
     double DynastyScore,
     double DraftCapitalScore,
@@ -40,5 +35,6 @@ public record RookiePlayerDto(
     double ConsensusAdpScore,
     double ValuationBlendScore,
     double PositionalScore,
+    double AgeMultiplier,       // percentage points e.g. +3.0 or -4.0
     List<string> ActiveSignals
 );
