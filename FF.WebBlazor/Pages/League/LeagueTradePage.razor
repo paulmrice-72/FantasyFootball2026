@@ -1,0 +1,875 @@
+@* FF.WebBlazor/Pages/League/LeagueTradePage.razor *@
+@page "/league/trade"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+@inject ISnackbar Snackbar
+@inject LeagueStateService LeagueState
+@implements IDisposable
+
+<PageTitle>Trade Analyzer — FantasyCombine.AI</PageTitle>
+
+@* ── HEADER ─────────────────────────────────────────────── *@
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.SwapHoriz" Class="mr-2"
+                 Style="vertical-align:middle;" />
+        Trade Analyzer
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        League-aware · Roster composition · Drop impact · Standing projection
+    </MudText>
+</div>
+
+@* ── LOADING CONTEXT ────────────────────────────────────── *@
+@if (_contextLoading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_context is null)
+{
+    <MudAlert Severity="Severity.Warning">
+        Could not load league context. Ensure your Sleeper account is linked
+        and your league has been synced.
+    </MudAlert>
+}
+else
+{
+    @* ── TRADE BUILDER ──────────────────────────────────── *@
+    <MudGrid Spacing="3" Class="mb-4">
+
+        @* ── MY SIDE ──────────────────────────────────── *@
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4 fc-controls-bar" Elevation="0">
+                <MudText Typo="Typo.subtitle1" Class="mb-3"
+                         Style="color:var(--fc-cyan);">
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowForward"
+                             Size="Size.Small" Class="mr-1" />
+                    I Give Up
+                </MudText>
+
+                @* Player selector — my roster *@
+                <MudSelect T="LeaguePlayerDto?"
+                           Value="_mySelectedPlayer"
+                           ValueChanged="@(p => { _mySelectedPlayer = p; })"
+                           Label="Add from my roster..."
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="mb-2"
+                           ToStringFunc="@(p => p?.PlayerName ?? string.Empty)"
+                           Clearable="true">
+                    @foreach (var p in _context.MyTeam.Players.OrderBy(p => p.Position).ThenByDescending(p => p.TradeValue))
+                    {
+                        <MudSelectItem T="LeaguePlayerDto?" Value="@p">
+                            @p.PlayerName
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">
+                                @p.Position · @p.TradeValue.ToString("F1")
+                            </MudText>
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                           Disabled="@(_mySelectedPlayer is null)"
+                           OnClick="AddPlayerToMySide" Class="mb-3">
+                    Add Player
+                </MudButton>
+
+                @* Pick selector — my actual picks *@
+                @if (_context.MyTeam.Picks.Count > 0)
+                {
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1">
+                        Add Draft Pick
+                    </MudText>
+                    <MudSelect T="LeaguePickDto?"
+                               Value="_mySelectedPick"
+                               ValueChanged="@(p => { _mySelectedPick = p; })"
+                               Label="Select pick..."
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="mb-2"
+                               ToStringFunc="@(p => p?.Description ?? string.Empty)"
+                               Clearable="true">
+                        @foreach (var pick in _context.MyTeam.Picks.OrderBy(p => p.Season).ThenBy(p => p.Round))
+                        {
+                            <MudSelectItem T="LeaguePickDto?" Value="@pick">
+                                @pick.Description
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">
+                                    ~@pick.EstimatedValue.ToString("F1")
+                                </MudText>
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                               Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                               Disabled="@(_mySelectedPick is null)"
+                               OnClick="AddPickToMySide" Class="mb-3">
+                        Add Pick
+                    </MudButton>
+                }
+
+                @* My side list *@
+                @if (_mySide.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        No players added yet.
+                    </MudText>
+                }
+                else
+                {
+                    @foreach (var item in _mySide)
+                    {
+                        <MudPaper Class="pa-2 mb-2 d-flex align-center justify-space-between"
+                                  Elevation="1"
+                                  Style="background:rgba(255,255,255,0.03);">
+                            <div>
+                                <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                    @item.Label
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @item.Position
+                                    @if (item.Age > 0) { <span> · Age @item.Age</span> }
+                                    · <span style="color:var(--fc-cyan);">@item.Value.ToString("F1")</span>
+                                </MudText>
+                            </div>
+                            @{ var myItem = item; }
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => _mySide.Remove(myItem))" />
+                        </MudPaper>
+                    }
+                    <MudDivider Class="my-2" />
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Total Value
+                        </MudText>
+                        <MudText Typo="Typo.subtitle2" Style="color:var(--fc-cyan);">
+                            @_mySide.Sum(p => p.Value).ToString("F1")
+                        </MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+
+        @* ── CENTRE ────────────────────────────────────── *@
+        <MudItem xs="12" md="2"
+                 Class="d-flex flex-column align-center justify-center">
+            <MudIcon Icon="@Icons.Material.Filled.SwapHoriz"
+                     Style="font-size:2.5rem;color:var(--fc-cyan);opacity:0.4;"
+                     Class="mb-3" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Calculate"
+                       FullWidth="true"
+                       Disabled="@(_analyzing || _mySide.Count == 0 || _theirSide.Count == 0)"
+                       OnClick="AnalyzeTrade">
+                @(_analyzing ? "Analyzing..." : "Analyze")
+            </MudButton>
+            @if (_mySide.Count > 0 || _theirSide.Count > 0)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Default"
+                           Size="Size.Small" Class="mt-2" OnClick="ClearAll">
+                    Clear
+                </MudButton>
+            }
+        </MudItem>
+
+        @* ── THEIR SIDE ────────────────────────────────── *@
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4 fc-controls-bar" Elevation="0">
+                <MudText Typo="Typo.subtitle1" Class="mb-3"
+                         Style="color:var(--fc-cyan);">
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowBack"
+                             Size="Size.Small" Class="mr-1" />
+                    I Receive
+                </MudText>
+
+                @* Opponent team selector *@
+                <MudSelect T="LeagueTeamDto?"
+                           Value="_selectedOpponent"
+                           ValueChanged="OnOpponentSelected"
+                           Label="Select opponent team..."
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="mb-3"
+                           ToStringFunc="@(t => t?.TeamName ?? string.Empty)"
+                           Clearable="true">
+                    @foreach (var team in _context.Opponents.OrderBy(t => t.TeamName))
+                    {
+                        <MudSelectItem T="LeagueTeamDto?" Value="@team">
+                            @team.TeamName
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">
+                                @team.TotalTradeValue.ToString("F0") total value
+                            </MudText>
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (_selectedOpponent is not null)
+                {
+                    @* Their player selector *@
+                    <MudSelect T="LeaguePlayerDto?"
+                               Value="_theirSelectedPlayer"
+                               ValueChanged="@(p => { _theirSelectedPlayer = p; })"
+                               Label="Add their player..."
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="mb-2"
+                               ToStringFunc="@(p => p?.PlayerName ?? string.Empty)"
+                               Clearable="true">
+                        @foreach (var p in _selectedOpponent.Players.OrderBy(p => p.Position).ThenByDescending(p => p.TradeValue))
+                        {
+                            <MudSelectItem T="LeaguePlayerDto?" Value="@p">
+                                @p.PlayerName
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">
+                                    @p.Position · @p.TradeValue.ToString("F1")
+                                </MudText>
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                               Disabled="@(_theirSelectedPlayer is null)"
+                               OnClick="AddPlayerToTheirSide" Class="mb-3">
+                        Add Player
+                    </MudButton>
+
+                    @* Their pick selector *@
+                    @if (_selectedOpponent.Picks.Count > 0)
+                    {
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1">
+                            Add Their Pick
+                        </MudText>
+                        <MudSelect T="LeaguePickDto?"
+                                   Value="_theirSelectedPick"
+                                   ValueChanged="@(p => { _theirSelectedPick = p; })"
+                                   Label="Select pick..."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-2"
+                                   ToStringFunc="@(p => p?.Description ?? string.Empty)"
+                                   Clearable="true">
+                            @foreach (var pick in _selectedOpponent.Picks.OrderBy(p => p.Season).ThenBy(p => p.Round))
+                            {
+                                <MudSelectItem T="LeaguePickDto?" Value="@pick">
+                                    @pick.Description
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">
+                                        ~@pick.EstimatedValue.ToString("F1")
+                                    </MudText>
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                                   Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                                   Disabled="@(_theirSelectedPick is null)"
+                                   OnClick="AddPickToTheirSide" Class="mb-3">
+                            Add Pick
+                        </MudButton>
+                    }
+                }
+
+                @* Their side list *@
+                @if (_theirSide.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @(_selectedOpponent is null
+                            ? "Select an opponent team first."
+                            : "No players added yet.")
+                    </MudText>
+                }
+                else
+                {
+                    @foreach (var item in _theirSide)
+                    {
+                        <MudPaper Class="pa-2 mb-2 d-flex align-center justify-space-between"
+                                  Elevation="1"
+                                  Style="background:rgba(255,255,255,0.03);">
+                            <div>
+                                <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                    @item.Label
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @item.Position
+                                    @if (item.Age > 0) { <span> · Age @item.Age</span> }
+                                    · <span style="color:var(--fc-cyan);">@item.Value.ToString("F1")</span>
+                                </MudText>
+                            </div>
+                            @{ var theirItem = item; }
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => _theirSide.Remove(theirItem))" />
+                        </MudPaper>
+                    }
+                    <MudDivider Class="my-2" />
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Total Value
+                        </MudText>
+                        <MudText Typo="Typo.subtitle2" Style="color:var(--fc-cyan);">
+                            @_theirSide.Sum(p => p.Value).ToString("F1")
+                        </MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ── ANALYZING ──────────────────────────────────────── *@
+    @if (_analyzing)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+    }
+
+    @* ── RESULT PANEL ───────────────────────────────────── *@
+    @if (_result is not null)
+    {
+        var gc = GradeColor(_result.Grade);
+
+        @* Value + grade card *@
+        <MudPaper Class="pa-4 mb-4" Elevation="2"
+                  Style="@("border-left:4px solid " + gc + ";")">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="3"
+                         Class="d-flex flex-column align-center justify-center">
+                    <MudText Typo="Typo.h2"
+                             Style="@("font-weight:900;color:" + gc + ";font-family:'JetBrains Mono',monospace;")">
+                        @_result.Grade
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Trade Grade
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" sm="5">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Value Comparison</MudText>
+                    <div class="d-flex align-center gap-3 mb-1">
+                        <MudText Typo="Typo.body2" Style="min-width:80px;">You Give</MudText>
+                        <MudProgressLinear Value="@ValueBarPct(_result.MySideValue)"
+                                           Color="Color.Error" Rounded="true"
+                                           Size="Size.Medium" Style="flex:1;" />
+                        <MudText Typo="Typo.body2" Class="fc-stat"
+                                 Style="min-width:40px;font-family:'JetBrains Mono',monospace;">
+                            @_result.MySideValue.ToString("F1")
+                        </MudText>
+                    </div>
+                    <div class="d-flex align-center gap-3">
+                        <MudText Typo="Typo.body2" Style="min-width:80px;">You Get</MudText>
+                        <MudProgressLinear Value="@ValueBarPct(_result.TheirSideValue)"
+                                           Color="Color.Success" Rounded="true"
+                                           Size="Size.Medium" Style="flex:1;" />
+                        <MudText Typo="Typo.body2" Class="fc-stat"
+                                 Style="min-width:40px;font-family:'JetBrains Mono',monospace;">
+                            @_result.TheirSideValue.ToString("F1")
+                        </MudText>
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mt-2"
+                             Style="@("color:" + gc + ";")">
+                        @_result.Recommendation
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    @if (_result.KeyInsights.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Key Insights</MudText>
+                        @foreach (var insight in _result.KeyInsights)
+                        {
+                            <div class="d-flex align-start mb-1">
+                                <MudIcon Icon="@Icons.Material.Filled.Lightbulb"
+                                         Size="Size.Small"
+                                         Style="color:var(--fc-cyan);margin-right:6px;margin-top:2px;" />
+                                <MudText Typo="Typo.body2">@insight</MudText>
+                            </div>
+                        }
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @* ── Roster Impact card ──────────────────────────── *@
+        @if (_result.RosterImpact is not null)
+        {
+            <MudPaper Class="pa-4 mb-4 fc-card" Elevation="0">
+                <MudText Typo="Typo.subtitle2" Class="mb-3 fc-section-label">
+                    ROSTER IMPACT
+                </MudText>
+                @if (_result.RosterImpact.Warnings.Count > 0)
+                {
+                    @foreach (var w in _result.RosterImpact.Warnings)
+                    {
+                        <div class="d-flex align-center gap-2 mb-1">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning"
+                                     Size="Size.Small" Style="color:#F59E0B;" />
+                            <MudText Typo="Typo.body2">@w</MudText>
+                        </div>
+                    }
+                }
+                @if (_result.RosterImpact.Positives.Count > 0)
+                {
+                    @foreach (var p in _result.RosterImpact.Positives)
+                    {
+                        <div class="d-flex align-center gap-2 mb-1">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                                     Size="Size.Small" Style="color:#34D399;" />
+                            <MudText Typo="Typo.body2">@p</MudText>
+                        </div>
+                    }
+                }
+                @if (_result.RosterImpact.Warnings.Count == 0 &&
+                     _result.RosterImpact.Positives.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        No significant positional impact detected.
+                    </MudText>
+                }
+            </MudPaper>
+        }
+
+        @* ── Drop Analysis card ──────────────────────────── *@
+        @if (_result.DropAnalysis is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-4">
+                <MudText Typo="Typo.subtitle2" Style="font-weight:700;">
+                    ⚠ You Must Drop @_result.DropAnalysis.DropsRequired Player(s)
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mt-1">
+                    Receiving more players than you give requires drops.
+                    Estimated value lost from likely drops:
+                    <strong>@_result.DropAnalysis.EffectiveValueLost.ToString("F1")</strong>
+                </MudText>
+                @if (_result.DropAnalysis.SuggestedDrops.Count > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mt-2 d-block mud-text-secondary">
+                        Suggested drops (your weakest rostered players):
+                    </MudText>
+                    @foreach (var drop in _result.DropAnalysis.SuggestedDrops)
+                    {
+                        <MudChip T="string" Size="Size.Small"
+                                 Style="background:#2a1a00; color:#F59E0B; margin:2px;">
+                            @drop.PlayerName · @drop.Position · @drop.TradeValue.ToString("F1")
+                        </MudChip>
+                    }
+                }
+            </MudAlert>
+        }
+
+        @* ── League Standing card ────────────────────────── *@
+        @if (_result.LeagueStandingImpact is not null)
+        {
+            var si      = _result.LeagueStandingImpact;
+            var delta   = si.RankDelta;
+            var upColor = delta > 0 ? "#34D399" : delta < 0 ? "#F59E0B" : "#94a3b8";
+            var arrow   = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+
+            <MudPaper Class="pa-4 mb-4 fc-card" Elevation="0">
+                <MudText Typo="Typo.subtitle2" Class="mb-3 fc-section-label">
+                    LEAGUE STANDING IMPACT
+                </MudText>
+                <div class="d-flex align-center gap-4 flex-wrap">
+                    <div class="text-center">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Current Rank
+                        </MudText>
+                        <MudText Typo="Typo.h4"
+                                 Style="font-weight:800; color:var(--fc-cyan);">
+                            #@si.CurrentRank
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @si.CurrentTotalValue.ToString("F0") value
+                        </MudText>
+                    </div>
+                    <MudText Typo="Typo.h4"
+                             Style="@("font-weight:800; color:" + upColor + ";")">
+                        @arrow
+                    </MudText>
+                    <div class="text-center">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Projected Rank
+                        </MudText>
+                        <MudText Typo="Typo.h4"
+                                 Style="@("font-weight:800; color:" + upColor + ";")">
+                            #@si.ProjectedRank
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @si.ProjectedTotalValue.ToString("F0") value
+                        </MudText>
+                    </div>
+                    @if (delta != 0)
+                    {
+                        <MudText Typo="Typo.body2"
+                                 Style="@("font-style:italic; color:" + upColor + ";")">
+                            @(delta > 0
+                                ? $"Moves you up {delta} spot(s) in league value rankings"
+                                : $"Moves you down {Math.Abs(delta)} spot(s) in league value rankings")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary"
+                                 Style="font-style:italic;">
+                            No change in league standing
+                        </MudText>
+                    }
+                </div>
+            </MudPaper>
+        }
+
+        @* ── League Rankings reference ───────────────────── *@
+        <MudExpansionPanels Class="mb-4">
+            <MudExpansionPanel Text="League Value Rankings">
+                <MudTable Items="@_context.LeagueRankings" Dense="true" Hover="true"
+                          Class="fc-table">
+                    <HeaderContent>
+                        <MudTh>#</MudTh>
+                        <MudTh>Team</MudTh>
+                        <MudTh Style="text-align:right">Total Value</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudText Typo="Typo.body2"
+                                     Style="@(context.IsMyTeam ? "color:var(--fc-cyan);font-weight:700;" : "")">
+                                #@context.Rank
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.body2"
+                                     Style="@(context.IsMyTeam ? "color:var(--fc-cyan);font-weight:700;" : "")">
+                                @context.TeamName
+                                @if (context.IsMyTeam)
+                                {
+                                    <MudChip T="string" Size="Size.Small"
+                                             Style="background:#1a2a3a; color:#60a5fa; margin-left:6px; height:18px;">
+                                        You
+                                    </MudChip>
+                                }
+                            </MudText>
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:var(--fc-cyan);">
+                            @context.TotalTradeValue.ToString("F0")
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+}
+
+@code {
+    private LeagueTradeContextDto? _context;
+    private bool _contextLoading = true;
+    private bool _analyzing;
+    private TradeResultModel? _result;
+
+    // My side
+    private List<TradeItem> _mySide = [];
+    private LeaguePlayerDto? _mySelectedPlayer;
+    private LeaguePickDto?   _mySelectedPick;
+
+    // Their side
+    private LeagueTeamDto?   _selectedOpponent;
+    private List<TradeItem>  _theirSide = [];
+    private LeaguePlayerDto? _theirSelectedPlayer;
+    private LeaguePickDto?   _theirSelectedPick;
+
+    private HttpClient Http => HttpClientFactory.CreateClient("AuthAPI");
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        LeagueState.OnLeagueChanged += OnLeagueChanged;
+        await LoadContextAsync();
+    }
+
+    public void Dispose()
+    {
+        LeagueState.OnLeagueChanged -= OnLeagueChanged;
+    }
+
+    private void OnLeagueChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            ClearAll();
+            await LoadContextAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadContextAsync()
+    {
+        _contextLoading = true;
+        _context        = null;
+        StateHasChanged();
+
+        try
+        {
+            var leagueId = LeagueState.ActiveLeagueId;
+            if (string.IsNullOrEmpty(leagueId))
+            {
+                Snackbar.Add("No active league selected.", Severity.Warning);
+                return;
+            }
+
+            _context = await Http.GetFromJsonAsync<LeagueTradeContextDto>(
+                $"api/v1/trade/league-context?leagueId={leagueId}&season=2026");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load league context: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _contextLoading = false;
+        }
+    }
+
+    // ── Add / Remove ──────────────────────────────────────────────────────
+    private void AddPlayerToMySide()
+    {
+        if (_mySelectedPlayer is null) return;
+        if (_mySide.Any(i => i.Id == _mySelectedPlayer.SleeperPlayerId))
+        {
+            Snackbar.Add("Player already added.", Severity.Warning);
+            return;
+        }
+        _mySide.Add(new TradeItem(
+            _mySelectedPlayer.SleeperPlayerId,
+            _mySelectedPlayer.PlayerName,
+            _mySelectedPlayer.Position,
+            _mySelectedPlayer.Age,
+            _mySelectedPlayer.TradeValue,
+            IsPick: false));
+        _mySelectedPlayer = null;
+        _result = null;
+    }
+
+    private void AddPickToMySide()
+    {
+        if (_mySelectedPick is null) return;
+        var id = $"pick-my-{_mySelectedPick.Season}-{_mySelectedPick.Round}";
+        if (_mySide.Any(i => i.Id == id))
+        {
+            Snackbar.Add("Pick already added.", Severity.Warning);
+            return;
+        }
+        _mySide.Add(new TradeItem(
+            id,
+            _mySelectedPick.Description,
+            "PICK",
+            0,
+            _mySelectedPick.EstimatedValue,
+            IsPick: true,
+            Round: _mySelectedPick.Round,
+            Tier:  "Mid",
+            Year:  _mySelectedPick.Season));
+        _mySelectedPick = null;
+        _result = null;
+    }
+
+    private void AddPlayerToTheirSide()
+    {
+        if (_theirSelectedPlayer is null) return;
+        if (_theirSide.Any(i => i.Id == _theirSelectedPlayer.SleeperPlayerId))
+        {
+            Snackbar.Add("Player already added.", Severity.Warning);
+            return;
+        }
+        _theirSide.Add(new TradeItem(
+            _theirSelectedPlayer.SleeperPlayerId,
+            _theirSelectedPlayer.PlayerName,
+            _theirSelectedPlayer.Position,
+            _theirSelectedPlayer.Age,
+            _theirSelectedPlayer.TradeValue,
+            IsPick: false));
+        _theirSelectedPlayer = null;
+        _result = null;
+    }
+
+    private void AddPickToTheirSide()
+    {
+        if (_theirSelectedPick is null) return;
+        var id = $"pick-their-{_theirSelectedPick.Season}-{_theirSelectedPick.Round}";
+        if (_theirSide.Any(i => i.Id == id))
+        {
+            Snackbar.Add("Pick already added.", Severity.Warning);
+            return;
+        }
+        _theirSide.Add(new TradeItem(
+            id,
+            _theirSelectedPick.Description,
+            "PICK",
+            0,
+            _theirSelectedPick.EstimatedValue,
+            IsPick: true,
+            Round: _theirSelectedPick.Round,
+            Tier:  "Mid",
+            Year:  _theirSelectedPick.Season));
+        _theirSelectedPick = null;
+        _result = null;
+    }
+
+    private void OnOpponentSelected(LeagueTeamDto? team)
+    {
+        _selectedOpponent    = team;
+        _theirSide           = [];
+        _theirSelectedPlayer = null;
+        _theirSelectedPick   = null;
+        _result              = null;
+    }
+
+    private void ClearAll()
+    {
+        _mySide              = [];
+        _theirSide           = [];
+        _mySelectedPlayer    = null;
+        _mySelectedPick      = null;
+        _theirSelectedPlayer = null;
+        _theirSelectedPick   = null;
+        _selectedOpponent    = null;
+        _result              = null;
+    }
+
+    // ── Analyze ───────────────────────────────────────────────────────────
+    private async Task AnalyzeTrade()
+    {
+        if (_mySide.Count == 0 || _theirSide.Count == 0) return;
+
+        _analyzing = true;
+        _result    = null;
+        StateHasChanged();
+
+        try
+        {
+            var leagueId = LeagueState.ActiveLeagueId;
+
+            var request = new
+            {
+                MyPlayerIds    = _mySide.Where(i => !i.IsPick).Select(i => i.Id).ToList(),
+                TheirPlayerIds = _theirSide.Where(i => !i.IsPick).Select(i => i.Id).ToList(),
+                MyPicks        = _mySide.Where(i => i.IsPick)
+                                         .Select(i => new { Round = i.Round!.Value, Tier = i.Tier!, Year = i.Year!.Value })
+                                         .ToList(),
+                TheirPicks     = _theirSide.Where(i => i.IsPick)
+                                            .Select(i => new { Round = i.Round!.Value, Tier = i.Tier!, Year = i.Year!.Value })
+                                            .ToList(),
+                Season         = 2026,
+                LeagueId       = leagueId
+            };
+
+            var response = await Http.PostAsJsonAsync("api/v1/trade/analyze", request);
+            if (response.IsSuccessStatusCode)
+            {
+                _result = await response.Content.ReadFromJsonAsync<TradeResultModel>();
+            }
+            else
+            {
+                Snackbar.Add("Trade analysis failed — check API.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _analyzing = false;
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    private double MaxValue => Math.Max(_result?.MySideValue ?? 0, _result?.TheirSideValue ?? 0);
+    private double ValueBarPct(double v) => MaxValue > 0 ? v / MaxValue * 100.0 : 0;
+
+    private static string GradeColor(string grade) => grade switch
+    {
+        "A" => "#00C8F0",
+        "B" => "#4CAF50",
+        "C" => "#FFC107",
+        "D" => "#FF9800",
+        "F" => "#F44336",
+        _   => "#888888"
+    };
+
+    // ── Local DTOs ────────────────────────────────────────────────────────
+    private record TradeItem(
+        string Id,
+        string Label,
+        string Position,
+        int    Age,
+        double Value,
+        bool   IsPick,
+        int?   Round = null,
+        string? Tier = null,
+        int?   Year  = null);
+
+    // ── Response DTOs (mirror backend shapes) ─────────────────────────────
+    private record LeagueTradeContextDto(
+        LeagueTeamDto         MyTeam,
+        List<LeagueTeamDto>   Opponents,
+        List<LeagueRankingDto> LeagueRankings,
+        int                   DraftRounds);
+
+    private record LeagueTeamDto(
+        string              RosterId,
+        string              TeamName,
+        string              OwnerSleeperUserId,
+        List<LeaguePlayerDto> Players,
+        List<LeaguePickDto> Picks,
+        double              TotalTradeValue);
+
+    private record LeaguePlayerDto(
+        string  SleeperPlayerId,
+        string  PlayerName,
+        string  Position,
+        string? NflTeam,
+        int     Age,
+        double  TradeValue);
+
+    private record LeaguePickDto(
+        int    Season,
+        int    Round,
+        string OriginalTeamName,
+        string CurrentTeamName,
+        string Description,
+        double EstimatedValue);
+
+    private record LeagueRankingDto(
+        int    Rank,
+        string TeamName,
+        string OwnerSleeperUserId,
+        double TotalTradeValue,
+        bool   IsMyTeam);
+
+    private record TradeResultModel(
+        string              Grade,
+        string              Recommendation,
+        double              MySideValue,
+        double              TheirSideValue,
+        double              ValueDifferential,
+        List<string>        KeyInsights,
+        RosterImpactModel?  RosterImpact,
+        DropAnalysisModel?  DropAnalysis,
+        LeagueStandingModel? LeagueStandingImpact);
+
+    private record RosterImpactModel(
+        List<string> Warnings,
+        List<string> Positives);
+
+    private record DropAnalysisModel(
+        int                  DropsRequired,
+        List<SuggestedDropModel> SuggestedDrops,
+        double               EffectiveValueLost);
+
+    private record SuggestedDropModel(
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        double TradeValue);
+
+    private record LeagueStandingModel(
+        int    CurrentRank,
+        int    ProjectedRank,
+        double CurrentTotalValue,
+        double ProjectedTotalValue,
+        int    RankDelta);
+}

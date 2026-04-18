@@ -77,7 +77,8 @@ else
             else if (_isOffSeason && _offSeasonRecs.Count > 0)
             {
                 <MudAlert Severity="Severity.Info" Class="mb-3">
-                    Off-season mode — players ranked by dynasty trade value.
+                    Off-season mode — players ranked by dynasty trade value. Rankings will reflect
+                    real valuations after the NFL Draft (April 24–26) and post-draft simulation jobs run.
                     In-season VORP available once Week 1 projections are calculated.
                 </MudAlert>
                 <MudTable Items="@FilteredOffSeason" Dense="true" Hover="true" Striped="true"
@@ -342,25 +343,43 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Subscribe first — event may fire during or after LoadContextAsync
         LeagueState.OnLeagueChanged += OnLeagueChangedHandler;
+
         await LoadContextAsync();
         await LoadAlertsAsync();
-        if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId))
+
+        // Initial load attempt — if league was already known, fire now
+        // Handler will also fire if LeagueState settles after this point
+        if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId)
+            && _offSeasonRecs.Count == 0)
+        {
             await LoadOffSeasonAsync();
+        }
     }
 
     private void OnLeagueChangedHandler()
     {
-        // Update selected league and reload
-        _selectedLeagueId = LeagueState.ActiveLeagueId ?? _selectedLeagueId;
-        _offSeasonRecs = [];
-        _vorpRecs = [];
-        _fitRecs = [];
-        _vorpQueried = false;
+        var newLeagueId = LeagueState.ActiveLeagueId ?? string.Empty;
+        bool leagueChanged = newLeagueId != _selectedLeagueId;
+
+        _selectedLeagueId = newLeagueId;
+
+        if (leagueChanged || (_offSeasonRecs.Count == 0 && _vorpRecs.Count == 0))
+        {
+            _offSeasonRecs = [];
+            _vorpRecs = [];
+            _fitRecs = [];
+            _vorpQueried = false;
+        }
+
         _ = InvokeAsync(async () =>
         {
-            if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId))
+            if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId)
+                && _offSeasonRecs.Count == 0 && !_vorpLoading)
+            {
                 await LoadOffSeasonAsync();
+            }
             StateHasChanged();
         });
     }
@@ -506,10 +525,12 @@ else
         SpeedScore:             null,
         FortyYard:              null);
 
-    var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, data }
-    };
+        var parameters = new DialogParameters<PlayerCardDialog>
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Stats }
+        };
+
     var options = new DialogOptions
     {
         MaxWidth    = MaxWidth.Small,

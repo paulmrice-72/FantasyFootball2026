@@ -652,9 +652,10 @@
             FortyYard: player.FortyYard);
 
         var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, cardData }
-    };
+        {
+            { x => x.Player, cardData },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
+        };
         var options = new DialogOptions
         {
             MaxWidth = MaxWidth.Small,

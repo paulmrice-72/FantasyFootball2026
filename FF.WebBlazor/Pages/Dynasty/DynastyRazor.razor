@@ -319,12 +319,18 @@ else if (_filtered.Count > 0)
             AthleticismSignalScore: 0,
             AthleticismScore: null,
             SpeedScore: null,
-            FortyYard: null);
+            FortyYard: null,
+            DynastyTradeValue: player.TradeValue,
+            CareerValueScore: player.CareerValueScore,
+            CareerPhase: player.CareerPhase,
+            YearsOfPrimeRemaining: player.YearsOfPrimeRemaining);
 
         var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, data }
-    };
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Dynasty }
+        };
+
         var options = new DialogOptions
         {
             MaxWidth = MaxWidth.Small,
@@ -332,6 +338,7 @@ else if (_filtered.Count > 0)
             CloseButton = true
         };
         await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
+
     }
 
     // ── Filtering ─────────────────────────────────────────────

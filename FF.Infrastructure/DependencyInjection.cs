@@ -109,6 +109,7 @@ public static class DependencyInjection
         services.AddScoped<IDfvCalculationService, DfvCalculationService>();
         services.AddScoped<ITradeAnalysisRepository, TradeAnalysisRepository>();
         services.AddScoped<ITradeAnalyzerService, TradeAnalyzerService>();
+        services.AddScoped<ILeagueTradeContextSleeperService, LeagueTradeContextSleeperService>();
         services.AddScoped<IVorpRecommendationRepository, VorpRecommendationRepository>();
         services.AddScoped<IInjuryAlertRepository, InjuryAlertRepository>();
         services.AddScoped<InjuryAlertSyncJob>();
