@@ -7,6 +7,7 @@
 @inject NavigationManager Nav
 @inject LeagueStateService LeagueState
 @implements IDisposable
+@inject IDialogService DialogService
 
 <PageTitle>My Team — FantasyCombine.AI</PageTitle>
 
@@ -73,9 +74,14 @@
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>
-                                <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                @{
+                                    var rp = context;
+                                }
+                                <MudButton Variant="Variant.Text"
+                                           Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                           OnClick="@(() => _ = OpenPlayerCardAsync(rp))">
                                     @context.PlayerName
-                                </MudText>
+                                </MudButton>
                             </MudTd>
                             <MudTd><MudText Typo="Typo.body2">@context.NflTeam</MudText></MudTd>
                             <MudTd><MudText Typo="Typo.body2">@(context.Age?.ToString() ?? "—")</MudText></MudTd>
@@ -1112,5 +1118,49 @@ else if (_roster is null)
         _ => "background:#1a1a2a; color:#94a3b8;"
     };
 
+    private async Task OpenPlayerCardAsync(MyRosterPlayerDto player)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: player.SleeperPlayerId,
+            FullName: player.PlayerName,
+            Position: player.Position,
+            NflTeam: player.NflTeam,
+            Age: player.Age,
+            DraftRound: null,
+            DraftPick: null,
+            CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg",
+            FantasyProsRank: null,
+            FantasyProsTier: null,
+            PffGrade: null,
+            PffRank: null,
+            ConsensusAdp: null,
+            DynastyScore: 0,
+            DraftCapitalScore: 0,
+            PositionalScore: 0,
+            ValuationBlendScore: 0,
+            FantasyProsScore: 0,
+            PffGradeScore: 0,
+            ConsensusAdpScore: 0,
+            AgeMultiplier: 0,
+            AthleticismSignalScore: 0,
+            AthleticismScore: null,
+            SpeedScore: null,
+            FortyYard: null,
+            LeagueContextAvailable: true,
+            RosteredByTeamName: _roster?.TeamName);
 
+        var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, data },
+        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
+    };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true
+        };
+        await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
+    }
 }
