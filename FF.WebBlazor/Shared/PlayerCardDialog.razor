@@ -8,8 +8,7 @@
         <div class="d-flex align-center gap-3">
             @if (!string.IsNullOrEmpty(Player.HeadshotUrl))
             {
-                <img src="@Player.HeadshotUrl"
-                     alt="@Player.FullName"
+                <img src="@Player.HeadshotUrl" alt="@Player.FullName"
                      style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
                      onerror="this.style.display='none'" />
             }
@@ -24,9 +23,7 @@
                     @Player.FullName
                 </MudText>
                 <div class="d-flex align-center gap-2 mt-1">
-                    <MudChip T="string" Size="Size.Small"
-                             Color="@GetPositionColor(Player.Position)"
-                             Variant="Variant.Filled">
+                    <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(Player.Position)" Variant="Variant.Filled">
                         @Player.Position
                     </MudChip>
                     @if (!string.IsNullOrEmpty(Player.NflTeam))
@@ -40,41 +37,66 @@
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">
                             Age @Player.Age
                         </MudText>
+                        @if (Player.Age >= 23)
+                        {
+                            <MudTooltip Text="Age 23+ prospects carry additional dynasty risk">
+                                <MudIcon Icon="@Icons.Material.Filled.Warning"
+                                         Style="color:#F59E0B; font-size:1rem; vertical-align:middle;" />
+                            </MudTooltip>
+                        }
                     }
                 </div>
             </div>
         </div>
     </TitleContent>
-
     <DialogContent>
-
         @* ── Bio strip ───────────────────────────────────────────────────── *@
         <div class="d-flex flex-wrap mt-1 mb-4" style="gap:24px 32px;">
             @if (!string.IsNullOrEmpty(Player.CollegeTeam))
             {
                 <div style="min-width:80px;">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">College</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">College</MudText>
                     <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.CollegeTeam</MudText>
                 </div>
             }
             @if (Player.DraftRound.HasValue && Player.DraftPick.HasValue)
             {
                 <div style="min-width:80px;">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">NFL Draft</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">NFL Draft</MudText>
                     <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">R@(Player.DraftRound) P@(Player.DraftPick)</MudText>
                 </div>
             }
             @if (Player.FantasyProsRank.HasValue)
             {
                 <div style="min-width:80px;">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">FP Rank</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">FP Rank</MudText>
                     <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">#@Player.FantasyProsRank</MudText>
+                </div>
+            }
+            @if (Player.PffGrade.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">PFF Grade</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.PffGrade.Value.ToString("F1")</MudText>
+                </div>
+            }
+            @if (Player.ConsensusAdp.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Consensus ADP</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.ConsensusAdp.Value.ToString("F1")</MudText>
                 </div>
             }
             @if (!string.IsNullOrEmpty(Player.FantasyProsTier))
             {
                 <div style="min-width:80px;">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Tier</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Tier</MudText>
                     <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.FantasyProsTier</MudText>
                 </div>
             }
@@ -87,14 +109,20 @@
                  Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
             Dynasty Score Breakdown
         </MudText>
-
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 32px;">
-            @ScoreRow("Dynasty Score", Player.DynastyScore, "Composite — draft capital 35%, positional 25%, valuation 30%, FP rank 10%")
-            @ScoreRow("Draft Capital", Player.DraftCapitalScore, "Log-scaled pick slot — earlier picks score higher")
-            @ScoreRow("Positional Value", Player.PositionalScore, "QB 85 · WR 90 · TE 75 · RB 55 — dynasty scarcity weighting")
-            @ScoreRow("Valuation Blend", Player.ValuationBlendScore, "Blend of Career Value, Trade Value, and Discounted Future Value")
-            @ScoreRow("FP Score", Player.FantasyProsScore, "FantasyPros dynasty rookie rank — rank 1 = 100, rank 100+ = 0")
+            @ScoreRow("Dynasty Score", Player.DynastyScore, "Signal-normalized composite — active signals fill 90% of the pool; positional value is a 10% additive floor")
+            @ScoreRow("Draft Capital", Player.DraftCapitalScore, "Log-scaled NFL pick slot — earlier picks score higher; max weight 25%")
+            @ScoreRow("FP Score", Player.FantasyProsScore, "FantasyPros dynasty rookie rank — rank 1 = 100, rank 100+ = 0; max weight 20%")
+            @ScoreRow("PFF Grade", Player.PffGradeScore, "PFF pre-draft grade (0–100); max weight 20%")
+            @ScoreRow("Consensus ADP", Player.ConsensusAdpScore, "Consensus ADP pick number — earlier ADP scores higher; max weight 15%")
+            @ScoreRow("Positional Value", Player.PositionalScore, "Dynasty positional scarcity floor — WR 90, QB 85, TE 75, RB 55; always 10% of composite")
+            @ScoreRow("Valuation Blend", Player.ValuationBlendScore, "Blend of Career Value, Trade Value, and DFV — available Week 1 in-season; max weight 10%")
+            @if (Player.AgeMultiplier != 0)
+            {
+                @AgeRow()
+            }
         </div>
+
         <MudDivider Class="my-4" />
 
         @* ── AI Scout Report ─────────────────────────────────────────────── *@
@@ -105,11 +133,8 @@
             </MudText>
             @if (!_narrativeLoaded)
             {
-                <MudButton Variant="Variant.Outlined"
-                           Size="Size.Small"
-                           Color="Color.Primary"
-                           OnClick="GenerateNarrative"
-                           Disabled="@_narrativeLoading">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary"
+                           OnClick="GenerateNarrative" Disabled="@_narrativeLoading">
                     @if (_narrativeLoading)
                     {
                         <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
@@ -122,7 +147,6 @@
                 </MudButton>
             }
         </div>
-
         @if (_narrativeLoaded)
         {
             <MudPaper Class="pa-3" Elevation="0"
@@ -138,9 +162,7 @@
                 Click Generate for an AI-powered scouting summary.
             </MudText>
         }
-
     </DialogContent>
-
     <DialogActions>
         <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
     </DialogActions>
@@ -166,8 +188,7 @@
 
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content
-                    .ReadFromJsonAsync<NarrativeResponse>();
+                var result = await response.Content.ReadFromJsonAsync<NarrativeResponse>();
                 _narrative = result?.Narrative;
                 _narrativeLoaded = true;
             }
@@ -195,10 +216,37 @@
                 <MudProgressLinear Value="@value" Max="100"
                                    Color="@GetScoreColor(value)"
                                    Style="flex:1;height:5px;border-radius:3px;" />
-                <MudText Typo="Typo.body2"
-                         Style="font-weight:600;min-width:36px;text-align:right;font-size:.8rem;">
+                <MudText Typo="Typo.body2" Style="font-weight:600;min-width:36px;text-align:right;font-size:.8rem;">
                     @value.ToString("F1")
                 </MudText>
+            </div>
+        </MudTooltip>
+    };
+
+    // Age multiplier row — no progress bar; shows signed % adjustment instead
+    private RenderFragment AgeRow() => __builder =>
+    {
+        var multiplier = Player.AgeMultiplier;
+        var label = multiplier switch
+        {
+            > 0 => $"+{multiplier:F1}%",
+            < 0 => $"{multiplier:F1}%",
+            _ => "—"
+        };
+        var color = multiplier switch
+        {
+            > 0 => "color:#34D399;",   // green
+            < 0 => "color:#F59E0B;",   // amber
+            _ => "color:var(--mud-palette-text-secondary);"
+        };
+        var tooltip = Player.Age.HasValue
+            ? $"Age {Player.Age} — post-composite adjustment. RBs have steepest curve; QBs flattest."
+            : "Age unknown — no adjustment applied.";
+
+        <MudTooltip Text="@tooltip" Placement="Placement.Left">
+            <div class="d-flex align-center gap-2 mb-1">
+                <MudText Typo="Typo.body2" Style="min-width:110px; font-size:.8rem;">Age Adjustment</MudText>
+                <MudText Typo="Typo.body2" Style="@("font-weight:600; font-size:.8rem; " + color)">@label</MudText>
             </div>
         </MudTooltip>
     };
@@ -233,11 +281,17 @@
         string? HeadshotUrl,
         int? FantasyProsRank,
         string? FantasyProsTier,
+        double? PffGrade,
+        int? PffRank,
+        double? ConsensusAdp,
         double DynastyScore,
         double DraftCapitalScore,
         double PositionalScore,
         double ValuationBlendScore,
-        double FantasyProsScore);
+        double FantasyProsScore,
+        double PffGradeScore,
+        double ConsensusAdpScore,
+        double AgeMultiplier);
 
     private record NarrativeResponse(string Narrative);
 }

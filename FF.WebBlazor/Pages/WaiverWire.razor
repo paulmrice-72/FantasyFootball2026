@@ -476,30 +476,45 @@ else
             _emergenceLoading = false;
         }
     }
-    private async Task OpenPlayerCard(string sleeperPlayerId, string playerName, string position, string? nflTeam, string? collegeTeam = null)
-    {
-        var data = new PlayerCardDialog.PlayerCardData(
-            SleeperPlayerId: sleeperPlayerId,
-            FullName: playerName,
-            Position: position,
-            NflTeam: nflTeam,
-            Age: null,
-            DraftRound: null,
-            DraftPick: null,
-            CollegeTeam: collegeTeam,
-            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{sleeperPlayerId}.jpg",
-            FantasyProsRank: null,
-            FantasyProsTier: null,
-            DynastyScore: 0,
-            DraftCapitalScore: 0,
-            PositionalScore: 0,
-            ValuationBlendScore: 0,
-            FantasyProsScore: 0);
+ private async Task OpenPlayerCard(string sleeperPlayerId, string playerName, string position, string? nflTeam, string? collegeTeam = null)
+{
+    var data = new PlayerCardDialog.PlayerCardData(
+        SleeperPlayerId:    sleeperPlayerId,
+        FullName:           playerName,
+        Position:           position,
+        NflTeam:            nflTeam,
+        Age:                null,
+        DraftRound:         null,
+        DraftPick:          null,
+        CollegeTeam:        collegeTeam,
+        HeadshotUrl:        $"https://sleepercdn.com/content/nfl/players/thumb/{sleeperPlayerId}.jpg",
+        FantasyProsRank:    null,
+        FantasyProsTier:    null,
+        PffGrade:           null,
+        PffRank:            null,
+        ConsensusAdp:       null,
+        DynastyScore:       0,
+        DraftCapitalScore:  0,
+        PositionalScore:    0,
+        ValuationBlendScore: 0,
+        FantasyProsScore:   0,
+        PffGradeScore:      0,
+        ConsensusAdpScore:  0,
+        AgeMultiplier:      0);
 
-        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, data } };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
-        await DialogService.ShowAsync<PlayerCardDialog>(playerName, parameters, options);
-    }
+    var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, data }
+    };
+    var options = new DialogOptions
+    {
+        MaxWidth    = MaxWidth.Small,
+        FullWidth   = true,
+        CloseButton = true
+    };
+    await DialogService.ShowAsync<PlayerCardDialog>(playerName, parameters, options);
+}
+
     // ── Local context record matching API response ────────────────────────
     private record UserContext(
         string UserId,

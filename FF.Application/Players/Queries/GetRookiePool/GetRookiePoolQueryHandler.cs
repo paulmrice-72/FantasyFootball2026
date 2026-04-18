@@ -65,7 +65,8 @@ public class GetRookiePoolQueryHandler(
                 valuation: val,
                 fantasyProsRank: fp?.FantasyProsRank,
                 pffGrade: pff?.PffGrade,
-                consensusAdp: adp?.Adp);
+                consensusAdp: adp?.Adp,
+                age: player.Age);
 
             var headshotUrl = player.SleeperPlayerId is not null
                 ? $"{HeadshotBaseUrl}{player.SleeperPlayerId}.jpg"
@@ -100,6 +101,7 @@ public class GetRookiePoolQueryHandler(
                 ConsensusAdpScore: breakdown.ConsensusAdpScore,
                 ValuationBlendScore: breakdown.ValuationBlendScore,
                 PositionalScore: breakdown.PositionalScore,
+                AgeMultiplier: breakdown.AgeMultiplier,
                 ActiveSignals: breakdown.ActiveSignals);
         })
         .OrderByDescending(r => r.DynastyScore)
