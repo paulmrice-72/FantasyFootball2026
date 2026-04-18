@@ -104,4 +104,15 @@ public class Player : Entity
         if (collegeTeam != null) CollegeTeam = collegeTeam;
         SetUpdated();
     }
+    // Add these to Player.cs
+
+
+
+    public void UpdateBirthDate(DateOnly birthDate)
+    {
+        BirthDate = birthDate;
+        SetUpdated();
+    }
+
+
 }
