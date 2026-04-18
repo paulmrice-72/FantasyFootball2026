@@ -1,4 +1,5 @@
 ﻿// FF.API/Controllers/AdminController.cs
+using FF.Application.Features.DraftTools.Commands.SyncCombineData;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
@@ -21,7 +22,34 @@ public class AdminController(
     ILogger<AdminController> logger) : ControllerBase
 {
     // ── existing user endpoints unchanged ───────────────────────────────
+    [HttpGet("combine-debug")]
+    public async Task<IActionResult> CombineDebug(
+        [FromServices] IHttpClientFactory httpClientFactory,
+        CancellationToken ct)
+    {
+        var http = httpClientFactory.CreateClient("NflverseClient");
+        var csv = await http.GetStringAsync(
+            "https://github.com/nflverse/nflverse-data/releases/download/combine/combine.csv", ct);
 
+        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        // Find 2026 rows WITH drill data
+        var with2026Drills = lines.Skip(1)
+            .Where(l => l.StartsWith("2026") && l.Split(',').Length > 12
+                        && !string.IsNullOrWhiteSpace(l.Split(',')[12]))
+            .Take(5)
+            .ToList();
+
+        // Count by season
+        var countBySeason = lines.Skip(1)
+            .GroupBy(l => l.Split(',')[0])
+            .Select(g => new { season = g.Key, count = g.Count() })
+            .OrderByDescending(x => x.season)
+            .Take(5)
+            .ToList();
+
+        return Ok(new { with2026Drills, countBySeason });
+    }
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers(CancellationToken ct)
     {
@@ -168,6 +196,20 @@ public class AdminController(
         logger.LogInformation("Admin triggered stats sync — season {Season}", request.Season);
         await statsSyncJob.SyncCurrentSeasonAsync(request.Season);
         return Ok(new { Message = $"Stats sync complete for season {request.Season}." });
+    }
+
+    [HttpPost("jobs/run-combine-sync")]
+    public async Task<IActionResult> RunCombineSync(
+        [FromQuery] int season,
+        [FromServices] SyncCombineDataCommandHandler combineSync,
+        CancellationToken ct)
+    {
+        logger.LogInformation("Admin triggered combine sync — season {Season}", season);
+        var result = await combineSync.Handle(
+            new FF.Application.Features.DraftTools.Commands.SyncCombineData.SyncCombineDataCommand(season), ct);
+        return result.IsSuccess
+            ? Ok(result.Value)
+            : BadRequest(result.Error.Message);
     }
     public record RunJobRequest(int Season);
     public record NflContextOverrideRequest(int? Season, int? Week);

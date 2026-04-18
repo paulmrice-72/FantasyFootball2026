@@ -46,6 +46,9 @@ public class PlayerConfiguration : IEntityTypeConfiguration<Player>
             .HasMaxLength(50);
 
         builder.Property(p => p.Age);
+        builder.Property(p => p.BirthDate);
+        builder.Ignore(p => p.ComputedAge);   // computed, not stored
+
         builder.Property(p => p.YearsExperience);
 
         // ── E10 Dynasty Draft ─────────────────────────────────────────
