@@ -15,17 +15,19 @@ public class Player : Entity
     public int? JerseyNumber { get; private set; }
     public string? SleeperPlayerId { get; private set; }
     // ── Age ───────────────────────────────────────────────────────────────────
-    public int? Age { get; private set; }           // Sleeper-synced, updated weekly
-    public DateOnly? BirthDate { get; private set; } // nflverse combine, permanent
+    public int? Age { get; private set; }           // Sleeper-synced
+    public DateOnly? BirthDate { get; private set; } // combine-sourced
 
-    /// <summary>
-    /// Computes current age from BirthDate when available; falls back to
-    /// Sleeper-synced Age. BirthDate is more precise and never goes stale.
-    /// </summary>
     public int? ComputedAge =>
         BirthDate.HasValue
             ? (int)((DateTime.UtcNow - BirthDate.Value.ToDateTime(TimeOnly.MinValue)).TotalDays / 365.25)
             : Age;
+
+    public void UpdateBirthDate(DateOnly birthDate)
+    {
+        BirthDate = birthDate;
+        SetUpdated();
+    }
     public int? YearsExperience { get; private set; }
     public string? GsisId { get; set; }
     public string? InjuryStatus { get; private set; }
@@ -86,6 +88,7 @@ public class Player : Entity
         Position = position;
         YearsExperience = yearsExperience;
         JerseyNumber = jerseyNumber;
+        Age = age;
         if (gsisId != null) GsisId = gsisId;
         InjuryStatus = injuryStatus;
         if (collegeTeam != null) CollegeTeam = collegeTeam;

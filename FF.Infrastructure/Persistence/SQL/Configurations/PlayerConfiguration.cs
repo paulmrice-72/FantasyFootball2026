@@ -47,7 +47,7 @@ public class PlayerConfiguration : IEntityTypeConfiguration<Player>
 
         builder.Property(p => p.Age);
         builder.Property(p => p.BirthDate);
-        builder.Ignore(p => p.ComputedAge);   // computed, not stored
+        builder.Ignore(p => p.ComputedAge);
 
         builder.Property(p => p.YearsExperience);
 
