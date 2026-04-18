@@ -11,8 +11,7 @@ public class UserLeaguePreference : Entity
     public string UserId { get; private set; } = string.Empty;
     public Guid LeagueId { get; private set; }
     public bool IsHidden { get; private set; }
-    public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
-
+    public new DateTime? UpdatedAt { get; set; }
     private UserLeaguePreference() { }
 
     public static UserLeaguePreference Create(string userId, Guid leagueId, bool isHidden) =>

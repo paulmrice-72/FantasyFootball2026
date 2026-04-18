@@ -33,8 +33,15 @@ public record RookiePlayerDto(
     double FantasyProsScore,
     double PffGradeScore,
     double ConsensusAdpScore,
+    double AthleticismSignalScore,   // ← normalized signal score (0-100)
     double ValuationBlendScore,
     double PositionalScore,
     double AgeMultiplier,       // percentage points e.g. +3.0 or -4.0
-    List<string> ActiveSignals
+    List<string> ActiveSignals,
+    double? AthleticismScore,
+    double? SpeedScore,
+    double? FortyYard,
+    double? Vertical,
+    double? BroadJump,
+    string? CombineSchool
 );
