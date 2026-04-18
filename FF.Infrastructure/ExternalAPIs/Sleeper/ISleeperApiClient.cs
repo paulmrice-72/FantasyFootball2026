@@ -86,4 +86,8 @@ public interface ISleeperApiClient
 
     [Get("/v1/league/{leagueId}/matchups/{week}")]
     Task<List<SleeperMatchupDto>> GetMatchupsAsync(string leagueId, int week, CancellationToken cancellationToken = default);
+
+    [Get("/v1/league/{leagueId}/traded_picks")]
+    Task<List<SleeperDraftPickDto>> GetTradedPicksAsync(
+        string leagueId, CancellationToken cancellationToken = default);
 }

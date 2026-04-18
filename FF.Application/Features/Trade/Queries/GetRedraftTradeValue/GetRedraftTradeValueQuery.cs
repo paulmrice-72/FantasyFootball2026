@@ -1,6 +1,6 @@
 ﻿using MediatR;
 
-namespace FF.Application.Features.Trade.Queries;
+namespace FF.Application.Features.Trade.Queries.GetRedraftTradeValue;
 
 public record GetRedraftTradeValueQuery(List<string> SleeperPlayerIds)
     : IRequest<List<RedraftTradeValueDto>>;

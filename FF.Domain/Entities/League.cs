@@ -19,7 +19,7 @@ public class League : Entity
     public string LeagueType { get; private set; } = "Redraft";
 
     // Draft settings
-    public int DraftRounds { get; private set; } = 3;
+    public int DraftRounds { get; private set; } = 5;
     public int PickYearsOut { get; private set; } = 3;
     public bool CanTradePicks { get; private set; } = false;
 
