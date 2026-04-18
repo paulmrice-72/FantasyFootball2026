@@ -29,7 +29,8 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
         CancellationToken cancellationToken = default)
     {
         var query = DbSet.AsNoTracking()
-            .Where(p => p.YearsExperience == 0);
+            .Where(p => p.YearsExperience == 0)
+            .Where(p => p.FirstName != "Player" && p.LastName != "Invalid");  // ← add this
 
         if (!string.IsNullOrWhiteSpace(position))
         {
