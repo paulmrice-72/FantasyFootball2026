@@ -64,7 +64,12 @@ public static class RookieDynastyScoreCalculator
             activeSignals.Add((pffScore, PffGradeMaxWeight, "PffGrade"));
         if (consensusAdp.HasValue)
             activeSignals.Add((adpScore, ConsensusAdpMaxWeight, "ConsensusAdp"));
-        if (athleticismScore.HasValue)
+        var hasConsensusSignal = fantasyProsRank.HasValue
+            || overallPick is > 0
+            || consensusAdp.HasValue
+            || pffGrade.HasValue;
+
+        if (athleticismScore.HasValue && hasConsensusSignal)
             activeSignals.Add((athleticismRaw, AthleticismMaxWeight, "Athleticism"));
         if (valuation is not null)
             activeSignals.Add((valuationScore, ValuationBlendMaxWeight, "ValuationBlend"));
