@@ -2,7 +2,7 @@
 using FF.Domain.Documents;
 using MediatR;
 
-namespace FF.Application.Features.Trade.Queries;
+namespace FF.Application.Features.Trade.Queries.GetRedraftTradeValue;
 
 public class GetRedraftTradeValueQueryHandler(ISimulationResultRepository simulationRepository)
     : IRequestHandler<GetRedraftTradeValueQuery, List<RedraftTradeValueDto>>

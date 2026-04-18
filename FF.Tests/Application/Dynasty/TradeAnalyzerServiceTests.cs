@@ -13,10 +13,14 @@ public class TradeAnalyzerServiceTests
 {
     private readonly Mock<IDynastyValuationRepository> _valuationRepo = new();
     private readonly Mock<IPickValueRepository> _pickValueRepo = new();
-
+    // ADD THESE:
+    private readonly Mock<IRosterPlayerRepository> _rosterPlayerRepo = new();
+    private readonly Mock<ILeagueRepository> _leagueRepo = new();
     private TradeAnalyzerService CreateSut() => new(
         _valuationRepo.Object,
         _pickValueRepo.Object,
+        _rosterPlayerRepo.Object,
+        _leagueRepo.Object,
         NullLogger<TradeAnalyzerService>.Instance);
 
     private static DynastyValuationDocument MakeValuation(
