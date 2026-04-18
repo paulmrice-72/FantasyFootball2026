@@ -5,6 +5,7 @@
 @inject IHttpClientFactory HttpClientFactory
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IDialogService DialogService
 
 <PageTitle>Trade Analyzer — FantasyCombine.AI</PageTitle>
 
@@ -91,7 +92,7 @@
                 <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1">Add Draft Pick</MudText>
                 <div class="d-flex gap-2 mb-2">
                     <MudSelect T="int" @bind-Value="_myPickYear" Label="Year" Variant="Variant.Outlined"
-                               Margin="Margin.Dense" Style="max-width:90px;">
+                               Margin="Margin.Dense" Style="max-width:120px;">
                         <MudSelectItem Value="2026">2026</MudSelectItem>
                         <MudSelectItem Value="2027">2027</MudSelectItem>
                         <MudSelectItem Value="2028">2028</MudSelectItem>
@@ -127,7 +128,14 @@
                               Elevation="1"
                               Style="background:rgba(255,255,255,0.03);">
                         <div>
-                            <MudText Typo="Typo.body2" Style="font-weight:600;">@player.PlayerName</MudText>
+                            @{
+                                var tp = player;
+                            }
+                            <MudButton Variant="Variant.Text"
+                                       Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                       OnClick="@(() => _ = OpenPlayerCardAsync(tp))">
+                                @player.PlayerName
+                            </MudButton>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                 @player.Position · Age @player.Age ·
                                 <span style="color:var(--fc-cyan);">
@@ -216,7 +224,7 @@
                 <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1">Add Draft Pick</MudText>
                 <div class="d-flex gap-2 mb-2">
                     <MudSelect T="int" @bind-Value="_myPickYear" Label="Year" Variant="Variant.Outlined"
-                               Margin="Margin.Dense" Style="max-width:90px;">
+                               Margin="Margin.Dense" Style="max-width:120px;">
                         <MudSelectItem Value="2026">2026</MudSelectItem>
                         <MudSelectItem Value="2027">2027</MudSelectItem>
                         <MudSelectItem Value="2028">2028</MudSelectItem>
@@ -252,7 +260,14 @@
                               Elevation="1"
                               Style="background:rgba(255,255,255,0.03);">
                         <div>
-                            <MudText Typo="Typo.body2" Style="font-weight:600;">@player.PlayerName</MudText>
+                            @{
+                                var tp = player;
+                            }
+                            <MudButton Variant="Variant.Text"
+                                       Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                       OnClick="@(() => _ = OpenPlayerCardAsync(tp))">
+                                @player.PlayerName
+                            </MudButton>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                 @player.Position · Age @player.Age ·
                                 <span style="color:var(--fc-cyan);">
@@ -847,4 +862,51 @@
         string Grade,
         List<TradeSidePlayerModel> MySide,
         List<TradeSidePlayerModel> TheirSide);
+
+    private async Task OpenPlayerCardAsync(TradePlayerItem player)
+    {
+        if (player.IsDraftPick) return; // no card for draft picks
+
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: player.SleeperPlayerId,
+            FullName: player.PlayerName,
+            Position: player.Position,
+            NflTeam: null,
+            Age: player.Age,
+            DraftRound: null,
+            DraftPick: null,
+            CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg",
+            FantasyProsRank: null,
+            FantasyProsTier: null,
+            PffGrade: null,
+            PffRank: null,
+            ConsensusAdp: null,
+            DynastyScore: player.TradeValue,
+            DraftCapitalScore: 0,
+            PositionalScore: 0,
+            ValuationBlendScore: 0,
+            FantasyProsScore: 0,
+            PffGradeScore: 0,
+            ConsensusAdpScore: 0,
+            AgeMultiplier: 0,
+            AthleticismSignalScore: 0,
+            AthleticismScore: null,
+            SpeedScore: null,
+            FortyYard: null,
+            DynastyTradeValue: player.TradeValue);
+
+        var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, data },
+        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Trade }
+    };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true
+        };
+        await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
+    }
 }
