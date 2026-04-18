@@ -43,6 +43,8 @@ public class FantasyProsRookieRankingRepository(MongoDbContext context)
             .Eq(x => x.SleeperPlayerId, document.SleeperPlayerId);
 
         var update = Builders<FantasyProsRookieRankingDocument>.Update
+            .SetOnInsert(x => x.Id, document.Id)
+            .Set(x => x.SleeperPlayerId, document.SleeperPlayerId)
             .Set(x => x.PlayerName, document.PlayerName)
             .Set(x => x.Position, document.Position)
             .Set(x => x.NflTeam, document.NflTeam)
@@ -57,7 +59,6 @@ public class FantasyProsRookieRankingRepository(MongoDbContext context)
             new UpdateOptions { IsUpsert = true },
             cancellationToken);
     }
-
     public async Task UpsertManyAsync(
         IEnumerable<FantasyProsRookieRankingDocument> documents,
         CancellationToken cancellationToken = default)

@@ -624,25 +624,40 @@
     private async Task OpenPlayerCard(RookiePlayerDto player)
     {
         var cardData = new PlayerCardDialog.PlayerCardData(
-            SleeperPlayerId:     player.SleeperPlayerId,
-            FullName:            player.FullName,
-            Position:            player.Position,
-            NflTeam:             player.NflTeam,
-            Age:                 player.Age,
-            DraftRound:          player.DraftRound,
-            DraftPick:           player.DraftPick,
-            CollegeTeam:         player.CollegeTeam,
-            HeadshotUrl:         player.HeadshotUrl,
-            FantasyProsRank:     player.FantasyProsRank,
-            FantasyProsTier:     player.FantasyProsTier,
-            DynastyScore:        player.DynastyScore,
-            DraftCapitalScore:   player.DraftCapitalScore,
-            PositionalScore:     player.PositionalScore,
+            SleeperPlayerId: player.SleeperPlayerId,
+            FullName: player.FullName,
+            Position: player.Position,
+            NflTeam: player.NflTeam,
+            Age: player.Age,
+            DraftRound: player.DraftRound,
+            DraftPick: player.DraftPick,
+            CollegeTeam: player.CollegeTeam,
+            HeadshotUrl: player.HeadshotUrl,
+            FantasyProsRank: player.FantasyProsRank,
+            FantasyProsTier: player.FantasyProsTier,
+            PffGrade: player.PffGrade,
+            PffRank: player.PffRank,
+            ConsensusAdp: player.ConsensusAdp,
+            DynastyScore: player.DynastyScore,
+            DraftCapitalScore: player.DraftCapitalScore,
+            PositionalScore: player.PositionalScore,
             ValuationBlendScore: player.ValuationBlendScore,
-            FantasyProsScore:    player.FantasyProsScore);
+            FantasyProsScore: player.FantasyProsScore,
+            PffGradeScore: player.PffGradeScore,
+            ConsensusAdpScore: player.ConsensusAdpScore,
+            AgeMultiplier: player.AgeMultiplier);
 
-        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, cardData } };
-        var options    = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, BackdropClick = true };
+        var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, cardData }
+    };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true,
+            BackdropClick = true
+        };
         await DialogService.ShowAsync<PlayerCardDialog>(player.FullName, parameters, options);
     }
 
@@ -669,27 +684,35 @@
 
     // ── DTOs ────────────────────────────────────────────────────────────
     private record RookiePlayerDto(
-        string  SleeperPlayerId,
-        string  FullName,
-        string  Position,
+        string SleeperPlayerId,
+        string FullName,
+        string Position,
         string? NflTeam,
-        int?    Age,
-        int?    DraftRound,
-        int?    DraftPick,
+        int? Age,
+        int? DraftRound,
+        int? DraftPick,
         string? CollegeTeam,
         string? HeadshotUrl,
         double? CareerValueScore,
         double? TradeValue,
         double? DiscountedFutureValue,
         double? BreakoutScore,
-        int?    FantasyProsRank,
-        int?    FantasyProsPositionRank,
+        int? FantasyProsRank,
+        int? FantasyProsPositionRank,
         string? FantasyProsTier,
-        double  DynastyScore,
-        double  DraftCapitalScore,
-        double  PositionalScore,
-        double  ValuationBlendScore,
-        double  FantasyProsScore);
+        double? PffGrade,
+        int? PffRank,
+        double? ConsensusAdp,
+        int? ConsensusAdpRank,
+        string? AdpSource,
+        double DynastyScore,
+        double DraftCapitalScore,
+        double PositionalScore,
+        double ValuationBlendScore,
+        double FantasyProsScore,
+        double PffGradeScore,
+        double ConsensusAdpScore,
+        double AgeMultiplier);
 
     private record OffSeasonPlayerDto(
         string  SleeperPlayerId,

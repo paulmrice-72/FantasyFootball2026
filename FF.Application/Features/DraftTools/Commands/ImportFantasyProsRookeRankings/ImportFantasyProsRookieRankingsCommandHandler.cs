@@ -22,16 +22,18 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
         {
             var rows = ParseCsv(request.CsvContent);
             if (rows.Count == 0)
-                return (Result<ImportFantasyProsResult>)Result<ImportFantasyProsResult>.Failure(
+                return Result.Failure<ImportFantasyProsResult>(
                     new Error("FP_IMPORT_EMPTY", "CSV contained no parseable rows"));
 
             // Load all rookies for name matching
             var rookies = await playerRepository.GetRookiesAsync(null, cancellationToken);
+            // Use first match if normalized names collide — handles placeholder/duplicate names
             var nameMap = rookies
                 .Where(p => p.SleeperPlayerId != null)
+                .GroupBy(p => NormalizeName(p.FullName))
                 .ToDictionary(
-                    p => NormalizeName(p.FullName),
-                    p => p.SleeperPlayerId!);
+                    g => g.Key,
+                    g => g.First().SleeperPlayerId!);
 
             var documents = new List<FantasyProsRookieRankingDocument>();
             int unmatched = 0;
@@ -79,7 +81,7 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
         catch (Exception ex)
         {
             logger.LogError(ex, "FP Import failed");
-            return (Result<ImportFantasyProsResult>)Result<ImportFantasyProsResult>.Failure(
+            return Result.Failure<ImportFantasyProsResult>(
                 new Error("FP_IMPORT_ERROR", ex.Message));
         }
     }
@@ -87,6 +89,8 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
     // ── CSV parsing ───────────────────────────────────────────────────────
     // Expected header: Rank,PlayerName,Position,Team,PositionRank,Tier
     // PositionRank and Tier columns are optional
+    // Expected FP export header:
+    // "RK","PLAYER NAME",TEAM,"POS","AGE","BEST","WORST","AVG.","STD.DEV","ECR VS. ADP"
     private static List<FpRow> ParseCsv(string csv)
     {
         var rows = new List<FpRow>();
@@ -94,36 +98,75 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
         if (lines.Length < 2) return rows;
 
         var headers = lines[0].Split(',')
-            .Select(h => h.Trim().ToLowerInvariant())
+            .Select(h => h.Trim().Trim('"').ToLowerInvariant())
             .ToArray();
 
-        int IdxOf(string name) => Array.IndexOf(headers, name);
+        int IdxOf(params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var idx = Array.IndexOf(headers, name);
+                if (idx >= 0) return idx;
+            }
+            return -1;
+        }
 
-        int iRank = IdxOf("rank");
-        int iName = IdxOf("playername");
-        int iPos = IdxOf("position");
+        int iRank = IdxOf("rk", "rank");
+        int iName = IdxOf("player name", "playername");
+        int iPos = IdxOf("pos", "position");
         int iTeam = IdxOf("team");
-        int iPosRank = IdxOf("positionrank");
-        int iTier = IdxOf("tier");
 
         foreach (var line in lines.Skip(1))
         {
-            var cols = line.Split(',');
+            // Handle quoted fields with commas inside
+            var cols = SplitCsvLine(line);
             if (cols.Length <= Math.Max(iRank, iName)) continue;
-
             if (!int.TryParse(Safe(cols, iRank), out var rank)) continue;
+
+            // Strip position rank suffix: "RB1" -> "RB", "WR2" -> "WR"
+            var rawPos = Safe(cols, iPos).ToUpperInvariant();
+            var position = new string(rawPos.TakeWhile(char.IsLetter).ToArray());
+
+            // Derive position rank from suffix digit if present
+            var posRankStr = new string(rawPos.SkipWhile(char.IsLetter).ToArray());
+            int.TryParse(posRankStr, out var positionRank);
 
             rows.Add(new FpRow(
                 Rank: rank,
                 PlayerName: Safe(cols, iName),
-                Position: Safe(cols, iPos).ToUpperInvariant(),
-                Team: Safe(cols, iTeam).ToUpperInvariant(),
-                PositionRank: int.TryParse(Safe(cols, iPosRank), out var pr) ? pr : 0,
-                Tier: iTier >= 0 ? Safe(cols, iTier) : null
-            ));
+                Position: string.IsNullOrEmpty(position) ? "UNK" : position,
+                Team: Safe(cols, iTeam).ToUpperInvariant().Trim('"'),
+                PositionRank: positionRank,
+                Tier: null));
         }
 
         return rows;
+    }
+
+    private static string[] SplitCsvLine(string line)
+    {
+        var result = new List<string>();
+        bool inQuotes = false;
+        var current = new System.Text.StringBuilder();
+
+        foreach (var ch in line)
+        {
+            if (ch == '"')
+            {
+                inQuotes = !inQuotes;
+            }
+            else if (ch == ',' && !inQuotes)
+            {
+                result.Add(current.ToString().Trim().Trim('"'));
+                current.Clear();
+            }
+            else
+            {
+                current.Append(ch);
+            }
+        }
+        result.Add(current.ToString().Trim().Trim('"'));
+        return result.ToArray();
     }
 
     private static string Safe(string[] cols, int idx) =>
@@ -134,6 +177,5 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
         new string([.. name.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c == ' ')])
         .Trim();
 
-    private record FpRow(int Rank, string PlayerName, string Position,
-        string Team, int PositionRank, string? Tier);
+    private record FpRow(int Rank, string PlayerName, string Position, string Team, int PositionRank, string? Tier);
 }

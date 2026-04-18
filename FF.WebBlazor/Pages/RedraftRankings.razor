@@ -289,25 +289,39 @@ else if (_filtered.Count > 0)
     private async Task OpenPlayerCard(SimRow row)
     {
         var data = new PlayerCardDialog.PlayerCardData(
-            SleeperPlayerId:     row.SleeperPlayerId,
-            FullName:            row.PlayerName,
-            Position:            row.Position,
-            NflTeam:             row.NflTeam,
-            Age:                 null,
-            DraftRound:          null,
-            DraftPick:           null,
-            CollegeTeam:         null,
-            HeadshotUrl:         $"https://sleepercdn.com/content/nfl/players/thumb/{row.SleeperPlayerId}.jpg",
-            FantasyProsRank:     null,
-            FantasyProsTier:     null,
-            DynastyScore:        0,
-            DraftCapitalScore:   0,
-            PositionalScore:     0,
+            SleeperPlayerId: row.SleeperPlayerId,
+            FullName: row.PlayerName,
+            Position: row.Position,
+            NflTeam: row.NflTeam,
+            Age: null,
+            DraftRound: null,
+            DraftPick: null,
+            CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{row.SleeperPlayerId}.jpg",
+            FantasyProsRank: null,
+            FantasyProsTier: null,
+            PffGrade: null,
+            PffRank: null,
+            ConsensusAdp: null,
+            DynastyScore: 0,
+            DraftCapitalScore: 0,
+            PositionalScore: 0,
             ValuationBlendScore: 0,
-            FantasyProsScore:    0);
+            FantasyProsScore: 0,
+            PffGradeScore: 0,
+            ConsensusAdpScore: 0,
+            AgeMultiplier: 0);
 
-        var parameters = new DialogParameters<PlayerCardDialog> { { x => x.Player, data } };
-        var options    = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, data }
+    };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true
+        };
         await DialogService.ShowAsync<PlayerCardDialog>(row.PlayerName, parameters, options);
     }
 
