@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<IRosterRepository, RosterRepository>();
         services.AddScoped<IPlayerGameLogRepository, PlayerGameLogRepository>();
         services.AddScoped<IPlayerUsageMetricsRepository, PlayerUsageMetricsRepository>();
+        services.AddScoped<IPlatformSettingsRepository, PlatformSettingsRepository>();
         services.AddScoped<ISnapCountRepository, SnapCountRepository>();
         services.AddScoped<IUsageMetricsService, UsageMetricsService>();
         services.AddScoped<UsageMetricsAggregationJob>();

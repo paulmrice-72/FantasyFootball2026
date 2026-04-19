@@ -14,6 +14,7 @@ public class FFDbContext(DbContextOptions<FFDbContext> options) : IdentityDbCont
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<LeagueMembership> LeagueMemberships => Set<LeagueMembership>();
     public DbSet<LeaguePrivacyRule> LeaguePrivacyRules => Set<LeaguePrivacyRule>();
+    public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     public DbSet<UserProjectionWeightProfile> UserProjectionWeightProfiles => Set<UserProjectionWeightProfile>();
     public DbSet<UserLeaguePreference> UserLeaguePreferences => Set<UserLeaguePreference>();
     protected override void OnModelCreating(ModelBuilder builder)
