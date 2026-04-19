@@ -114,18 +114,19 @@
                             <MudTd>
                                 @if (context.IsStarter)
                                 {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary"
-                                             Variant="Variant.Text">Starter</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">Starter</MudChip>
+                                }
+                                else if (context.IsOnTaxi)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">Taxi</MudChip>
                                 }
                                 else if (context.IsOnIr)
                                 {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Error"
-                                             Variant="Variant.Text">IR</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">IR</MudChip>
                                 }
                                 else
                                 {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Default"
-                                             Variant="Variant.Text">Bench</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">Bench</MudChip>
                                 }
                             </MudTd>
                         </RowTemplate>
@@ -853,6 +854,7 @@ else if (_roster is null)
         string? InjuryDesignation,
         bool IsStarter,
         bool IsOnIr,
+        bool IsOnTaxi,          // ← add
         double? MedianProjectedPoints,
         string? ByeWeek);
 

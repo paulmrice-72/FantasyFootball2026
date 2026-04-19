@@ -87,7 +87,12 @@ public class SleeperIdentityService(HttpClient httpClient) : ISleeperIdentitySer
                     int.TryParse(l.Season, out var s) ? s : season,
                     l.Status ?? "unknown",
                     l.TotalRosters,
-                    l.LeagueType switch { 2 => "Dynasty", 1 => "Keeper", _ => "Redraft" }))
+                    l.Settings?.Type switch          // ← was l.LeagueType
+                    {
+                        2 => "Dynasty",
+                        1 => "Keeper",
+                        _ => "Redraft"
+                    }))
                 .ToList()
                 .AsReadOnly();
         }
@@ -103,7 +108,11 @@ public class SleeperIdentityService(HttpClient httpClient) : ISleeperIdentitySer
         [property: JsonPropertyName("season")] string? Season,
         [property: JsonPropertyName("status")] string? Status,
         [property: JsonPropertyName("total_rosters")] int TotalRosters,
-        [property: JsonPropertyName("league_type")] int LeagueType
+        [property: JsonPropertyName("settings")] SleeperLeagueSettings? Settings
+    );
+
+    private record SleeperLeagueSettings(
+        [property: JsonPropertyName("type")] int Type
     );
     private record SleeperUserResponse(
         [property: JsonPropertyName("user_id")] string? UserId,
