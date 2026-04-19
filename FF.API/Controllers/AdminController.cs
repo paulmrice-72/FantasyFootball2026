@@ -1,4 +1,6 @@
 ﻿// FF.API/Controllers/AdminController.cs
+using FF.Application.Features.Admin.Commands.SetPlatformSettings;
+using FF.Application.Features.Admin.Queries.GetPlatformSettings;
 using FF.Application.Features.DraftTools.Commands.SyncCombineData;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
@@ -6,6 +8,7 @@ using FF.Application.Interfaces.Services;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Services;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +22,7 @@ namespace FF.API.Controllers;
 public class AdminController(
     UserManager<ApplicationUser> userManager,
     IAppSettingsRepository appSettingsRepo,
+    IPlatformSettingsRepository platformSettingsRepo,
     ILogger<AdminController> logger) : ControllerBase
 {
     // ── existing user endpoints unchanged ───────────────────────────────
@@ -50,6 +54,32 @@ public class AdminController(
 
         return Ok(new { with2026Drills, countBySeason });
     }
+
+    [HttpGet("platform-settings")]
+    public async Task<IActionResult> GetPlatformSettings()
+    {
+        var settings = await platformSettingsRepo.GetAsync();
+        return Ok(new
+        {
+            settings.RegistrationsEnabled,
+            settings.UpdatedAt,
+            settings.UpdatedBy
+        });
+    }
+
+    [HttpPut("platform-settings")]
+    public async Task<IActionResult> SetPlatformSettings([FromBody] SetPlatformSettingsRequest request)
+    {
+        var settings = await platformSettingsRepo.GetAsync();
+        settings.RegistrationsEnabled = request.RegistrationsEnabled;
+        settings.UpdatedAt = DateTime.UtcNow;
+        settings.UpdatedBy = User.Identity?.Name ?? "admin";
+        await platformSettingsRepo.SaveAsync(settings);
+        return NoContent();
+    }
+
+    public record SetPlatformSettingsRequest(bool RegistrationsEnabled);
+
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers(CancellationToken ct)
     {

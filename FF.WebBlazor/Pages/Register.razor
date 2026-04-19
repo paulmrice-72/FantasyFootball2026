@@ -80,19 +80,19 @@
         var result = await AuthService.RegisterAsync(
             new(_email, _password, _firstName, _lastName));
 
-        if (result is null)
+        if (result.AuthResponse is null)
         {
-            _errorMessage = "Registration failed. Please check your details and try again.";
+            _errorMessage = result.ErrorMessage
+                ?? "Registration failed. Please check your details and try again.";
             _isLoading = false;
             return;
         }
 
         var authProvider = (CustomAuthStateProvider)AuthStateProvider;
         authProvider.MarkUserAsAuthenticated(
-            result.AccessToken,
-            result.RefreshToken,
-            result.AccessTokenExpiry);
-
+            result.AuthResponse.AccessToken,
+            result.AuthResponse.RefreshToken,
+            result.AuthResponse.AccessTokenExpiry);
         Navigation.NavigateTo("/");
     }
 }
