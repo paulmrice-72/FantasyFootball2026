@@ -31,7 +31,58 @@
         </MudItem>
     </MudGrid>
 </MudPaper>
-
+@* ── Simulation Pipeline ─────────────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.Memory" Class="mr-2" Style="vertical-align:middle;" />
+        Simulation Pipeline
+    </MudText>
+    <MudItem xs="12" sm="6" md="4">
+        <MudButton FullWidth="true"
+                   Variant="Variant.Filled" Color="Color.Warning"
+                   StartIcon="@Icons.Material.Filled.BarChart"
+                   OnClick="RunStatsSync"
+                   Disabled="_statsBusy">
+            Stats Sync
+        </MudButton>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
+            Current season only
+        </MudText>
+        <MudText Typo="Typo.caption" Style="@StatsStatusStyle">@_statsStatus</MudText>
+    </MudItem>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" sm="6" md="4">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.BarChart"
+                       OnClick="RunStatsSync"
+                       Disabled="_statsBusy">
+                Stats Sync
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="@StatsStatusStyle">@_statsStatus</MudText>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.DirectionsRun"
+                       OnClick="RunSnapCountSync"
+                       Disabled="_snapBusy">
+                Snap Count Sync
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="@SnapStatusStyle">@_snapStatus</MudText>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.AutoAwesome"
+                       OnClick="RunProjections"
+                       Disabled="_projBusy">
+                Projections &amp; Sims
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="@ProjStatusStyle">@_projStatus</MudText>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
 @* ── FantasyPros Rankings ─────────────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -242,6 +293,19 @@
 
     private string DfvStatusStyle => string.IsNullOrEmpty(_dfvStatus) ? "display:none" :
         _dfvOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+
+    // ── Simulation pipeline ──────────────────────────────────────────────
+    private bool _statsBusy; private string _statsStatus = string.Empty; private bool _statsOk;
+    private bool _snapBusy; private string _snapStatus = string.Empty; private bool _snapOk;
+    private bool _projBusy; private string _projStatus = string.Empty; private bool _projOk;
+
+    private string StatsStatusStyle => string.IsNullOrEmpty(_statsStatus) ? "display:none" :
+        _statsOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string SnapStatusStyle => string.IsNullOrEmpty(_snapStatus) ? "display:none" :
+        _snapOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string ProjStatusStyle => string.IsNullOrEmpty(_projStatus) ? "display:none" :
+        _projOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+
     // ── FantasyPros ──────────────────────────────────────────────────────────
     private IBrowserFile? _fpFile;
     private bool _fpBusy;
@@ -438,6 +502,55 @@
         }
         catch (Exception ex) { _dfvOk = false; _dfvStatus = ex.Message; }
         finally { _dfvBusy = false; }
+    }
+
+    private async Task RunStatsSync()
+    {
+        _statsBusy = true; _statsStatus = "Syncing — this may take ~30s...";
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-stats-sync",
+                new { Season = _season });
+            _statsOk = resp.IsSuccessStatusCode;
+            _statsStatus = _statsOk ? "Done ✓" : $"Failed ({(int)resp.StatusCode})";
+        }
+        catch (Exception ex) { _statsOk = false; _statsStatus = ex.Message; }
+        finally { _statsBusy = false; }
+    }
+
+    private async Task RunSnapCountSync()
+    {
+        _snapBusy = true; _snapStatus = "Syncing...";
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsync("api/v1/admin/jobs/run-snap-count-sync", null);
+            _snapOk = resp.IsSuccessStatusCode;
+            _snapStatus = _snapOk ? "Done ✓" : $"Failed ({(int)resp.StatusCode})";
+        }
+        catch (Exception ex) { _snapOk = false; _snapStatus = ex.Message; }
+        finally { _snapBusy = false; }
+    }
+
+    private async Task RunProjections()
+    {
+        _projBusy = true; _projStatus = "Calculating projections + running sims — this takes ~60s...";
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-projections",
+                new { Season = _season });
+            _projOk = resp.IsSuccessStatusCode;
+            if (_projOk)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JobResultDto>();
+                _projStatus = $"Done ✓ — {body?.Message ?? "complete"}";
+            }
+            else _projStatus = $"Failed ({(int)resp.StatusCode})";
+        }
+        catch (Exception ex) { _projOk = false; _projStatus = ex.Message; }
+        finally { _projBusy = false; }
     }
 
     // ── Response DTOs ────────────────────────────────────────────────────────

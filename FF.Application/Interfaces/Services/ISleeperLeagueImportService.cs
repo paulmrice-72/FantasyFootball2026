@@ -5,7 +5,7 @@
 // without knowing anything about Sleeper, HTTP, or EF Core.
 // The implementation lives in FF.Infrastructure.
 
-using FF.Application.Leagues.Commands.ImportLeague;
+using FF.Application.Features.Leagues.Commands.ImportLeague;
 
 namespace FF.Application.Interfaces.Services;
 

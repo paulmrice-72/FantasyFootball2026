@@ -1,13 +1,13 @@
 using FF.Application.Features.Leagues.Queries.GetLeagueRosterGrades;
 using FF.Application.Features.Leagues.Queries.GetLeagueStandings;
-using FF.Application.Leagues.Commands.ImportLeague;
 using FF.Application.Leagues.Commands.SetLeagueVisibility;
-using FF.Application.Leagues.Commands.SyncUserLeagues;
-using FF.Application.Leagues.Queries.GetAllLeagues;
+using FF.Application.Features.Leagues.Commands.SyncUserLeagues;
+using FF.Application.Features.Leagues.Queries.GetAllLeagues;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using FF.Application.Features.Leagues.Commands.ImportLeague;
 
 namespace FF.API.Controllers;
 

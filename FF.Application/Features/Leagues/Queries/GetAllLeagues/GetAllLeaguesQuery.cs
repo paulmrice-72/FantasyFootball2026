@@ -5,7 +5,7 @@ using FF.Application.Interfaces.Persistence;
 using FF.SharedKernel.Common;
 using MediatR;
 
-namespace FF.Application.Leagues.Queries.GetAllLeagues;
+namespace FF.Application.Features.Leagues.Queries.GetAllLeagues;
 
 // ── Query ─────────────────────────────────────────────────────────────────────
 

@@ -5,6 +5,7 @@
 @inject IHttpClientFactory HttpClientFactory
 @inject ISnackbar Snackbar
 @inject LeagueStateService LeagueState
+@inject NflContextClientService NflContext
 @implements IDisposable
 
 <PageTitle>My Matchup — FantasyCombine.AI</PageTitle>
@@ -69,7 +70,12 @@ else
             </MudItem>
 
             <MudItem xs="5" Class="text-center">
-                <MudText Typo="Typo.h6" Style="font-weight:700;">@_matchup.Opponent.TeamName</MudText>
+                <MudLink Href="@($"league/teams?rosterId={_matchup.Opponent.SleeperRosterId}")"
+                         Style="text-decoration:none; color:inherit;">
+                    <MudText Typo="Typo.h6" Style="font-weight:700; cursor:pointer;">
+                        @_matchup.Opponent.TeamName
+                    </MudText>
+                </MudLink>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@_matchup.Opponent.OwnerName</MudText>
                 <MudText Typo="Typo.h3" Class="fc-stat fc-ceiling mt-1">
                     @_matchup.Opponent.TotalProjectedPoints.ToString("F1")
@@ -212,9 +218,16 @@ else
 
         @* Opponent starters *@
         <MudItem xs="12" md="6">
-            <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-2">
-                OPPONENT STARTERS
-            </MudText>
+            <div class="d-flex align-center gap-3 mb-2">
+                <MudText Typo="Typo.subtitle2" Class="fc-section-label">
+                    OPPONENT STARTERS
+                </MudText>
+                <MudLink Href="@($"league/teams?rosterId={_matchup.Opponent.SleeperRosterId}")"
+                         Typo="Typo.caption"
+                         Style="color: var(--fc-amber);">
+                    Scout full roster →
+                </MudLink>
+            </div>
             <MudPaper Elevation="0" Class="fc-table-paper">
                 <MudTable Items="@_matchup.Opponent.Players.Where(p => p.IsStarter).ToList()"
                           Dense="true" Hover="true" Class="fc-table">
@@ -276,8 +289,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _week = GetCurrentNflWeek();
-        _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+        (_season, _week) = await NflContext.GetContextAsync();
         LeagueState.OnLeagueChanged += OnLeagueChangedHandler;
         await LoadMatchupAsync();
     }
@@ -367,8 +379,12 @@ else
         double MyWinProbability, double OpponentWinProbability);
 
     private record MyMatchupSideDto(
-        string TeamName, string OwnerName,
-        double TotalProjectedPoints, double ProjectedFloor, double ProjectedCeiling,
+        string TeamName,
+        string OwnerName,
+        string? SleeperRosterId,        // ← add this
+        double TotalProjectedPoints,
+        double ProjectedFloor,
+        double ProjectedCeiling,
         List<MyMatchupPlayerDto> Players);
 
     private record MyMatchupPlayerDto(

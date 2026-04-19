@@ -102,11 +102,13 @@ public class GetMyMatchupQueryHandler(
         // 9 — Assemble both sides
         var mySide = BuildSide(
             myRosterDoc.TeamName, myRosterDoc.OwnerName,
+            myRosterDoc.SleeperRosterId,
             myPlayerIds, myStarterSet,
             playerLookup, simLookup, injuryLookup);
 
         var oppSide = BuildSide(
             opponentTeamName, opponentOwnerName,
+            opponentRosterDoc.SleeperRosterId,
             opponentPlayerIds, oppStarterSet,
             playerLookup, simLookup, injuryLookup);
 
@@ -127,6 +129,7 @@ public class GetMyMatchupQueryHandler(
 
     private static MyMatchupSideDto BuildSide(
         string teamName, string ownerName,
+        string? rosterId,
         IEnumerable<string> playerIds,
         HashSet<string> starterSet,
         Dictionary<string, FF.Domain.Entities.Player> playerLookup,
@@ -164,6 +167,7 @@ public class GetMyMatchupQueryHandler(
         return new MyMatchupSideDto(
             TeamName: teamName,
             OwnerName: ownerName,
+            SleeperRosterId: rosterId,      // ← add this
             TotalProjectedPoints: totalMedian,
             ProjectedFloor: totalFloor,
             ProjectedCeiling: totalCeiling,

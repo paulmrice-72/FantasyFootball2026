@@ -7,7 +7,7 @@
 using FF.SharedKernel.Common;
 using MediatR;
 
-namespace FF.Application.Leagues.Commands.ImportLeague;
+namespace FF.Application.Features.Leagues.Commands.ImportLeague;
 
 /// <summary>
 /// Triggers a full import of a Sleeper league into the local database.
