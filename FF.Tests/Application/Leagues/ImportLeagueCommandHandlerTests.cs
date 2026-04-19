@@ -1,7 +1,7 @@
 // FF.Tests/Application/Leagues/ImportLeagueCommandHandlerTests.cs
 
+using FF.Application.Features.Leagues.Commands.ImportLeague;
 using FF.Application.Interfaces.Services;
-using FF.Application.Leagues.Commands.ImportLeague;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;

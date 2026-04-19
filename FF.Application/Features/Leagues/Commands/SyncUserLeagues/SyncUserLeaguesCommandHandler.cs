@@ -4,7 +4,7 @@ using FF.SharedKernel.Common;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace FF.Application.Leagues.Commands.SyncUserLeagues;
+namespace FF.Application.Features.Leagues.Commands.SyncUserLeagues;
 
 public class SyncUserLeaguesCommandHandler(
     ILeagueMembershipRepository leagueMembershipRepository,

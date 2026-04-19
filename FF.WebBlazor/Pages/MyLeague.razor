@@ -6,6 +6,7 @@
 @inject NavigationManager Nav
 @inject LeagueStateService LeagueState
 @implements IDisposable
+@inject NflContextClientService NflContext
 
 <PageTitle>My League — FantasyCombine.AI</PageTitle>
 
@@ -174,16 +175,7 @@ else
         var http = HttpClientFactory.CreateClient("AuthAPI");
 
         // ── 1. NFL context ────────────────────────────────────────────
-        try
-        {
-            var ctx = await http.GetFromJsonAsync<NflContextResponse>("api/v1/admin/nfl-context");
-            if (ctx is not null) { _season = ctx.ActiveSeason; _week = ctx.ActiveWeek; }
-        }
-        catch
-        {
-            _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
-            _week = 18;
-        }
+        (_season, _week) = await NflContext.GetContextAsync();
 
         // ── 2. Resolve active league ──────────────────────────────────
         _activeLeagueId = LeagueState.ActiveLeagueId;

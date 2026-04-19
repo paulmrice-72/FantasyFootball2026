@@ -6,6 +6,7 @@
 @inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager Nav
 @inject LeagueStateService LeagueState
+@inject NflContextClientService NflContext
 
 <PageTitle>League Standings — FantasyCombine.AI</PageTitle>
 
@@ -108,10 +109,12 @@ else
                                 </MudText>
                             </MudTd>
                             <MudTd>
-                                <div>
-                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.TeamName</MudText>
+                                <MudLink Href="@($"league/teams?rosterId={context.SleeperRosterId}")"
+                                         Style="text-decoration:none; color:inherit;">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600; cursor:pointer;"
+                                             Class="fc-link-hover">@context.TeamName</MudText>
                                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerName</MudText>
-                                </div>
+                                </MudLink>
                             </MudTd>
                             <MudTd Style="text-align:center;">
                                 <MudText Typo="Typo.body2" Class="font-mono fc-cyan">@context.Wins</MudText>
@@ -290,23 +293,7 @@ else
         var http = HttpClientFactory.CreateClient("AuthAPI");
 
         // Get NFL context for season/week
-        try
-        {
-            var ctx = await http.GetFromJsonAsync<NflContextResponse>(
-                "api/v1/admin/nfl-context");
-            if (ctx is not null)
-            {
-                _season = ctx.ActiveSeason;
-                _week = ctx.ActiveWeek;
-            }
-        }
-        catch
-        {
-            _season = DateTime.UtcNow.Month >= 3
-                ? DateTime.UtcNow.Year
-                : DateTime.UtcNow.Year - 1;
-            _week = 18;
-        }
+        (_season, _week) = await NflContext.GetContextAsync();
 
         // Week 15+ with no active games = season is finalized
         _seasonFinalized = _week >= 15 || _season < DateTime.UtcNow.Year;

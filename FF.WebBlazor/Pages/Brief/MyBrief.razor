@@ -5,7 +5,7 @@
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject ISnackbar Snackbar
-
+@inject NflContextClientService NflContext
 <PageTitle>War Room Brief — FantasyCombine.AI</PageTitle>
 
 @* ── HEADER ─────────────────────────────────────────────── *@
@@ -370,8 +370,8 @@
 }
 
 @code {
-    private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
-    private int _week = GetCurrentNflWeek();
+    private int _season;
+    private int _week;
     private bool _loading;
     private bool _generating;
     private string? _error;
@@ -379,6 +379,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        (_season, _week) = await NflContext.GetContextAsync();
         await LoadBrief();
     }
 
@@ -438,18 +439,6 @@
             _generating = false;
             StateHasChanged();
         }
-    }
-
-    private static int GetCurrentNflWeek()
-    {
-        var now = DateTime.UtcNow;
-        var season = now.Month >= 3 ? now.Year : now.Year - 1;
-        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
-        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
-        var seasonStart = sept1.AddDays(daysUntilThursday);
-        if (now < seasonStart) return 18;
-        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
-        return Math.Clamp(week, 1, 18);
     }
 
     private static string FormatSpread(decimal spread) => spread switch
