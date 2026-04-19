@@ -30,17 +30,19 @@ public class RosterPlayerRepository(
         else
         {
             var update = Builders<RosterPlayerDocument>.Update
-                                .Set(x => x.OwnerName, document.OwnerName)
-                                .Set(x => x.TeamName, document.TeamName)
-                                .Set(x => x.SleeperUserId, document.SleeperUserId)
-                                .Set(x => x.PlayerIds, document.PlayerIds)
-                                .Set(x => x.StarterIds, document.StarterIds)
-                                .Set(x => x.Season, document.Season)
-                                .Set(x => x.Wins, document.Wins)
-                                .Set(x => x.Losses, document.Losses)
-                                .Set(x => x.Ties, document.Ties)
-                                .Set(x => x.WaiverPosition, document.WaiverPosition)
-                                .Set(x => x.SyncedAt, document.SyncedAt);
+                .Set(x => x.OwnerName, document.OwnerName)
+                .Set(x => x.TeamName, document.TeamName)
+                .Set(x => x.SleeperUserId, document.SleeperUserId)
+                .Set(x => x.PlayerIds, document.PlayerIds)
+                .Set(x => x.StarterIds, document.StarterIds)
+                .Set(x => x.IrIds, document.IrIds)       // ← add
+                .Set(x => x.TaxiIds, document.TaxiIds)   // ← add
+                .Set(x => x.Season, document.Season)
+                .Set(x => x.Wins, document.Wins)
+                .Set(x => x.Losses, document.Losses)
+                .Set(x => x.Ties, document.Ties)
+                .Set(x => x.WaiverPosition, document.WaiverPosition)
+                .Set(x => x.SyncedAt, document.SyncedAt);
 
             await _collection.UpdateOneAsync(
                 Builders<RosterPlayerDocument>.Filter.Eq(x => x.Id, existing.Id),
