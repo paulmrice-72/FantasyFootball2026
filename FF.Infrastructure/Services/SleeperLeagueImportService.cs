@@ -10,7 +10,6 @@
 
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
-using FF.Application.Leagues.Commands;
 using FF.Application.Leagues.Commands.ImportLeague;
 using FF.Domain.Documents;
 using FF.Domain.Entities;
@@ -266,6 +265,8 @@ public class SleeperLeagueImportService(
                 SleeperUserId = sleeperUserId,
                 PlayerIds = sleeperRoster.Players ?? [],
                 StarterIds = sleeperRoster.Starters ?? [],
+                IrIds = sleeperRoster.Reserve ?? [],       // ← add (Reserve is the Sleeper DTO field)
+                TaxiIds = sleeperRoster.Taxi ?? [],        // ← already done
                 Season = season,
                 Wins = sleeperRoster.Settings?.Wins ?? 0,
                 Losses = sleeperRoster.Settings?.Losses ?? 0,

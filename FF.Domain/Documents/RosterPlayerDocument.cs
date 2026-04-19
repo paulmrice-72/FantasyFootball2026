@@ -20,10 +20,17 @@ public class RosterPlayerDocument
     /// <summary>Player IDs in the starting lineup for the current week.</summary>
     public List<string> StarterIds { get; set; } = [];
 
+    /// <summary>Player IDs on IR/Reserve slots.</summary>
+    public List<string> IrIds { get; set; } = [];          // ← add
+
+    /// <summary>Player IDs on the dynasty taxi squad.</summary>
+    public List<string> TaxiIds { get; set; } = [];        // ← add
     public int Season { get; set; }
     public int Wins { get; set; }
     public int Losses { get; set; }
     public int Ties { get; set; }
     public int WaiverPosition { get; set; }
     public DateTime SyncedAt { get; set; } = DateTime.UtcNow;
+
+
 }

@@ -1,12 +1,18 @@
-﻿using FF.Application.Identity.Interfaces;
+﻿using FF.Application.Features.DraftTools.Commands.ImportConsensusAdp;
+using FF.Application.Identity.Interfaces;
+using FF.Application.Interfaces.Services;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace FF.Application.Identity.Commands.LinkSleeperAccount;
 
+// Inject ISleeperLeagueImportService into the constructor
 public class LinkSleeperAccountCommandHandler(
     ISleeperIdentityService sleeperIdentityService,
     IUserRepository userRepository,
-    ILeagueMembershipRepository leagueMembershipRepository
+    ILeagueMembershipRepository leagueMembershipRepository,
+    ISleeperLeagueImportService leagueImportService, 
+    ILogger<LinkSleeperAccountCommandHandler> logger   // ← add
 ) : IRequestHandler<LinkSleeperAccountCommand, LinkSleeperAccountResult>
 {
     public async Task<LinkSleeperAccountResult> Handle(
@@ -63,8 +69,21 @@ public class LinkSleeperAccountCommandHandler(
                     leagueName: league.Name,
                     season: league.Season,
                     role: "member",
-                    leagueType: league.LeagueType,      // ← add
+                    leagueType: league.LeagueType,
                     cancellationToken: cancellationToken);
+
+                // ← Add: ensure Leagues row exists for every membership
+                try
+                {
+                    await leagueImportService.ImportLeagueAsync(
+                        league.LeagueId, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    // Log and continue — don't fail the whole link if one import errors
+                    logger.LogError(ex,
+                        "Failed to import league {LeagueId} during Sleeper link", league.LeagueId);
+                }
             }
         }
 
