@@ -36,10 +36,10 @@
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="fc-admin-stat-card" Elevation="0">
-            <MudIcon Icon="@Icons.Material.Filled.Article" Class="fc-admin-stat-icon" />
-            <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Articles</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Coming soon</MudText>
+        <MudPaper Class="fc-admin-stat-card" Elevation="0" @onclick='@(() => Nav.NavigateTo("/admin/imports"))'>
+            <MudIcon Icon="@Icons.Material.Filled.Upload" Class="fc-admin-stat-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Imports</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">CSV uploads & triggers</MudText>
         </MudPaper>
     </MudItem>
 </MudGrid>
