@@ -12,7 +12,7 @@ using FF.SharedKernel.Common;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace FF.Application.Leagues.Commands.ImportLeague;
+namespace FF.Application.Features.Leagues.Commands.ImportLeague;
 
 public class ImportLeagueCommandHandler(
     ISleeperLeagueImportService importService,

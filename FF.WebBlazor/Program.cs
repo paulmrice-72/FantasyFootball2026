@@ -28,8 +28,10 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();
 builder.Services.AddSingleton<LeagueStateService>();
+builder.Services.AddScoped<NflContextClientService>();
 
 // MudBlazor
 builder.Services.AddMudServices();
+
 
 await builder.Build().RunAsync();

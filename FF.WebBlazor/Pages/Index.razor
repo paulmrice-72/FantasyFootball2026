@@ -191,8 +191,7 @@ else if (!_loading)
         // ── 1. NFL context ───────────────────────────────────────────
         try
         {
-            var ctx = await http.GetFromJsonAsync<NflContextResponse>(
-                "api/v1/admin/nfl-context");
+            var ctx = await http.GetFromJsonAsync<NflContextResponse>("api/v1/admin/nfl-context/public");
             if (ctx is not null)
             {
                 _season = ctx.ActiveSeason;

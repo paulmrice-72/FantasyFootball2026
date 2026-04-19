@@ -8,9 +8,9 @@
 // We check by SleeperLeagueId, SleeperRosterId, etc. before inserting.
 // This means if the job runs twice, you get the same result as running it once.
 
+using FF.Application.Features.Leagues.Commands.ImportLeague;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
-using FF.Application.Leagues.Commands.ImportLeague;
 using FF.Domain.Documents;
 using FF.Domain.Entities;
 using FF.Infrastructure.ExternalApis.Sleeper;

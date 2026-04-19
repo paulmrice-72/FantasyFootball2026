@@ -7,6 +7,7 @@
 @inject ISnackbar Snackbar
 @inject LeagueStateService LeagueState
 @implements IDisposable
+@inject NavigationManager Nav
 
 <PageTitle>Trade Analyzer — FantasyCombine.AI</PageTitle>
 
@@ -555,6 +556,10 @@ else
 }
 
 @code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "opponentRosterId")]
+    public string? PreselectedOpponentRosterId { get; set; }
+
     private LeagueTradeContextDto? _context;
     private bool _contextLoading = true;
     private bool _analyzing;
@@ -612,6 +617,13 @@ else
 
             _context = await Http.GetFromJsonAsync<LeagueTradeContextDto>(
                 $"api/v1/trade/league-context?leagueId={leagueId}&season=2026");
+
+            // Auto-select opponent if navigated from Opponent Viewer or Matchup page
+            if (!string.IsNullOrEmpty(PreselectedOpponentRosterId) && _context is not null)
+            {
+                _selectedOpponent = _context.Opponents
+                    .FirstOrDefault(t => t.RosterId == PreselectedOpponentRosterId);
+            }
         }
         catch (Exception ex)
         {

@@ -21,6 +21,7 @@ public record MyMatchupDto(
 public record MyMatchupSideDto(
     string TeamName,
     string OwnerName,
+    string? SleeperRosterId,        // ← add this
     double TotalProjectedPoints,
     double ProjectedFloor,
     double ProjectedCeiling,

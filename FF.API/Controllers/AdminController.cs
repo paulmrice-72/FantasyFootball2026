@@ -241,6 +241,38 @@ public class AdminController(
             ? Ok(result.Value)
             : BadRequest(result.Error.Message);
     }
+    [HttpGet("nfl-context/public")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetNflContextPublic()
+    {
+        var settings = await appSettingsRepo.GetAsync();
+        var calendarSeason = NflContextService.CalcSeason(DateTime.UtcNow);
+        var calendarWeek = NflContextService.CalcWeek(DateTime.UtcNow, calendarSeason);
+        var activeSeason = settings.SimulationSeasonOverride ?? calendarSeason;
+        var activeWeek = settings.SimulationWeekOverride ?? calendarWeek;
+        return Ok(new { ActiveSeason = activeSeason, ActiveWeek = activeWeek });
+    }
+
+    [HttpPost("jobs/run-projections")]
+    public async Task<IActionResult> RunProjections(
+    [FromBody] RunJobRequest request,
+    [FromServices] ProjectionRefreshJob projectionJob,
+    CancellationToken ct)
+    {
+        logger.LogInformation("Admin triggered projection refresh — season {Season}", request.Season);
+        await projectionJob.RunAsync("admin-trigger", ct);
+        return Ok(new { Message = $"Projection calculation and simulation complete for season {request.Season}." });
+    }
+
+    [HttpPost("jobs/run-snap-count-sync")]
+    public async Task<IActionResult> RunSnapCountSync(
+        [FromServices] SnapCountSyncJob snapCountJob,
+        CancellationToken ct)
+    {
+        logger.LogInformation("Admin triggered snap count sync");
+        await snapCountJob.RunAsync();
+        return Ok(new { Message = "Snap count sync complete." });
+    }
     public record RunJobRequest(int Season);
     public record NflContextOverrideRequest(int? Season, int? Week);
 }

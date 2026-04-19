@@ -5,6 +5,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject LeagueStateService LeagueState
+@inject NflContextClientService NflContext
 
 <MudText Typo="Typo.h5" Class="mb-1" Style="color: var(--fc-cyan);">
     <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="mr-2" />
@@ -298,8 +299,8 @@ else
 
     // Shared controls
     private string _selectedLeagueId = string.Empty;
-    private int _week = 1;
-    private const int CurrentSeason = 2026;
+    private int _currentSeason;
+    private int _week;
 
     // VORP state
     private List<VorpRecommendationDocument> _vorpRecs = [];
@@ -393,24 +394,17 @@ else
         _contextLoading = true;
         try
         {
-            _context = await Http.GetFromJsonAsync<UserContext>(
-                "api/v1/identity/context");
-
-            // Use global LeagueState — falls back to context's active league
+            _context = await Http.GetFromJsonAsync<UserContext>("api/v1/identity/context");
             _selectedLeagueId = !string.IsNullOrEmpty(LeagueState.ActiveLeagueId)
                 ? LeagueState.ActiveLeagueId
                 : _context?.ActiveLeagueId ?? string.Empty;
-
             _isOffSeason = DateTime.UtcNow.Month is >= 3 and < 9;
+
+            // Honour admin override
+            (_currentSeason, _week) = await NflContext.GetContextAsync();
         }
-        catch
-        {
-            // Not logged in or API unavailable
-        }
-        finally
-        {
-            _contextLoading = false;
-        }
+        catch { }
+        finally { _contextLoading = false; }
     }
 
     private async Task LoadAllAsync()
@@ -461,9 +455,9 @@ else
         _fitQueried = true;
         try
         {
-            var url = $"api/v1/waiver/recommendations/roster-aware" +
-                      $"?leagueId={_selectedLeagueId}&sleeperUserId={_context.SleeperUserId}" +
-                      $"&season={CurrentSeason}&week={_week}&top=30";
+            var url = $"api/v1/waiver/recommendations/roster-aware"
+                + $"?leagueId={_selectedLeagueId}&sleeperUserId={_context.SleeperUserId}"
+                + $"&season={_currentSeason}&week={_week}&top=30";
             var result = await Http.GetFromJsonAsync<List<RosterAwareRecommendation>>(url);
             _fitRecs = result ?? [];
         }
@@ -483,8 +477,7 @@ else
         try
         {
             var result = await Http.GetFromJsonAsync<List<EmergenceAlertDocument>>(
-                $"api/v1/emergence/alerts?season={CurrentSeason}");
-            _alerts = result ?? [];
+                $"api/v1/emergence/alerts?season={_currentSeason}");
         }
         catch
         {

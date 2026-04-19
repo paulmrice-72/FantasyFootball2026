@@ -1,0 +1,394 @@
+﻿@page "/league/teams"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpFactory
+@using FF.WebBlazor.Services
+@inject LeagueStateService LeagueState
+@inject NavigationManager Nav
+
+<PageTitle>League Teams — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title">
+        <MudIcon Icon="@Icons.Material.Filled.Groups" Class="mr-2" Style="vertical-align:middle;" />
+        League Teams
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Scout any opponent — roster, depth grades, dynasty value.
+    </MudText>
+</div>
+
+@if (string.IsNullOrEmpty(LeagueState.ActiveLeagueId))
+{
+    <MudAlert Severity="Severity.Warning">Select a league from the top bar to view teams.</MudAlert>
+}
+else if (_teamsLoading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_teams.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">No teams found for this league. Try syncing your league data.</MudAlert>
+}
+else
+{
+    @* ── Team picker ─────────────────────────────────────────────────────── *@
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudGrid Spacing="2" AlignItems="Center">
+            <MudItem xs="12" sm="7" md="5">
+                <div style="position:relative; width:100%;">
+                    <MudSelect T="LeagueTeamSummaryDto?"
+                               @bind-Value="_selectedTeam"
+                               Label="Select a team to scout"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               FullWidth="true"
+                               ToStringFunc="@(t => t is null ? "" : $"{t.TeamName} ({t.OwnerName})")"
+                               AnchorOrigin="Origin.BottomLeft"
+                               TransformOrigin="Origin.TopLeft">
+                        @foreach (var team in _teams)
+                        {
+                            <MudSelectItem T="LeagueTeamSummaryDto?" Value="@team">
+                                <div class="d-flex justify-space-between align-center" style="width:100%">
+                                    <span>@team.TeamName</span>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">
+                                        @team.Wins–@team.Losses
+                                    </MudChip>
+                                </div>
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+            </MudItem>
+            <MudItem xs="12" sm="5" md="4" Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Search"
+                           OnClick="LoadOpponent"
+                           Disabled="@(_selectedTeam is null || _rosterLoading)">
+                    Scout Team
+                </MudButton>
+                @if (_selectedTeam is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.SwapHoriz"
+                               OnClick="GoToTradeAnalyzer">
+                        Trade with Team
+                    </MudButton>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ── Opponent detail ─────────────────────────────────────────────────── *@
+    @if (_rosterLoading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+    }
+    else if (_roster is not null)
+    {
+        @* Header bar *@
+        <MudPaper Class="pa-4 mb-4" Elevation="1">
+            <MudGrid Spacing="2" AlignItems="Center">
+                <MudItem xs="12" sm="8">
+                    <MudText Typo="Typo.h6">@_roster.TeamName</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @_roster.OwnerName &nbsp;·&nbsp;
+                        @_roster.Wins–@_roster.Losses record &nbsp;·&nbsp;
+                        @_roster.Players.Count players rostered
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4" Class="d-flex justify-end gap-2 flex-wrap">
+                    @if (_dynastyGrade is not null)
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">
+                            @_dynastyGrade.OverallProfile
+                        </MudChip>
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @* Depth grades + dynasty grade side by side *@
+        @if (_depthGrades is not null || _dynastyGrade is not null)
+        {
+            <MudGrid Spacing="3" Class="mb-4">
+                @if (_depthGrades is not null)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudPaper Class="pa-4" Elevation="1" Style="height:100%">
+                            <MudText Typo="Typo.subtitle1" Class="mb-3" Style="color: var(--fc-amber);">
+                                <MudIcon Icon="@Icons.Material.Filled.BarChart" Class="mr-1" Style="vertical-align:middle;" />
+                                Positional Depth
+                            </MudText>
+                            <MudGrid Spacing="2">
+                                @foreach (var g in _depthGrades.Grades)
+                                {
+                                    <MudItem xs="6">
+                                        <div class="d-flex align-center gap-2">
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@GradeColor(g.Grade)"
+                                                     Style="min-width:42px; justify-content:center; font-weight:700;">
+                                                @g.Grade
+                                            </MudChip>
+                                            <div>
+                                                <MudText Typo="Typo.body2" Style="font-weight:600">@g.Position</MudText>
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@g.Label</MudText>
+                                            </div>
+                                        </div>
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                        </MudPaper>
+                    </MudItem>
+                }
+                @if (_dynastyGrade is not null)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudPaper Class="pa-4" Elevation="1" Style="height:100%">
+                            <MudText Typo="Typo.subtitle1" Class="mb-3" Style="color: var(--fc-amber);">
+                                <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Class="mr-1" Style="vertical-align:middle;" />
+                                Dynasty Value
+                            </MudText>
+                            <MudGrid Spacing="2">
+                                <MudItem xs="6">
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Contention</MudText>
+                                    <div class="d-flex align-center gap-2 mt-1">
+                                        <MudChip T="string" Size="Size.Small"
+                                                 Color="@GradeColor(_dynastyGrade.ContentionGrade)"
+                                                 Style="font-weight:700;">
+                                            @_dynastyGrade.ContentionGrade
+                                        </MudChip>
+                                        <MudText Typo="Typo.body2">@_dynastyGrade.ContentionLabel</MudText>
+                                    </div>
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Longevity</MudText>
+                                    <div class="d-flex align-center gap-2 mt-1">
+                                        <MudChip T="string" Size="Size.Small"
+                                                 Color="@GradeColor(_dynastyGrade.LongevityGrade)"
+                                                 Style="font-weight:700;">
+                                            @_dynastyGrade.LongevityGrade
+                                        </MudChip>
+                                        <MudText Typo="Typo.body2">@_dynastyGrade.LongevityLabel</MudText>
+                                    </div>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudDivider Class="my-1" />
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        Avg trade value: <strong>@_dynastyGrade.AvgTradeValue</strong> &nbsp;·&nbsp;
+                                        Avg age: <strong>@_dynastyGrade.AvgAge</strong> &nbsp;·&nbsp;
+                                        Prime players: <strong>@_dynastyGrade.PrimePlayerCount</strong>
+                                    </MudText>
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        @* Roster table *@
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudText Typo="Typo.subtitle1" Class="mb-3" Style="color: var(--fc-amber);">
+                <MudIcon Icon="@Icons.Material.Filled.People" Class="mr-1" Style="vertical-align:middle;" />
+                Roster
+            </MudText>
+            <MudTable Items="_roster.Players" Dense="true" Hover="true"
+                      GroupBy="_groupDefinition" Class="fc-table">
+                <ColGroup>
+                    <col style="width:30%" />
+                    <col style="width:10%" />
+                    <col style="width:10%" />
+                    <col style="width:15%" />
+                    <col style="width:15%" />
+                    <col style="width:20%" />
+                </ColGroup>
+                <HeaderContent>
+                    <MudTh>Player</MudTh>
+                    <MudTh>Team</MudTh>
+                    <MudTh>Age</MudTh>
+                    <MudTh>Role</MudTh>
+                    <MudTh>Proj Pts</MudTh>
+                    <MudTh>Injury</MudTh>
+                </HeaderContent>
+                <GroupHeaderTemplate>
+                    <MudTh colspan="6" Class="fc-group-header">
+                        <strong>@context.Key</strong>
+                        <MudChip T="string" Size="Size.Small" Class="ml-2">
+                            @context.Items.Count()
+                        </MudChip>
+                    </MudTh>
+                </GroupHeaderTemplate>
+                <RowTemplate>
+                    <MudTd>@context.PlayerName</MudTd>
+                    <MudTd>@context.NflTeam</MudTd>
+                    <MudTd>@(context.Age?.ToString() ?? "—")</MudTd>
+                    <MudTd>
+                        @if (context.IsStarter)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">Starter</MudChip>
+                        }
+                        else if (context.IsOnIr)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error">IR</MudChip>
+                        }
+                        else if (context.IsOnTaxi)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning">Taxi</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Bench</MudChip>
+                        }
+                    </MudTd>
+                    <MudTd>@(context.MedianProjectedPoints.HasValue ? context.MedianProjectedPoints.Value.ToString("F1") : "—")</MudTd>
+                    <MudTd>
+                        @if (!string.IsNullOrEmpty(context.InjuryDesignation))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error">@context.InjuryDesignation</MudChip>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "rosterId")]
+    public string? PreselectedRosterId { get; set; }
+
+    private List<LeagueTeamSummaryDto> _teams = [];
+    private LeagueTeamSummaryDto? _selectedTeam;
+    private bool _teamsLoading = true;
+    private bool _rosterLoading = false;
+
+    private MyRosterDto? _roster;
+    private PositionalDepthGradesDto? _depthGrades;
+    private DynastyTeamGradeDto? _dynastyGrade;
+
+    private readonly TableGroupDefinition<MyRosterPlayerDto> _groupDefinition = new()
+    {
+        GroupName = "Position",
+        Indentation = false,
+        Expandable = false,
+        Selector = p => p.Position
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        LeagueState.OnLeagueChanged += OnLeagueChanged;
+        await LoadTeams();
+
+        // Auto-select team if navigated from standings
+        if (!string.IsNullOrEmpty(PreselectedRosterId) && _teams.Count > 0)
+        {
+            _selectedTeam = _teams.FirstOrDefault(t => t.SleeperRosterId == PreselectedRosterId);
+            if (_selectedTeam is not null)
+                await LoadOpponent();
+        }
+    }
+
+    public void Dispose() => LeagueState.OnLeagueChanged -= OnLeagueChanged;
+
+    private void OnLeagueChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _selectedTeam = null;
+            _roster = null;
+            _depthGrades = null;
+            _dynastyGrade = null;
+            await LoadTeams();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadTeams()
+    {
+        if (string.IsNullOrEmpty(LeagueState.ActiveLeagueId)) { _teamsLoading = false; return; }
+        _teamsLoading = true;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var result = await http.GetFromJsonAsync<List<LeagueTeamSummaryDto>>(
+                $"api/v1/league/teams?sleeperLeagueId={LeagueState.ActiveLeagueId}");
+            _teams = result ?? [];
+        }
+        catch { _teams = []; }
+        finally { _teamsLoading = false; }
+    }
+
+    private async Task LoadOpponent()
+    {
+        if (_selectedTeam is null) return;
+        _rosterLoading = true;
+        _roster = null; _depthGrades = null; _dynastyGrade = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var leagueId = LeagueState.ActiveLeagueId;
+            var rosterId = _selectedTeam.SleeperRosterId;
+            var season = DateTime.UtcNow.Year;
+
+            var rosterTask = http.GetFromJsonAsync<MyRosterDto>(
+                $"api/v1/league/teams/{rosterId}/roster?sleeperLeagueId={leagueId}");
+            var depthTask = http.GetFromJsonAsync<PositionalDepthGradesDto>(
+                $"api/v1/league/teams/{rosterId}/depth-grades?sleeperLeagueId={leagueId}&season={season}");
+            var dynastyTask = http.GetFromJsonAsync<DynastyTeamGradeDto>(
+                $"api/v1/league/teams/{rosterId}/dynasty-grade?sleeperLeagueId={leagueId}");
+
+            await Task.WhenAll(rosterTask, depthTask, dynastyTask);
+
+            _roster = await rosterTask;
+            _depthGrades = await depthTask;
+            _dynastyGrade = await dynastyTask;
+        }
+        catch { }
+        finally { _rosterLoading = false; }
+    }
+
+    private void GoToTradeAnalyzer()
+    {
+        if (_selectedTeam is not null)
+            Nav.NavigateTo($"/league/trade?opponentRosterId={_selectedTeam.SleeperRosterId}");
+    }
+
+    private static Color GradeColor(string grade) => grade switch
+    {
+        "A+" or "A" => Color.Success,
+        "B+" or "B" => Color.Primary,
+        "C+" or "C" => Color.Warning,
+        _ => Color.Error
+    };
+
+    // ── Local DTOs (mirrors API response shapes) ─────────────────────────────
+    private record LeagueTeamSummaryDto(
+        string SleeperRosterId, string TeamName, string OwnerName,
+        int Wins, int Losses, int PlayerCount);
+
+    private record MyRosterDto(
+        string TeamName, string OwnerName, string LeagueId,
+        int Wins, int Losses, int WaiverPosition,
+        List<MyRosterPlayerDto> Players);
+
+    private record MyRosterPlayerDto(
+        string SleeperPlayerId, string PlayerName, string Position,
+        string NflTeam, int? Age, string? InjuryDesignation,
+        bool IsStarter, bool IsOnIr, bool IsOnTaxi,
+        double? MedianProjectedPoints, string? ByeWeek);
+
+    private record PositionalDepthGradesDto(List<PositionDepthGradeDto> Grades);
+
+    private record PositionDepthGradeDto(
+        string Position, string Grade, int GradeScore,
+        string Label, string Summary, int RosteredCount,
+        int HealthyCount, double StarterScore, double DepthScore);
+
+    private record DynastyTeamGradeDto(
+        string ContentionGrade, int ContentionScore, string ContentionLabel,
+        string ContentionSummary, string LongevityGrade, int LongevityScore,
+        string LongevityLabel, string LongevitySummary, string OverallProfile,
+        int RosteredCount, int PrimePlayerCount, int YoungPlayerCount,
+        double AvgTradeValue, double AvgAge);
+}
