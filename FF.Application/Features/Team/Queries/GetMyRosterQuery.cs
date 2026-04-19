@@ -23,5 +23,6 @@ public record MyRosterPlayerDto(
     string? InjuryDesignation,
     bool IsStarter,
     bool IsOnIr,
+    bool IsOnTaxi,          // ← add
     double? MedianProjectedPoints,
     string? ByeWeek);

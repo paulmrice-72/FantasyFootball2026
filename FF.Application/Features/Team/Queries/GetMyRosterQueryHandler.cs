@@ -41,6 +41,8 @@ public class GetMyRosterQueryHandler(
 
         // 5 — Assemble DTO
         var starterSet = rosterDoc.StarterIds.ToHashSet();
+        var taxiSet = rosterDoc.TaxiIds.ToHashSet();
+        var irSet = rosterDoc.IrIds.ToHashSet();    // ← add this
 
         var rosterPlayers = playerIds
             .Select(sleeperPlayerId =>
@@ -57,12 +59,13 @@ public class GetMyRosterQueryHandler(
                     Age: player?.Age,
                     InjuryDesignation: injury?.Designation,
                     IsStarter: starterSet.Contains(sleeperPlayerId),
-                    IsOnIr: rosterDoc.StarterIds.Contains(sleeperPlayerId) is false
-                             && player?.InjuryStatus == "IR",
+IsOnIr: irSet.Contains(sleeperPlayerId),    // ← was the broken line
+IsOnTaxi: taxiSet.Contains(sleeperPlayerId),
                     MedianProjectedPoints: sim is not null ? (double)sim.Median : null,
-                   ByeWeek: player is not null ? GetByeWeek(player.NflTeam) : null);
+                    ByeWeek: player is not null ? GetByeWeek(player.NflTeam) : null);
             })
             .OrderBy(p => PositionOrder(p.Position))
+            .ThenBy(p => RoleOrder(p))
             .ThenBy(p => p.PlayerName)
             .ToList();
 
@@ -88,6 +91,14 @@ public class GetMyRosterQueryHandler(
         "K" => 4,
         _ => 5
     };
+
+    private static int RoleOrder(MyRosterPlayerDto p)
+    {
+        if (p.IsStarter) return 0;
+        if (p.IsOnIr) return 2;
+        if (p.IsOnTaxi) return 3;
+        return 1; // bench
+    }
     /// <summary>
     /// 2025 NFL bye weeks by team. Update each September.
     /// </summary>
