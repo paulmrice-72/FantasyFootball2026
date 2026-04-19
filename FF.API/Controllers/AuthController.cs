@@ -1,22 +1,33 @@
 ﻿using FF.Application.Interfaces.Auth;
 using FF.Application.Interfaces.Auth.DTOs;
+using FF.Application.Interfaces.Persistence;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FF.API.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(IAuthService authService, IPlatformSettingsRepository platformSettingsRepo) : ControllerBase
 {
     private readonly IAuthService _authService = authService;
+    private readonly IPlatformSettingsRepository _platformSettingsRepo = platformSettingsRepo;
+
+    // Constructor — add IPlatformSettingsRepository platformSettingsRepo
+    // and store as _platformSettingsRepo
 
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        var result = await _authService.RegisterAsync(request);
-        if (result.IsFailure)
-            return BadRequest(new { result.Error.Code, result.Error.Message });
+        var settings = await _platformSettingsRepo.GetAsync();
+        if (!settings.RegistrationsEnabled)
+            return StatusCode(423, new
+            {
+                Code = "REGISTRATIONS_CLOSED",
+                Message = "New registrations are temporarily closed. Please check back soon."
+            });
 
+        var result = await _authService.RegisterAsync(request);
+        if (result.IsFailure) return BadRequest(new { result.Error.Code, result.Error.Message });
         return Ok(result.Value);
     }
 
@@ -66,4 +77,6 @@ public class AuthController(IAuthService authService) : ControllerBase
 
         return Ok(new { message = "Password reset successfully." });
     }
+
+
 }

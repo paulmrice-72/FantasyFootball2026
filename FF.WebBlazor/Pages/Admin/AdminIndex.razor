@@ -8,42 +8,38 @@
 
 <div class="fc-page-header mb-4">
     <MudText Typo="Typo.h5" Class="fc-page-title" Style="color: var(--fc-amber);">
-        <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings"
-                 Class="mr-2" Style="vertical-align:middle;" />
+        <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Class="mr-2" Style="vertical-align:middle;" />
         Admin Console
     </MudText>
 </div>
 
 <MudGrid Spacing="3">
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="fc-admin-stat-card" Elevation="0"
-                  @onclick='@(() => Nav.NavigateTo("/admin/users"))'>
+        <MudPaper Class="fc-admin-stat-card" Elevation="0" @onclick='@(() => Nav.NavigateTo("/admin/users"))'>
             <MudIcon Icon="@Icons.Material.Filled.People" Class="fc-admin-stat-icon" />
             <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Users</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">Manage accounts</MudText>
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="fc-admin-stat-card" Elevation="0"
-                  @onclick='@(() => Nav.NavigateTo("/admin/jobs"))'>
+        <MudPaper Class="fc-admin-stat-card" Elevation="0" @onclick='@(() => Nav.NavigateTo("/admin/jobs"))'>
             <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="fc-admin-stat-icon" />
             <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Jobs</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">Monitor & trigger</MudText>
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="fc-admin-stat-card" Elevation="0"
-                  @onclick='@(() => Nav.NavigateTo("/admin/logs"))'>
+        <MudPaper Class="fc-admin-stat-card" Elevation="0" @onclick='@(() => Nav.NavigateTo("/admin/logs"))'>
             <MudIcon Icon="@Icons.Material.Filled.Terminal" Class="fc-admin-stat-icon" />
             <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Logs</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">Live Seq feed</MudText>
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
-        <MudPaper Class="fc-admin-stat-card" Elevation="0">
-            <MudIcon Icon="@Icons.Material.Filled.Article" Class="fc-admin-stat-icon" />
-            <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Articles</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Coming soon</MudText>
+        <MudPaper Class="fc-admin-stat-card" Elevation="0" @onclick='@(() => Nav.NavigateTo("/admin/imports"))'>
+            <MudIcon Icon="@Icons.Material.Filled.Upload" Class="fc-admin-stat-icon" />
+            <MudText Typo="Typo.h4" Class="fc-stat fc-amber">Imports</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">CSV uploads & triggers</MudText>
         </MudPaper>
     </MudItem>
 </MudGrid>
@@ -54,7 +50,6 @@
         <MudIcon Icon="@Icons.Material.Filled.AccessTime" Class="mr-2" Style="vertical-align:middle;" />
         NFL Context — Season / Week Override
     </MudText>
-
     @if (_contextLoading)
     {
         <MudProgressLinear Indeterminate="true" Color="Color.Warning" />
@@ -74,8 +69,7 @@
                 {
                     <MudChip T="string" Color="Color.Warning" Size="Size.Small" Class="mr-1">OVERRIDE</MudChip>
                     <MudText Typo="Typo.body1" Style="display:inline">
-                        Season <strong>@(_context.OverrideSeason ?? _context.CalendarSeason)</strong> —
-                        Week <strong>@(_context.OverrideWeek ?? _context.CalendarWeek)</strong>
+                        Season <strong>@(_context.OverrideSeason ?? _context.CalendarSeason)</strong> — Week <strong>@(_context.OverrideWeek ?? _context.CalendarWeek)</strong>
                     </MudText>
                 }
                 else
@@ -87,22 +81,16 @@
                 }
             </MudItem>
         </MudGrid>
-
         <MudDivider Class="mb-3" />
-
         <MudGrid Spacing="2">
             <MudItem xs="12" sm="4">
-                <MudNumericField T="int?" @bind-Value="_overrideSeason"
-                                 Label="Override Season"
-                                 Min="2020" Max="2030"
-                                 Placeholder="@_context.CalendarSeason.ToString()"
+                <MudNumericField T="int?" @bind-Value="_overrideSeason" Label="Override Season"
+                                 Min="2020" Max="2030" Placeholder="@_context.CalendarSeason.ToString()"
                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" sm="4">
-                <MudNumericField T="int?" @bind-Value="_overrideWeek"
-                                 Label="Override Week"
-                                 Min="1" Max="18"
-                                 Placeholder="@_context.CalendarWeek.ToString()"
+                <MudNumericField T="int?" @bind-Value="_overrideWeek" Label="Override Week"
+                                 Min="1" Max="18" Placeholder="@_context.CalendarWeek.ToString()"
                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" sm="4" Class="d-flex gap-2 align-center">
@@ -118,17 +106,60 @@
                 </MudButton>
             </MudItem>
         </MudGrid>
-
         @if (!string.IsNullOrEmpty(_statusMessage))
         {
             <MudAlert Severity="_statusSeverity" Class="mt-3" Dense="true">@_statusMessage</MudAlert>
         }
     }
 </MudPaper>
+
+@* ── Platform Settings ───────────────────────────────────────────────────── *@
+<MudPaper Class="pa-4 mt-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-3" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.Tune" Class="mr-2" Style="vertical-align:middle;" />
+        Platform Settings
+    </MudText>
+    @if (_settingsLoading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Warning" />
+    }
+    else
+    {
+        <MudGrid Spacing="2" AlignItems="Center">
+            <MudItem xs="12" sm="8">
+                <MudText Typo="Typo.body1"><strong>Open Registrations</strong></MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    When off, new sign-ups return a &quot;registrations closed&quot; message.
+                    Existing logins are unaffected.
+                </MudText>
+            </MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex justify-end align-center">
+                <MudSwitch T="bool"
+                           @bind-Value="_registrationsEnabled"
+                           Color="Color.Success"
+                           UnCheckedColor="Color.Error"
+                           Disabled="_settingsSaving"
+                           Label="@(_registrationsEnabled ? "Open" : "Closed")"
+                           @bind-Value:after="SavePlatformSettings" />
+            </MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+            Last updated @_settingsUpdatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt") by @_settingsUpdatedBy
+        </MudText>
+        @if (!string.IsNullOrEmpty(_settingsStatusMessage))
+        {
+            <MudAlert Severity="_settingsStatusSeverity" Class="mt-3" Dense="true">
+                @_settingsStatusMessage
+            </MudAlert>
+        }
+    }
+</MudPaper>
+
 @code {
     [Inject] NavigationManager Nav { get; set; } = default!;
     [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
 
+    // ── NFL Context ──────────────────────────────────────────────────────────
     private NflContextDto? _context;
     private bool _contextLoading = true;
     private bool _saving = false;
@@ -136,16 +167,22 @@
     private int? _overrideWeek;
     private string _statusMessage = string.Empty;
     private Severity _statusSeverity = Severity.Info;
-    // ── League management ────────────────────────────────────────────────────
-    private bool _leaguesLoading = true;
-    private string _leagueStatusMessage = string.Empty;
-    private Severity _leagueStatusSeverity = Severity.Info;
+
+    // ── Platform Settings ────────────────────────────────────────────────────
+    private bool _settingsLoading = true;
+    private bool _settingsSaving = false;
+    private bool _registrationsEnabled = true;
+    private DateTime _settingsUpdatedAt;
+    private string _settingsUpdatedBy = string.Empty;
+    private string _settingsStatusMessage = string.Empty;
+    private Severity _settingsStatusSeverity = Severity.Info;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadContext();
+        await Task.WhenAll(LoadContext(), LoadPlatformSettings());
     }
 
+    // ── NFL Context methods ──────────────────────────────────────────────────
     private async Task LoadContext()
     {
         _contextLoading = true;
@@ -159,8 +196,15 @@
                 _overrideWeek = _context.OverrideWeek;
             }
         }
-        catch { _statusMessage = "Failed to load NFL context."; _statusSeverity = Severity.Error; }
-        finally { _contextLoading = false; }
+        catch
+        {
+            _statusMessage = "Failed to load NFL context.";
+            _statusSeverity = Severity.Error;
+        }
+        finally
+        {
+            _contextLoading = false;
+        }
     }
 
     private async Task SetOverride()
@@ -186,8 +230,15 @@
                 _statusSeverity = Severity.Error;
             }
         }
-        catch { _statusMessage = "Error contacting API."; _statusSeverity = Severity.Error; }
-        finally { _saving = false; }
+        catch
+        {
+            _statusMessage = "Error contacting API.";
+            _statusSeverity = Severity.Error;
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task ClearOverride()
@@ -207,14 +258,83 @@
                 await LoadContext();
             }
         }
-        catch { _statusMessage = "Error contacting API."; _statusSeverity = Severity.Error; }
-        finally { _saving = false; }
+        catch
+        {
+            _statusMessage = "Error contacting API.";
+            _statusSeverity = Severity.Error;
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
+    // ── Platform Settings methods ────────────────────────────────────────────
+    private async Task LoadPlatformSettings()
+    {
+        _settingsLoading = true;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var dto = await http.GetFromJsonAsync<PlatformSettingsDto>("api/v1/admin/platform-settings");
+            if (dto is not null)
+            {
+                _registrationsEnabled = dto.RegistrationsEnabled;
+                _settingsUpdatedAt = dto.UpdatedAt;
+                _settingsUpdatedBy = dto.UpdatedBy;
+            }
+        }
+        catch
+        {
+            _settingsStatusMessage = "Failed to load platform settings.";
+            _settingsStatusSeverity = Severity.Error;
+        }
+        finally
+        {
+            _settingsLoading = false;
+        }
+    }
+
+    private async Task SavePlatformSettings()
+    {
+        _settingsSaving = true;
+        _settingsStatusMessage = string.Empty;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var response = await http.PutAsJsonAsync("api/v1/admin/platform-settings",
+                new { RegistrationsEnabled = _registrationsEnabled });
+            if (response.IsSuccessStatusCode)
+            {
+                _settingsStatusMessage = _registrationsEnabled
+                    ? "Registrations opened."
+                    : "Registrations closed. New sign-ups are blocked.";
+                _settingsStatusSeverity = _registrationsEnabled ? Severity.Success : Severity.Warning;
+                await LoadPlatformSettings();
+            }
+            else
+            {
+                _settingsStatusMessage = "Failed to save settings.";
+                _settingsStatusSeverity = Severity.Error;
+            }
+        }
+        catch
+        {
+            _settingsStatusMessage = "Error contacting API.";
+            _settingsStatusSeverity = Severity.Error;
+        }
+        finally
+        {
+            _settingsSaving = false;
+        }
+    }
+
+    // ── DTOs ─────────────────────────────────────────────────────────────────
     private record NflContextDto(
         int CalendarSeason, int CalendarWeek,
         int? OverrideSeason, int? OverrideWeek,
-        bool IsOverrideActive,
-        DateTime UpdatedAt, string UpdatedBy);
+        bool IsOverrideActive, DateTime UpdatedAt, string UpdatedBy);
 
+    private record PlatformSettingsDto(
+        bool RegistrationsEnabled, DateTime UpdatedAt, string UpdatedBy);
 }
