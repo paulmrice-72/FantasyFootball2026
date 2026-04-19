@@ -1,0 +1,446 @@
+﻿@page "/admin/imports"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
+
+<PageTitle>Imports & Triggers — Admin — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.Upload" Class="mr-2" Style="vertical-align:middle;" />
+        Imports &amp; Triggers
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Upload CSV files and trigger post-draft data jobs — no curl required.
+    </MudText>
+</div>
+
+@* ── Season selector (shared across all panels) ──────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="6" md="4">
+            <MudNumericField T="int"
+                             @bind-Value="_season"
+                             Label="Target Season"
+                             Min="2024" Max="2030"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             HelperText="Applied to all imports and triggers below" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@* ── FantasyPros Rankings ─────────────────────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.FormatListNumbered" Class="mr-2" Style="vertical-align:middle;" />
+        FantasyPros Rookie Rankings
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Export the rookie rankings CSV from FantasyPros and upload here. Replaces all existing FP rankings for the target season.
+    </MudText>
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="8">
+            <MudFileUpload T="IBrowserFile"
+                           FilesChanged="@(f => _fpFile = f)"
+                           Accept=".csv">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.AttachFile">
+                        @(_fpFile is null ? "Choose CSV file" : _fpFile.Name)
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.CloudUpload"
+                       OnClick="ImportFantasyPros"
+                       Disabled="@(_fpFile is null || _fpBusy)">
+                @if (_fpBusy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Import
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+    @if (!string.IsNullOrEmpty(_fpStatus))
+    {
+        <MudAlert Severity="_fpSeverity" Dense="true" Class="mt-3">@_fpStatus</MudAlert>
+    }
+</MudPaper>
+
+@* ── PFF Draft Grades ─────────────────────────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.Grade" Class="mr-2" Style="vertical-align:middle;" />
+        PFF Draft Grades
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Upload the PFF post-draft grades CSV. Run after the NFL Draft completes.
+    </MudText>
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="8">
+            <MudFileUpload T="IBrowserFile"
+                           FilesChanged="@(f => _pffFile = f)"
+                           Accept=".csv">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.AttachFile">
+                        @(_pffFile is null ? "Choose CSV file" : _pffFile.Name)
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.CloudUpload"
+                       OnClick="ImportPff"
+                       Disabled="@(_pffFile is null || _pffBusy)">
+                @if (_pffBusy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Import
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+    @if (!string.IsNullOrEmpty(_pffStatus))
+    {
+        <MudAlert Severity="_pffSeverity" Dense="true" Class="mt-3">@_pffStatus</MudAlert>
+    }
+</MudPaper>
+
+@* ── Consensus ADP ────────────────────────────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.SwapVert" Class="mr-2" Style="vertical-align:middle;" />
+        Consensus ADP
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Upload a consensus ADP CSV. Source label is stored alongside the data.
+    </MudText>
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="5">
+            <MudFileUpload T="IBrowserFile"
+                           FilesChanged="@(f => _adpFile = f)"
+                           Accept=".csv">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.AttachFile">
+                        @(_adpFile is null ? "Choose CSV file" : _adpFile.Name)
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudTextField @bind-Value="_adpSource"
+                          Label="Source label"
+                          Placeholder="e.g. FantasyPros"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.CloudUpload"
+                       OnClick="ImportAdp"
+                       Disabled="@(_adpFile is null || _adpBusy)">
+                @if (_adpBusy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Import
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+    @if (!string.IsNullOrEmpty(_adpStatus))
+    {
+        <MudAlert Severity="_adpSeverity" Dense="true" Class="mt-3">@_adpStatus</MudAlert>
+    }
+</MudPaper>
+
+@* ── Post-Draft Trigger Buttons ───────────────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Class="mr-2" Style="vertical-align:middle;" />
+        Post-Draft Data Jobs
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Run these in order after the draft. Each job reads the season set above.
+        Combine Sync → Draft Picks Sync → Career Sims → DFV Calculation.
+    </MudText>
+    <MudGrid Spacing="3">
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.FitnessCenter"
+                       OnClick="RunCombineSync"
+                       Disabled="_combineBusy">
+                Combine Sync
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="@CombineStatusStyle">@_combineStatus</MudText>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.ConfirmationNumber"
+                       OnClick="RunDraftPickSync"
+                       Disabled="_picksBusy">
+                Draft Picks Sync
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="@PicksStatusStyle">@_picksStatus</MudText>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.Timeline"
+                       OnClick="RunCareerSims"
+                       Disabled="_simsBusy">
+                Career Sims
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="@SimsStatusStyle">@_simsStatus</MudText>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true"
+                       Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.TrendingUp"
+                       OnClick="RunDfv"
+                       Disabled="_dfvBusy">
+                DFV Calculation
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="@DfvStatusStyle">@_dfvStatus</MudText>
+        </MudItem>
+
+    </MudGrid>
+</MudPaper>
+@code {
+    [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
+
+    private int _season = DateTime.UtcNow.Year;
+
+    private string CombineStatusStyle => string.IsNullOrEmpty(_combineStatus) ? "display:none" :
+    _combineOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+
+    private string PicksStatusStyle => string.IsNullOrEmpty(_picksStatus) ? "display:none" :
+        _picksOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+
+    private string SimsStatusStyle => string.IsNullOrEmpty(_simsStatus) ? "display:none" :
+        _simsOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+
+    private string DfvStatusStyle => string.IsNullOrEmpty(_dfvStatus) ? "display:none" :
+        _dfvOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    // ── FantasyPros ──────────────────────────────────────────────────────────
+    private IBrowserFile? _fpFile;
+    private bool _fpBusy;
+    private string _fpStatus = string.Empty;
+    private Severity _fpSeverity = Severity.Info;
+
+    // ── PFF ──────────────────────────────────────────────────────────────────
+    private IBrowserFile? _pffFile;
+    private bool _pffBusy;
+    private string _pffStatus = string.Empty;
+    private Severity _pffSeverity = Severity.Info;
+
+    // ── ADP ──────────────────────────────────────────────────────────────────
+    private IBrowserFile? _adpFile;
+    private bool _adpBusy;
+    private string _adpStatus = string.Empty;
+    private Severity _adpSeverity = Severity.Info;
+    private string _adpSource = "FantasyPros";
+
+    // ── Job triggers ─────────────────────────────────────────────────────────
+    private bool _combineBusy; private string _combineStatus = string.Empty; private bool _combineOk;
+    private bool _picksBusy; private string _picksStatus = string.Empty; private bool _picksOk;
+    private bool _simsBusy; private string _simsStatus = string.Empty; private bool _simsOk;
+    private bool _dfvBusy; private string _dfvStatus = string.Empty; private bool _dfvOk;
+
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    private async Task<string> ReadFileAsTextAsync(IBrowserFile file)
+    {
+        // 10 MB cap — CSVs are never this big but guards against accidents
+        using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+        using var reader = new System.IO.StreamReader(stream);
+        return await reader.ReadToEndAsync();
+    }
+
+    // ── Import handlers ──────────────────────────────────────────────────────
+    private async Task ImportFantasyPros()
+    {
+        if (_fpFile is null) return;
+        _fpBusy = true; _fpStatus = string.Empty;
+        try
+        {
+            var csv = await ReadFileAsTextAsync(_fpFile);
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync("api/v1/drafttools/fantasyPros/import",
+                new { CsvContent = csv, Season = _season });
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
+                _fpStatus = $"✓ {body?.RowsImported ?? 0} rows imported for season {_season}.";
+                _fpSeverity = Severity.Success;
+                _fpFile = null;
+            }
+            else
+            {
+                _fpStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                _fpSeverity = Severity.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _fpStatus = $"Error: {ex.Message}";
+            _fpSeverity = Severity.Error;
+        }
+        finally { _fpBusy = false; }
+    }
+
+    private async Task ImportPff()
+    {
+        if (_pffFile is null) return;
+        _pffBusy = true; _pffStatus = string.Empty;
+        try
+        {
+            var csv = await ReadFileAsTextAsync(_pffFile);
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync("api/v1/drafttools/pff/import",
+                new { CsvContent = csv, Season = _season });
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
+                _pffStatus = $"✓ {body?.RowsImported ?? 0} rows imported for season {_season}.";
+                _pffSeverity = Severity.Success;
+                _pffFile = null;
+            }
+            else
+            {
+                _pffStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                _pffSeverity = Severity.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _pffStatus = $"Error: {ex.Message}";
+            _pffSeverity = Severity.Error;
+        }
+        finally { _pffBusy = false; }
+    }
+
+    private async Task ImportAdp()
+    {
+        if (_adpFile is null) return;
+        _adpBusy = true; _adpStatus = string.Empty;
+        try
+        {
+            var csv = await ReadFileAsTextAsync(_adpFile);
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync("api/v1/drafttools/adp/import",
+                new { CsvContent = csv, Season = _season, Source = _adpSource });
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
+                _adpStatus = $"✓ {body?.RowsImported ?? 0} rows imported for season {_season}.";
+                _adpSeverity = Severity.Success;
+                _adpFile = null;
+            }
+            else
+            {
+                _adpStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                _adpSeverity = Severity.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _adpStatus = $"Error: {ex.Message}";
+            _adpSeverity = Severity.Error;
+        }
+        finally { _adpBusy = false; }
+    }
+
+    // ── Job trigger handlers ─────────────────────────────────────────────────
+    private async Task RunCombineSync()
+    {
+        _combineBusy = true; _combineStatus = string.Empty;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsync($"api/v1/admin/jobs/run-combine-sync?season={_season}", null);
+            _combineOk = resp.IsSuccessStatusCode;
+            _combineStatus = _combineOk ? "Done ✓" : $"Failed ({(int)resp.StatusCode})";
+        }
+        catch (Exception ex) { _combineOk = false; _combineStatus = ex.Message; }
+        finally { _combineBusy = false; }
+    }
+
+    private async Task RunDraftPickSync()
+    {
+        _picksBusy = true; _picksStatus = string.Empty;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsync($"api/v1/drafttools/sync/draft-picks?season={_season}", null);
+            _picksOk = resp.IsSuccessStatusCode;
+            _picksStatus = _picksOk ? "Queued ✓" : $"Failed ({(int)resp.StatusCode})";
+        }
+        catch (Exception ex) { _picksOk = false; _picksStatus = ex.Message; }
+        finally { _picksBusy = false; }
+    }
+
+    private async Task RunCareerSims()
+    {
+        _simsBusy = true; _simsStatus = "Running — this takes ~30s...";
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-career-sims",
+                new { Season = _season });
+            _simsOk = resp.IsSuccessStatusCode;
+            if (_simsOk)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JobResultDto>();
+                _simsStatus = $"Done ✓ — {body?.Count ?? 0} players simulated";
+            }
+            else _simsStatus = $"Failed ({(int)resp.StatusCode})";
+        }
+        catch (Exception ex) { _simsOk = false; _simsStatus = ex.Message; }
+        finally { _simsBusy = false; }
+    }
+
+    private async Task RunDfv()
+    {
+        _dfvBusy = true; _dfvStatus = "Calculating — this takes ~15s...";
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-dfv",
+                new { Season = _season });
+            _dfvOk = resp.IsSuccessStatusCode;
+            if (_dfvOk)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<JobResultDto>();
+                _dfvStatus = $"Done ✓ — {body?.Count ?? 0} players valued";
+            }
+            else _dfvStatus = $"Failed ({(int)resp.StatusCode})";
+        }
+        catch (Exception ex) { _dfvOk = false; _dfvStatus = ex.Message; }
+        finally { _dfvBusy = false; }
+    }
+
+    // ── Response DTOs ────────────────────────────────────────────────────────
+    private record ImportResultDto(int RowsImported);
+    private record JobResultDto(string Message, int Count);
+}
