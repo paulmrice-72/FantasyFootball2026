@@ -273,6 +273,15 @@ public class AdminController(
         await snapCountJob.RunAsync();
         return Ok(new { Message = "Snap count sync complete." });
     }
+    [HttpPost("jobs/run-article-generation")]
+    public async Task<IActionResult> RunArticleGeneration(
+    [FromServices] ArticleGenerationJob articleJob,
+    CancellationToken ct)
+    {
+        logger.LogInformation("Admin triggered article generation");
+        await articleJob.RunAsync(ct);
+        return Ok(new { Message = "Article generation complete." });
+    }
     public record RunJobRequest(int Season);
     public record NflContextOverrideRequest(int? Season, int? Week);
 }

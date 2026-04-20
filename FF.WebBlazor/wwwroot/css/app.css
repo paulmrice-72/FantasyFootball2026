@@ -772,3 +772,22 @@ td.numeric,
     border-top: 1px solid var(--fc-border) !important;
     z-index: 1300;
 }
+.writers-room-body p {
+    margin-bottom: 1rem;
+    line-height: 1.75;
+    color: var(--mud-palette-text-primary);
+}
+
+.writers-room-body h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--fc-amber);
+    margin-top: 2rem; /* was 1.5rem — more breathing room above headers */
+    margin-bottom: 0.75rem; /* was 0.5rem */
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(245, 158, 11, 0.2); /* subtle amber rule above each section */
+}
+
+.writers-room-body strong {
+    font-weight: 600;
+}

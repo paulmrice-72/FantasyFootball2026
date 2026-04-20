@@ -310,6 +310,12 @@ try
         "0 8 * * 0",   // Sunday 8am UTC = 3am ET
     utcOptions);
 
+    RecurringJob.AddOrUpdate<ArticleGenerationJob>(
+        "article-generation-weekly",
+        job => job.RunAsync(CancellationToken.None),
+        "0 10 * * 2",   // Tuesdays 10am UTC
+        utcOptions);
+
     RecurringJob.AddOrUpdate<EmergenceDetectionJob>(
         "emergence-detection-weekly",
         job => job.RunAsync(2026, 1),

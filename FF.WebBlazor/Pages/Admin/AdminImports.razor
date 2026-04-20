@@ -218,7 +218,24 @@
         <MudAlert Severity="_adpSeverity" Dense="true" Class="mt-3">@_adpStatus</MudAlert>
     }
 </MudPaper>
-
+@* ── Writers' Room ──────────────────────────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" Style="vertical-align:middle;" />
+        Writers' Room
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Generate articles for all active writer personas using current season/week context.
+    </MudText>
+    <MudItem xs="12" sm="6" md="4">
+        <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
+                   StartIcon="@Icons.Material.Filled.AutoStories"
+                   OnClick="RunArticleGeneration" Disabled="_articlesBusy">
+            Generate Articles
+        </MudButton>
+        <MudText Typo="Typo.caption" Style="@ArticlesStatusStyle">@_articlesStatus</MudText>
+    </MudItem>
+</MudPaper>
 @* ── Post-Draft Trigger Buttons ───────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -281,7 +298,26 @@
     [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
 
     private int _season = DateTime.UtcNow.Year;
+    private bool _articlesBusy;
+    private string _articlesStatus = string.Empty;
+    private bool _articlesOk;
+    private string ArticlesStatusStyle => string.IsNullOrEmpty(_articlesStatus) ? "display:none"
+        : _articlesOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
 
+    private async Task RunArticleGeneration()
+    {
+        _articlesBusy = true;
+        _articlesStatus = "Generating articles — this takes ~20s...";
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsync("api/v1/admin/jobs/run-article-generation", null);
+            _articlesOk = resp.IsSuccessStatusCode;
+            _articlesStatus = _articlesOk ? "Done ✓ — articles generated" : $"Failed ({(int)resp.StatusCode})";
+        }
+        catch (Exception ex) { _articlesOk = false; _articlesStatus = ex.Message; }
+        finally { _articlesBusy = false; }
+    }
     private string CombineStatusStyle => string.IsNullOrEmpty(_combineStatus) ? "display:none" :
     _combineOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
 

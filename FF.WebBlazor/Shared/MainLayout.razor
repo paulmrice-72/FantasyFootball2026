@@ -75,7 +75,8 @@
         <NavMenu OnNavItemClicked="CloseDrawerOnMobile"
                  SleeperLinked="@_sleeperLinked"
                  CurrentPath="@_currentPath"
-                 IsDynastyLeague="@_isDynastyLeague" />
+                 IsDynastyLeague="@_isDynastyLeague"
+                 UnreadArticleCount="@_unreadArticleCount" />
     </MudDrawer>
 
     <MudMainContent Class="fc-main-content">
@@ -143,6 +144,7 @@
     private string _currentPath = "";
     private bool _sleeperLinked = false;
     private bool _isDynastyLeague = false;
+    private int _unreadArticleCount;
 
     // ── theme unchanged ────────────────────────────────────────────────
     private readonly MudTheme _theme = new()
@@ -200,6 +202,19 @@
         }
         catch { }
 
+        // ── Article unread count for nav badge ─────────────────────────
+        try
+        {
+            var http = HttpClientFactory.CreateClient("AuthAPI");
+            var result = await http.GetFromJsonAsync<UnreadCountResponse>(
+                "api/v1/articles/unread-count");
+            _unreadArticleCount = result?.Count ?? 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Unread count failed: {ex.Message}");
+        }
+
         // LeagueState wins if already set (e.g. user clicked a home card)
         if (!string.IsNullOrEmpty(LeagueState.ActiveLeagueId))
             _activeLeagueId = LeagueState.ActiveLeagueId;
@@ -212,7 +227,10 @@
 
         LeagueState.OnLeagueChanged += HandleLeagueStateChanged;
     }
-
+    private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -220,10 +238,28 @@
             var width = await JS.InvokeAsync<int>("eval", "window.innerWidth");
             _isMobile = width < 600;
             _drawerOpen = width >= 960;
-            StateHasChanged();
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                try
+                {
+                    var http = HttpClientFactory.CreateClient("AuthAPI");
+                    var unread = await http.GetFromJsonAsync<UnreadCountResponse>(
+                        "api/v1/articles/unread-count", _jsonOptions);
+                    _unreadArticleCount = unread?.Count ?? 0;
+                    Console.WriteLine($"UNREAD COUNT: {_unreadArticleCount}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Unread count failed: {ex.Message}");
+                }
+            }
+
+            // Use InvokeAsync to ensure re-render propagates to child components
+            await InvokeAsync(StateHasChanged);
         }
     }
-
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         _currentPath = GetCurrentPath();
@@ -303,4 +339,6 @@
         string Role,
         bool IsActive = false,
         string LeagueType = "Redraft");
+
+        private record UnreadCountResponse(int Count);
 }
