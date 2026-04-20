@@ -1,0 +1,280 @@
+﻿@page "/admin/articles"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using FF.Domain.Enums
+@using Microsoft.AspNetCore.Authorization
+@using System.Net.Http.Json
+@using FF.Domain.Documents
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+<PageTitle>Article Review — Admin — FantasyCombine.AI</PageTitle>
+
+<div class="fc-page-header mb-4">
+    <MudText Typo="Typo.h5" Class="fc-page-title" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.RateReview" Class="mr-2" Style="vertical-align:middle;" />
+        Article Review
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Review AI-generated articles before they go public.
+    </MudText>
+</div>
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <MudAlert Severity="Severity.Error">@_errorMessage</MudAlert>
+}
+else if (_articles.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">No articles found. Run article generation from Imports &amp; Triggers.</MudAlert>
+}
+else
+{
+    @* Filter bar *@
+    <MudPaper Class="pa-3 mb-4" Elevation="1">
+        <MudChipSet T="string" @bind-SelectedValue="_statusFilter" SelectionMode="SelectionMode.SingleSelection">
+            <MudChip T="string" Value="@("All")" Color="Color.Default" Variant="Variant.Outlined">All (@_articles.Count)</MudChip>
+            <MudChip T="string" Value="@("Draft")" Color="Color.Warning" Variant="Variant.Outlined">Draft (@_articles.Count(a => a.ReviewStatus == ArticleReviewStatus.Draft))</MudChip>
+            <MudChip T="string" Value="@("Approved")" Color="Color.Success" Variant="Variant.Outlined">Approved (@_articles.Count(a => a.ReviewStatus == ArticleReviewStatus.Approved))</MudChip>
+            <MudChip T="string" Value="@("Rejected")" Color="Color.Error" Variant="Variant.Outlined">Rejected (@_articles.Count(a => a.ReviewStatus == ArticleReviewStatus.Rejected))</MudChip>
+        </MudChipSet>
+    </MudPaper>
+
+    @foreach (var article in Filtered)
+    {
+        <MudPaper Class="pa-4 mb-3" Elevation="1">
+            <MudGrid>
+                <MudItem xs="12" sm="9">
+                    <div class="d-flex align-center gap-2 mb-1">
+                        <MudChip T="string" Size="Size.Small" Color="@StatusColor(article.ReviewStatus)" Variant="Variant.Filled">
+                            @article.ReviewStatus
+                        </MudChip>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @article.PersonaName — @article.Role
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            | S@(article.Season) W@(article.Week) | @article.GeneratedAt.ToString("MMM d, h:mm tt") UTC
+                        </MudText>
+                    </div>
+                    <MudText Typo="Typo.h6" Class="mb-2" Style="color: var(--fc-amber);">@article.Title</MudText>
+                    <MudText Typo="Typo.body2" Style="white-space: pre-wrap; line-height: 1.6;">@article.Body</MudText>
+                    @if (article.ReviewStatus == ArticleReviewStatus.Approved)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                            👍 @article.ThumbsUp &nbsp; 👎 @article.ThumbsDown
+                        </MudText>
+                    }
+                </MudItem>
+                <MudItem xs="12" sm="3" Class="d-flex flex-column gap-2">
+
+                    @* ── Primary actions ── *@
+                    @if (article.ReviewStatus != ArticleReviewStatus.Approved)
+                    {
+                        <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.ThumbUp"
+                                   OnClick="@(() => Review(article.Id, true))"
+                                   Disabled="_busy.Contains(article.Id)">
+                            Approve
+                        </MudButton>
+                    }
+                    @if (article.ReviewStatus != ArticleReviewStatus.Rejected)
+                    {
+                        <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Error"
+                                   StartIcon="@Icons.Material.Filled.ThumbDown"
+                                   OnClick="@(() => Review(article.Id, false))"
+                                   Disabled="_busy.Contains(article.Id)">
+                            Reject
+                        </MudButton>
+                    }
+
+                    @* ── Regenerate ── *@
+                    <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.Refresh"
+                               OnClick="@(() => ToggleRegenPanel(article))"
+                               Disabled="_busy.Contains(article.Id)">
+                        Regenerate
+                    </MudButton>
+
+                    @* ── Scrap ── *@
+                    <MudButton FullWidth="true" Variant="Variant.Text" Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.DeleteForever"
+                               OnClick="@(() => Scrap(article.Id))"
+                               Disabled="_busy.Contains(article.Id)">
+                        Scrap
+                    </MudButton>
+
+                </MudItem>
+
+                @* ── Regenerate panel (expands inline below article) ── *@
+                @if (_regenPanelId == article.Id)
+                {
+                    <MudItem xs="12">
+                        <MudPaper Class="pa-3 mt-2" Elevation="0" Style="border: 1px solid var(--fc-amber); border-radius: 8px;">
+                            <MudText Typo="Typo.subtitle2" Class="mb-2" Style="color: var(--fc-amber);">
+                                Editor Feedback
+                            </MudText>
+                            <MudTextField @bind-Value="_regenNotes"
+                                          Label="What's wrong / what to improve"
+                                          Lines="3" FullWidth="true"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Class="mb-2" />
+                            <MudTextField @bind-Value="_regenTopic"
+                                          Label="New topic/angle (optional — leave blank to reuse same data)"
+                                          FullWidth="true"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Class="mb-2" />
+                            <MudCheckBox @bind-Value="_saveAsPersistent" Color="Color.Warning"
+                                         Label="Save as persistent guideline for this writer (applies to all future articles)" />
+                            <div class="d-flex gap-2 mt-2">
+                                <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                                           StartIcon="@Icons.Material.Filled.Refresh"
+                                           OnClick="@(() => SubmitRegen(article.Id, article.PersonaId))"
+                                           Disabled="_busy.Contains(article.Id)">
+                                    Regenerate
+                                </MudButton>
+                                <MudButton Variant="Variant.Text" OnClick="@(() => _regenPanelId = null)">
+                                    Cancel
+                                </MudButton>
+                            </div>
+                            @if (!string.IsNullOrEmpty(_regenStatus))
+                            {
+                                <MudText Typo="Typo.caption" Class="mt-1" Style="color: var(--mud-palette-warning);">
+                                    @_regenStatus
+                                </MudText>
+                            }
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
+
+    private List<ArticleDocument> _articles = [];
+    private HashSet<string> _busy = [];
+    private bool _loading = true;
+    private string _statusFilter = "All";
+    private string? _errorMessage = string.Empty;
+
+    private string? _regenPanelId;
+    private string _regenNotes = string.Empty;
+    private string _regenTopic = string.Empty;
+    private bool _saveAsPersistent = false;
+    private string _regenStatus = string.Empty;
+
+    private void ToggleRegenPanel(ArticleDocument article)
+    {
+        if (_regenPanelId == article.Id)
+        {
+            _regenPanelId = null;
+        }
+        else
+        {
+            _regenPanelId = article.Id;
+            _regenNotes = article.AdminNotes ?? string.Empty;   // ← pre-populate
+            _regenTopic = article.NewTopic ?? string.Empty;     // ← pre-populate
+            _saveAsPersistent = false;
+            _regenStatus = string.Empty;
+        }
+    }
+
+    private async Task SubmitRegen(string articleId, string personaId)
+    {
+        _busy.Add(articleId);
+        _regenStatus = "Regenerating — refresh in ~15 seconds...";
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync(
+                $"api/v1/articles/admin/{articleId}/regenerate",
+                new
+                {
+                    PersonaId = personaId,
+                    AdminNotes = _regenNotes,
+                    NewTopic = string.IsNullOrWhiteSpace(_regenTopic) ? null : _regenTopic,
+                    SaveAsPersistentFeedback = _saveAsPersistent
+                });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                _regenPanelId = null;
+                _regenStatus = string.Empty;
+                await Task.Delay(12000); // wait for background regen
+                await LoadAsync();
+            }
+            else
+            {
+                _regenStatus = $"Failed ({(int)resp.StatusCode})";
+            }
+        }
+        finally { _busy.Remove(articleId); }
+    }
+
+    private async Task Scrap(string articleId)
+    {
+        _busy.Add(articleId);
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            await http.DeleteAsync($"api/v1/articles/admin/{articleId}");
+            await LoadAsync();
+        }
+        finally { _busy.Remove(articleId); }
+    }
+
+    private IEnumerable<ArticleDocument> Filtered => _statusFilter == "All"
+        ? _articles
+        : _articles.Where(a => a.ReviewStatus.ToString() == _statusFilter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+        PropertyNameCaseInsensitive = true
+    };
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _errorMessage = string.Empty;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var result = await http.GetFromJsonAsync<List<ArticleDocument>>(
+                "api/v1/articles/admin/all", _jsonOptions);
+            _articles = result ?? [];
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Could not load articles: {ex.Message}";
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task Review(string id, bool approve)
+    {
+        _busy.Add(id);
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var endpoint = approve ? $"api/v1/articles/admin/{id}/approve" : $"api/v1/articles/admin/{id}/reject";
+            await http.PostAsync(endpoint, null);
+            await LoadAsync();
+        }
+        finally { _busy.Remove(id); }
+    }
+
+    private static Color StatusColor(ArticleReviewStatus status) => status switch
+    {
+        ArticleReviewStatus.Approved => Color.Success,
+        ArticleReviewStatus.Rejected => Color.Error,
+        _ => Color.Warning
+    };
+}
