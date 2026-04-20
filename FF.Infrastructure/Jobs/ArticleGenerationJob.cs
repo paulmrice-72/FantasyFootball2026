@@ -3,7 +3,7 @@ using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
-
+using FF.Domain.Enums;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -116,7 +116,7 @@ public class ArticleGenerationJob(
             return null;
         }
 
-        var dataPayload = BuildDataPayload(persona, players, season, week);
+        var dataPayload = BuildDataPayload(persona, players, season, week, null, null);
         var (title, body) = await CallAnthropicAsync(persona, dataPayload, apiKey, ct);
 
         if (string.IsNullOrWhiteSpace(body))
@@ -133,18 +133,43 @@ public class ArticleGenerationJob(
             Body = body,
             Season = season,
             Week = week,
-            IsPublished = true,
             GeneratedAt = DateTime.UtcNow
         };
     }
 
     private static string BuildDataPayload(
-        WriterPersonaDocument persona,
-        List<DynastyValuationDocument> players,
-        int season,
-        int week)
+    WriterPersonaDocument persona,
+    List<DynastyValuationDocument> players,
+    int season, int week,
+    string? adminNotes = null,
+    string? newTopic = null)
     {
         var sb = new StringBuilder();
+
+        // ── Persistent editorial feedback ──────────────────────────
+        if (persona.PersistentFeedback.Count > 0)
+        {
+            sb.AppendLine("EDITORIAL GUIDELINES (always follow these):");
+            foreach (var f in persona.PersistentFeedback.TakeLast(10))
+                sb.AppendLine($"- {f.Comment}");
+            sb.AppendLine();
+        }
+
+        // ── One-time admin notes ───────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(adminNotes))
+        {
+            sb.AppendLine("EDITOR FEEDBACK ON PREVIOUS DRAFT (address this):");
+            sb.AppendLine(adminNotes);
+            sb.AppendLine();
+        }
+
+        // ── Topic override ─────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(newTopic))
+        {
+            sb.AppendLine($"REQUESTED TOPIC: {newTopic}");
+            sb.AppendLine();
+        }
+
         sb.AppendLine($"SEASON: {season} | WEEK: {week}");
         sb.AppendLine($"YOUR ROLE: {persona.Role}");
         sb.AppendLine();
@@ -154,8 +179,7 @@ public class ArticleGenerationJob(
         foreach (var p in players)
         {
             var signals = p.BreakoutSignals.Any()
-                ? string.Join("; ", p.BreakoutSignals)
-                : "none";
+                ? string.Join("; ", p.BreakoutSignals) : "none";
             sb.AppendLine(
                 $"{p.PlayerName} | {p.Position} | {p.NflTeam} | Age {p.Age} | " +
                 $"TV:{p.TradeValue:F1} | {p.CareerPhase} | " +
@@ -164,10 +188,11 @@ public class ArticleGenerationJob(
         }
 
         sb.AppendLine();
-        sb.AppendLine("Write one article based on the most interesting story in this data.");
+        sb.AppendLine("Write a comprehensive weekly feature article covering 2-3 of the most interesting stories in this data.");
+        sb.AppendLine("Format your response using simple HTML only — use <h3> for section headers, <p> for paragraphs, <strong> for emphasis. No markdown. No ** or ## characters.");
         sb.AppendLine("Respond in this exact format:");
-        sb.AppendLine("TITLE: <your article title>");
-        sb.AppendLine("BODY: <your article body>");
+        sb.AppendLine("TITLE: <your plain text article title, no HTML>");
+        sb.AppendLine("BODY: <your full HTML article body>");
 
         return sb.ToString();
     }
@@ -183,12 +208,12 @@ public class ArticleGenerationJob(
         var requestBody = new
         {
             model,
-            max_tokens = 600,
+            max_tokens = 1200,  // was 600
             system = persona.SystemPrompt,
             messages = new[]
             {
-                new { role = "user", content = dataPayload }
-            }
+        new { role = "user", content = dataPayload }
+    }
         };
 
         var http = httpClientFactory.CreateClient();
@@ -239,7 +264,57 @@ public class ArticleGenerationJob(
 
         return (title, body);
     }
+    /// <summary>
+    /// Regenerates a single article for a specific persona,
+    /// incorporating admin notes and optional new topic.
+    /// </summary>
+    public async Task RegenerateAsync(
+        string personaId, string articleId,
+        string adminNotes, string? newTopic,
+        CancellationToken ct = default)
+    {
+        var apiKey = configuration["Anthropic:ApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey)) return;
 
+        var persona = await personaRepo.GetByIdAsync(personaId, ct);
+        if (persona is null) return;
+
+        var (season, week) = await nflContextService.GetContextAsync();
+        var allValuations = await valuationRepo.GetTopByTradeValueAsync(200);
+
+        var specialties = persona.Specialties
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+        var players = allValuations
+            .Where(v => specialties.Contains("Dynasty") || specialties.Contains("Rookie")
+                ? true
+                : specialties.Any(s => v.Position.Equals(s, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v => v.TradeValue)
+            .Take(15)
+            .ToList();
+
+        var dataPayload = BuildDataPayload(persona, players, season, week, adminNotes, newTopic);
+        var (title, body) = await CallAnthropicAsync(persona, dataPayload, apiKey, ct);
+
+        if (string.IsNullOrWhiteSpace(body)) return;
+
+        var article = new ArticleDocument
+        {
+            Id = articleId,
+            PersonaId = persona.Id,
+            PersonaName = persona.Name,
+            Role = persona.Role,
+            Specialties = persona.Specialties,
+            Title = title,
+            Body = body,
+            Season = season,
+            Week = week,
+            ReviewStatus = ArticleReviewStatus.Draft,
+            GeneratedAt = DateTime.UtcNow
+        };
+
+        await articleRepo.UpsertAsync(article, ct);
+    }
     // ── Response DTOs ───────────────────────────────────────────────────────
     private class AnthropicResponse
     {

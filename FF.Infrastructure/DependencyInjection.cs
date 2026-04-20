@@ -144,6 +144,8 @@ public static class DependencyInjection
         services.AddScoped<ICombineResultRepository, CombineResultRepository>();
         services.AddScoped<SyncCombineDataCommandHandler>();
         services.AddScoped<IArticleRepository, ArticleRepository>();
+        services.AddScoped<ArticleGenerationJob>();
+        services.AddScoped<IArticleRatingRepository, ArticleRatingRepository>();
 
         // Health Checks
         services.AddHealthChecks()
@@ -452,6 +454,39 @@ public static class DependencyInjection
             if (!BsonClassMap.IsClassMapRegistered(typeof(CombineResultDocument)))
             {
                 BsonClassMap.RegisterClassMap<CombineResultDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                        .SetSerializer(new StringSerializer(BsonType.String));
+                });
+            }
+            if (!BsonClassMap.IsClassMapRegistered(typeof(ArticleDocument)))
+            {
+                BsonClassMap.RegisterClassMap<ArticleDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.UnmapMember(c => c.IsPublished);  // ← computed property, not stored
+                    cm.MapIdMember(c => c.Id)
+                        .SetSerializer(new StringSerializer(BsonType.String));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(ArticleRatingDocument)))
+            {
+                BsonClassMap.RegisterClassMap<ArticleRatingDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                        .SetSerializer(new StringSerializer(BsonType.String));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(WriterPersonaDocument)))
+            {
+                BsonClassMap.RegisterClassMap<WriterPersonaDocument>(cm =>
                 {
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);

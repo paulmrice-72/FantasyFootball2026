@@ -1,14 +1,13 @@
 ﻿// FF.Domain/Documents/ArticleDocument.cs
+using System.Text.Json.Serialization;
+using FF.Domain.Enums;
+
 namespace FF.Domain.Documents;
 
-/// <summary>
-/// A generated article from a Writers' Room persona.
-/// Collection: articles
-/// </summary>
 public class ArticleDocument
 {
-    public string Id { get; set; } = string.Empty;        // e.g. "sam-caruso-2026-18"
-    public string PersonaId { get; set; } = string.Empty; // "sam-caruso"
+    public string Id { get; set; } = string.Empty;
+    public string PersonaId { get; set; } = string.Empty;
     public string PersonaName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public string Specialties { get; set; } = string.Empty;
@@ -16,6 +15,20 @@ public class ArticleDocument
     public string Body { get; set; } = string.Empty;
     public int Season { get; set; }
     public int Week { get; set; }
-    public bool IsPublished { get; set; } = true;
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ArticleReviewStatus ReviewStatus { get; set; } = ArticleReviewStatus.Draft;
+
+    public bool IsPublished => ReviewStatus == ArticleReviewStatus.Approved;
+    public int ThumbsUp { get; set; }
+    public int ThumbsDown { get; set; }
     public DateTime GeneratedAt { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? ReviewedBy { get; set; }
+
+    /// <summary>One-time note used when requesting regeneration of this article.</summary>
+    public string? AdminNotes { get; set; }
+
+    /// <summary>Optional specific topic/angle to use instead of the default data payload.</summary>
+    public string? NewTopic { get; set; }
 }

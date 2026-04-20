@@ -121,6 +121,23 @@
         Trade Analyzer
     </MudNavLink>
 
+    @* Writers' Room — custom to support badge *@
+    <div style="position: relative; display: block;">
+        <MudNavLink Href="writers-room" Icon="@Icons.Material.Filled.AutoStories"
+                    IconColor="Color.Primary" OnClick="NotifyNavClicked">
+            Writers' Room
+        </MudNavLink>
+        @if (UnreadArticleCount > 0)
+        {
+            <span style="position: absolute; top: 6px; right: 12px;
+                background: #EF4444; color: white; border-radius: 10px;
+                padding: 1px 7px; font-size: 0.65rem; font-weight: 700;
+                pointer-events: none; z-index: 10;">
+                @UnreadArticleCount
+            </span>
+        }
+    </div>
+
     <MudNavLink Href="dfs"
                 Icon="@Icons.Material.Filled.SportsSoccer"
                 IconColor="Color.Primary"
@@ -155,6 +172,7 @@
     [Parameter] public bool SleeperLinked { get; set; }
     [Parameter] public string CurrentPath { get; set; } = "";
     [Parameter] public bool IsDynastyLeague { get; set; }
+    [Parameter] public int UnreadArticleCount { get; set; }
 
     private void NotifyNavClicked()
     {

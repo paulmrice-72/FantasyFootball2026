@@ -36,4 +36,14 @@ public class WriterPersonaRepository(MongoDbContext context) : IWriterPersonaRep
         var options = new ReplaceOptions { IsUpsert = true };
         await _collection.ReplaceOneAsync(filter, document, options, cancellationToken);
     }
+
+    public async Task AddFeedbackAsync(
+    string personaId, WriterFeedbackEntry entry, CancellationToken ct = default)
+    {
+        var filter = Builders<WriterPersonaDocument>.Filter.Eq(x => x.Id, personaId);
+        var update = Builders<WriterPersonaDocument>.Update
+            .Push(x => x.PersistentFeedback, entry)
+            .Set(x => x.UpdatedAt, DateTime.UtcNow);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
 }

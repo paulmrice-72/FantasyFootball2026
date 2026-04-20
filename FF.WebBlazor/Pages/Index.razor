@@ -169,7 +169,43 @@ else if (!_loading)
         </MudPaper>
     </MudItem>
 </MudGrid>
-
+@* ── LATEST FROM WRITERS' ROOM ───────────────────────────────── *@
+@if (_latestArticles.Count > 0)
+{
+    <MudText Typo="Typo.overline" Class="fc-section-label mb-3 mt-6 d-block">
+        LATEST FROM WRITERS' ROOM
+    </MudText>
+    <MudGrid Spacing="3" Class="mb-6">
+        @foreach (var article in _latestArticles)
+        {
+            <MudItem xs="12" sm="6" lg="3">
+                <MudPaper Class="pa-4 fc-quick-link" Elevation="0"
+                          style="cursor:pointer; height:100%; display:flex; flex-direction:column; justify-content:space-between;"
+                          @onclick="@(() => Nav.NavigateTo($"/writers-room/article/{article.Id}"))">
+                    <div>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary"
+                                 Variant="Variant.Filled" Class="mb-2">
+                            @article.PersonaName
+                        </MudChip>
+                        <MudText Typo="Typo.subtitle2" Style="font-weight:700; line-height:1.3;"
+                                 Class="mb-1">
+                            @article.Title
+                        </MudText>
+                    </div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+                        @article.GeneratedAt.ToString("MMM d") &nbsp;·&nbsp;
+                        👍 @article.ThumbsUp 👎 @article.ThumbsDown
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+    <div Class="mb-6">
+        <MudLink Href="/writers-room" Typo="Typo.body2" Color="Color.Primary">
+            View all articles →
+        </MudLink>
+    </div>
+}
 @code {
     private bool _loading = true;
     private int _season;
@@ -283,6 +319,20 @@ else if (!_loading)
         }
         catch { }
 
+        // ── Latest articles ────────────────────────────────────────────
+        try
+        {
+            var articles = await http.GetFromJsonAsync<List<ArticleSummary>>(
+                "api/v1/articles/latest?count=4",
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+                    PropertyNameCaseInsensitive = true
+                });
+            _latestArticles = articles ?? [];
+        }
+        catch { }
+
         _loading = false;
     }
 
@@ -354,4 +404,10 @@ else if (!_loading)
     private record InjurySummary(
         string PlayerId,
         string Designation);
+
+    private List<ArticleSummary> _latestArticles = [];
+
+    private record ArticleSummary(
+        string Id, string PersonaName, string Title,
+        int ThumbsUp, int ThumbsDown, DateTime GeneratedAt);
 }
