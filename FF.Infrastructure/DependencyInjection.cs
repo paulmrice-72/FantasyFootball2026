@@ -143,6 +143,7 @@ public static class DependencyInjection
         services.AddScoped<INflverseDownloadService, NflverseDownloadService>();
         services.AddScoped<ICombineResultRepository, CombineResultRepository>();
         services.AddScoped<SyncCombineDataCommandHandler>();
+        services.AddScoped<IArticleRepository, ArticleRepository>();
 
         // Health Checks
         services.AddHealthChecks()
