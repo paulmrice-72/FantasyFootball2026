@@ -24,6 +24,13 @@ public class League : Entity
     public bool CanTradePicks { get; private set; } = false;
 
     /// <summary>
+    /// Sleeper avatar hash for the league image.
+    /// CDN URL: https://sleepercdn.com/avatars/thumbs/{Avatar}
+    /// Null = no avatar set or not yet synced.
+    /// </summary>
+    public string? Avatar { get; private set; }
+
+    /// <summary>
     /// Sleeper roster_positions array stored as comma-separated string.
     /// e.g. "QB,RB,RB,WR,WR,TE,FLEX,SUPER_FLEX,BN,BN,BN,BN"
     /// Parsed into RosterConfiguration via RosterConfiguration.FromSleeperPositions().
@@ -49,6 +56,13 @@ public class League : Entity
             IsActive = true,
             LeagueType = leagueType
         };
+    }
+
+    public void UpdateAvatar(string? avatar)
+    {
+        if (Avatar == avatar) return;
+        Avatar = avatar;
+        SetUpdated();
     }
 
     public void UpdateLeagueType(string leagueType)

@@ -1,4 +1,5 @@
-﻿namespace FF.Domain.ValueObjects;
+﻿// FF.Domain/ValueObjects/UserContext.cs
+namespace FF.Domain.ValueObjects;
 
 public record UserContext(
     string UserId,
@@ -15,5 +16,6 @@ public record LeagueContext(
     int Season,
     string Role,
     bool IsActive,
-    string LeagueType = "Redraft"   // default so existing callers don't break
+    string LeagueType = "Redraft",  // default so existing callers don't break
+    string? Avatar = null           // ← NEW: Sleeper avatar hash
 );

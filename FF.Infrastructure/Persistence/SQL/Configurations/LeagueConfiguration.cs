@@ -59,5 +59,9 @@ public class LeagueConfiguration : IEntityTypeConfiguration<League>
         builder.Property(l => l.RosterPositions)
             .HasMaxLength(500)
             .IsRequired(false);
+
+        builder.Property(l => l.Avatar)
+            .HasMaxLength(100)
+            .IsRequired(false);
     }
 }

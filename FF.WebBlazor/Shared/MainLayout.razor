@@ -341,7 +341,8 @@ private async Task HandleLogout()
         int Season,
         string Role,
         bool IsActive = false,
-        string LeagueType = "Redraft");
+        string LeagueType = "Redraft",
+        string? Avatar = null);        // ← ADD
 
         private record UnreadCountResponse(int Count);
 }

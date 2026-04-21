@@ -38,19 +38,6 @@
         <MudIcon Icon="@Icons.Material.Filled.Memory" Class="mr-2" Style="vertical-align:middle;" />
         Simulation Pipeline
     </MudText>
-    <MudItem xs="12" sm="6" md="4">
-        <MudButton FullWidth="true"
-                   Variant="Variant.Filled" Color="Color.Warning"
-                   StartIcon="@Icons.Material.Filled.BarChart"
-                   OnClick="RunStatsSync"
-                   Disabled="_statsBusy">
-            Stats Sync
-        </MudButton>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
-            Current season only
-        </MudText>
-        <MudText Typo="Typo.caption" Style="@StatsStatusStyle">@_statsStatus</MudText>
-    </MudItem>
     <MudGrid Spacing="3">
         <MudItem xs="12" sm="6" md="4">
             <MudButton FullWidth="true"

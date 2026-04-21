@@ -11,8 +11,7 @@
 @* ── HEADER ──────────────────────────────────────────────── *@
 <div class="fc-page-header mb-4">
     <MudText Typo="Typo.h5" Class="fc-page-title">
-        <MudIcon Icon="@Icons.Material.Filled.Home" Class="mr-2"
-                 Style="vertical-align:middle;" />
+        <MudIcon Icon="@Icons.Material.Filled.Home" Class="mr-2" Style="vertical-align:middle;" />
         War Room
     </MudText>
     <MudText Typo="Typo.body2" Class="mud-text-secondary">
@@ -25,6 +24,31 @@
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-6" />
 }
 
+@* ── PLATFORM PULSE BAR ──────────────────────────────────── *@
+@if (!_loading)
+{
+    <div class="fc-pulse-bar mb-6">
+        <div class="fc-pulse-cell fc-pulse-cell--cyan">
+            <div class="fc-pulse-label">PLAYERS PROJECTED</div>
+            <div class="fc-pulse-value">@(_playerCount > 0 ? _playerCount.ToString() : "—")</div>
+        </div>
+        <div class="fc-pulse-cell fc-pulse-cell--green">
+            <div class="fc-pulse-label">TOP BOOM</div>
+            <div class="fc-pulse-value fc-pulse-value--green">@_topBoomPlayer</div>
+        </div>
+        <div class="fc-pulse-cell fc-pulse-cell--purple">
+            <div class="fc-pulse-label">TOP CEILING</div>
+            <div class="fc-pulse-value fc-pulse-value--purple">@_topCeilingPlayer</div>
+        </div>
+        <div class="fc-pulse-cell fc-pulse-cell--amber">
+            <div class="fc-pulse-label">LEAGUE INJURIES</div>
+            <div class="fc-pulse-value fc-pulse-value--amber">
+                @(_leagueInjuryCount > 0 ? _leagueInjuryCount.ToString() : "—")
+            </div>
+        </div>
+    </div>
+}
+
 @* ── MY LEAGUES ───────────────────────────────────────────── *@
 @if (_leagueCards.Count > 0)
 {
@@ -33,48 +57,75 @@
         @foreach (var card in _leagueCards)
         {
             <MudItem xs="12" sm="6" lg="4">
-                <MudPaper Class="fc-league-card" Elevation="0"
-                          @onclick="@(() => NavigateToLeague(card.SleeperLeagueId))">
+                <div class="fc-league-card fc-league-card--glow"
+                     @onclick="@(() => NavigateToLeague(card.SleeperLeagueId))">
 
-                    @* Card header — league name + enter arrow *@
+                    @* Card header — avatar + league name *@
                     <div class="fc-league-card-header">
-                        <div>
-                            <MudText Typo="Typo.subtitle1" Class="fc-league-card-title">
-                                @card.LeagueName
-                            </MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                @card.TeamName
-                            </MudText>
+                        <div class="d-flex align-center gap-3">
+                            @* Team avatar / initials fallback *@
+                            <div class="fc-league-avatar">
+                                @if (!string.IsNullOrEmpty(card.AvatarId))
+                                {
+                                    <img src="https://sleepercdn.com/avatars/thumbs/@card.AvatarId"
+                                         class="fc-league-avatar-img"
+                                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                                    <div class="fc-league-avatar-fallback" style="display:none">
+                                        @card.LeagueName.Substring(0, Math.Min(2, card.LeagueName.Length)).ToUpper()
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="fc-league-avatar-fallback">
+                                        @card.LeagueName.Substring(0, Math.Min(2, card.LeagueName.Length)).ToUpper()
+                                    </div>
+                                }
+                            </div>
+                            <div>
+                                <div class="fc-league-card-title">@card.LeagueName</div>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @card.TeamName
+                                </MudText>
+                            </div>
                         </div>
-                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight"
-                                 Class="mud-text-secondary" />
+                        <div class="d-flex align-center gap-2">
+                            @if (!string.IsNullOrEmpty(card.PlayoffProjection))
+                            {
+                                <MudChip T="string" Size="Size.Small"
+                                         Class="@PlayoffChipClass(card.PlayoffProjection)">
+                                    @card.PlayoffProjection
+                                </MudChip>
+                            }
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight"
+                                     Class="mud-text-secondary" />
+                        </div>
                     </div>
 
-                    @* Stat strip — record / waiver / injuries *@
+                    @* Stat strip *@
                     <div class="fc-league-card-stats">
-                        <div class="fc-league-card-stat">
+                        <div class="fc-league-card-stat fc-league-stat--cyan">
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">Record</MudText>
                             <MudText Typo="Typo.h6" Class="fc-cyan font-mono">
                                 @card.Wins-@card.Losses
                             </MudText>
                         </div>
-                        <div class="fc-league-card-stat">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Waiver</MudText>
-                            <MudText Typo="Typo.h6" Class="fc-cyan font-mono">
-                                @(card.WaiverPosition > 0 ? $"#{card.WaiverPosition}" : "—")
-                            </MudText>
+                        <div class="fc-league-card-stat fc-league-stat--amber">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Standing</MudText>
+                            <div class="font-mono fc-league-standing-val">
+                                @(card.StandingsPlace > 0 ? $"{Ordinal(card.StandingsPlace)} of {card.TotalTeams}" : "—")
+                            </div>
                         </div>
-                        <div class="fc-league-card-stat">
+                        <div class="fc-league-card-stat fc-league-stat--red">
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">Injuries</MudText>
                             <MudText Typo="Typo.h6" Class="font-mono"
                                      Style="@(card.InjuryCount > 0 ? "color:#F87171;" : "color:#E8EAF0;")">
                                 @card.InjuryCount
                             </MudText>
                         </div>
-                        <div class="fc-league-card-stat">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">IR</MudText>
+                        <div class="fc-league-card-stat fc-league-stat--muted">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Waiver</MudText>
                             <MudText Typo="Typo.h6" Class="font-mono mud-text-secondary">
-                                @card.IrCount
+                                @(card.WaiverPosition > 0 ? $"#{card.WaiverPosition}" : "—")
                             </MudText>
                         </div>
                     </div>
@@ -84,11 +135,11 @@
                     {
                         <div class="fc-league-card-starter">
                             <MudIcon Icon="@Icons.Material.Filled.Star"
-                                     Style="font-size:0.9rem; color:#00C8F0;" Class="mr-1" />
+                                     Style="font-size:0.9rem;color:#00C8F0;" Class="mr-1" />
                             <MudText Typo="Typo.caption" Class="mud-text-secondary mr-1">
                                 Top starter:
                             </MudText>
-                            <MudText Typo="Typo.caption" Style="color:#E8EAF0; font-weight:600;">
+                            <MudText Typo="Typo.caption" Style="color:#E8EAF0;font-weight:600;">
                                 @card.TopStarterName
                             </MudText>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary ml-1">
@@ -96,7 +147,7 @@
                             </MudText>
                         </div>
                     }
-                </MudPaper>
+                </div>
             </MudItem>
         }
     </MudGrid>
@@ -104,8 +155,7 @@
 else if (!_loading)
 {
     <MudAlert Severity="Severity.Info" Class="mb-6">
-        No leagues found. <MudLink Href="/settings/sleeper">Link your Sleeper account</MudLink>
-        to get started.
+        No leagues found. <MudLink Href="/settings/sleeper">Link your Sleeper account</MudLink> to get started.
     </MudAlert>
 }
 
@@ -115,7 +165,8 @@ else if (!_loading)
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="fc-quick-link" Elevation="0"
                   @onclick='@(() => Nav.NavigateTo("/my-team"))'>
-            <MudIcon Icon="@Icons.Material.Filled.Groups" Class="fc-quick-link-icon" />
+            <MudIcon Icon="@Icons.Material.Filled.Groups"
+                     Class="fc-quick-link-icon fc-quick-icon--cyan" />
             <div>
                 <MudText Typo="Typo.subtitle1" Style="font-weight:600;">My Team</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
@@ -129,7 +180,8 @@ else if (!_loading)
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="fc-quick-link" Elevation="0"
                   @onclick='@(() => Nav.NavigateTo("/projections"))'>
-            <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="fc-quick-link-icon" />
+            <MudIcon Icon="@Icons.Material.Filled.Analytics"
+                     Class="fc-quick-link-icon fc-quick-icon--green" />
             <div>
                 <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Projections</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
@@ -143,7 +195,8 @@ else if (!_loading)
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="fc-quick-link" Elevation="0"
                   @onclick='@(() => Nav.NavigateTo("/optimizer"))'>
-            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="fc-quick-link-icon" />
+            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome"
+                     Class="fc-quick-link-icon fc-quick-icon--amber" />
             <div>
                 <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Lineup Optimizer</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
@@ -157,9 +210,10 @@ else if (!_loading)
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="fc-quick-link" Elevation="0"
                   @onclick='@(() => Nav.NavigateTo("/dynasty/rookie-draft"))'>
-            <MudIcon Icon="@Icons.Material.Filled.SportsFootball" Class="fc-quick-link-icon" />
+            <MudIcon Icon="@Icons.Material.Filled.SportsFootball"
+                     Class="fc-quick-link-icon fc-quick-icon--purple" />
             <div>
-                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Rookie Draft Board</MudText>
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Draft Board</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
                     Rankings · Targets · Value
                 </MudText>
@@ -169,7 +223,8 @@ else if (!_loading)
         </MudPaper>
     </MudItem>
 </MudGrid>
-@* ── LATEST FROM WRITERS' ROOM ───────────────────────────────── *@
+
+@* ── LATEST FROM WRITERS' ROOM ───────────────────────────── *@
 @if (_latestArticles.Count > 0)
 {
     <MudText Typo="Typo.overline" Class="fc-section-label mb-3 mt-6 d-block">
@@ -180,15 +235,15 @@ else if (!_loading)
         {
             <MudItem xs="12" sm="6" lg="3">
                 <MudPaper Class="pa-4 fc-quick-link" Elevation="0"
-                          style="cursor:pointer; height:100%; display:flex; flex-direction:column; justify-content:space-between;"
+                          style="cursor:pointer;height:100%;display:flex;flex-direction:column;justify-content:space-between;"
                           @onclick="@(() => Nav.NavigateTo($"/writers-room/article/{article.Id}"))">
                     <div>
                         <MudChip T="string" Size="Size.Small" Color="Color.Primary"
                                  Variant="Variant.Filled" Class="mb-2">
                             @article.PersonaName
                         </MudChip>
-                        <MudText Typo="Typo.subtitle2" Style="font-weight:700; line-height:1.3;"
-                                 Class="mb-1">
+                        <MudText Typo="Typo.subtitle2"
+                                 Style="font-weight:700;line-height:1.3;" Class="mb-1">
                             @article.Title
                         </MudText>
                     </div>
@@ -206,15 +261,15 @@ else if (!_loading)
         </MudLink>
     </div>
 }
+
 @code {
     private bool _loading = true;
     private int _season;
     private int _week;
 
-    // League cards
     private List<LeagueCardVm> _leagueCards = [];
+    private List<ArticleSummary> _latestArticles = [];
 
-    // League pulse
     private int _playerCount;
     private string _topBoomPlayer = "—";
     private string _topCeilingPlayer = "—";
@@ -224,26 +279,20 @@ else if (!_loading)
     {
         var http = HttpClientFactory.CreateClient("AuthAPI");
 
-        // ── 1. NFL context ───────────────────────────────────────────
+        // ── 1. NFL context ─────────────────────────────────────────────
         try
         {
-            var ctx = await http.GetFromJsonAsync<NflContextResponse>("api/v1/admin/nfl-context/public");
-            if (ctx is not null)
-            {
-                _season = ctx.ActiveSeason;
-                _week = ctx.ActiveWeek;
-            }
+            var ctx = await http.GetFromJsonAsync<NflContextResponse>(
+                "api/v1/admin/nfl-context/public");
+            if (ctx is not null) { _season = ctx.ActiveSeason; _week = ctx.ActiveWeek; }
         }
         catch
         {
-            _season = DateTime.UtcNow.Month >= 3
-                ? DateTime.UtcNow.Year
-                : DateTime.UtcNow.Year - 1;
+            _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
             _week = 18;
         }
 
-        // ── 2. User leagues (already loaded in LeagueState via MainLayout) ──
-        // Re-fetch context to get the league list with names
+        // ── 2. User leagues ────────────────────────────────────────────
         List<LeagueItem> leagues = [];
         try
         {
@@ -253,15 +302,23 @@ else if (!_loading)
         }
         catch { }
 
-        // ── 3. Roster snapshot per league — parallel calls ───────────
+        // ── 3. Per-league: roster + standings in parallel ──────────────
         if (leagues.Count > 0)
         {
-            var rosterTasks = leagues.Select(async league =>
+            var cardTasks = leagues.Select(async league =>
             {
                 try
                 {
-                    var roster = await http.GetFromJsonAsync<MyRosterDto>(
+                    // Fire roster and standings simultaneously
+                    var rosterTask = http.GetFromJsonAsync<MyRosterDto>(
                         $"api/v1/team/roster?sleeperLeagueId={league.LeagueId}");
+                    var standingsTask = http.GetFromJsonAsync<LeagueStandingsDto>(
+                        $"api/v1/leagues/{league.LeagueId}/standings?season={_season}&week={_week}");
+
+                    await Task.WhenAll(rosterTask, standingsTask);
+
+                    var roster   = rosterTask.Result;
+                    var standings = standingsTask.Result;
 
                     if (roster is null) return null;
 
@@ -269,57 +326,74 @@ else if (!_loading)
                         .Where(p => p.IsStarter && p.MedianProjectedPoints.HasValue)
                         .MaxBy(p => p.MedianProjectedPoints);
 
+                    // Find our team in standings by roster match
+                    int standingsPlace = 0;
+                    int totalTeams = 0;
+                    string playoffProjection = string.Empty;
+
+                    if (standings?.Teams is { Count: > 0 })
+                    {
+                        totalTeams = standings.Teams.Count;
+                        // Match by TeamName as the common key
+                        var myTeam = standings.Teams
+                            .FirstOrDefault(t => t.TeamName == roster.TeamName);
+                        if (myTeam is not null)
+                        {
+                            standingsPlace    = myTeam.Rank;
+                            playoffProjection = myTeam.PlayoffProjection ?? string.Empty;
+                        }
+                    }
+
                     return new LeagueCardVm(
-                        SleeperLeagueId: league.LeagueId,
-                        LeagueName: league.LeagueName,
-                        TeamName: roster.TeamName,
-                        Wins: roster.Wins,
-                        Losses: roster.Losses,
-                        WaiverPosition: roster.WaiverPosition,
-                        InjuryCount: roster.Players.Count(
-                            p => p.InjuryDesignation != null && !p.IsOnIr),
-                        IrCount: roster.Players.Count(p => p.IsOnIr),
-                        TopStarterName: topStarter?.PlayerName,
-                        TopStarterPoints: topStarter?.MedianProjectedPoints.HasValue == true
-                            ? (double?)topStarter.MedianProjectedPoints!.Value
-                            : null
+                        SleeperLeagueId:   league.LeagueId,
+                        LeagueName:        league.LeagueName,
+                        TeamName:          roster.TeamName,
+                        AvatarId:          league.Avatar,
+                        Wins:              roster.Wins,
+                        Losses:            roster.Losses,
+                        WaiverPosition:    roster.WaiverPosition,
+                        InjuryCount:       roster.Players.Count(
+                                               p => p.InjuryDesignation != null && !p.IsOnIr),
+                        IrCount:           roster.Players.Count(p => p.IsOnIr),
+                        TopStarterName:    topStarter?.PlayerName,
+                        TopStarterPoints:  topStarter?.MedianProjectedPoints.HasValue == true
+                                               ? (double?)topStarter.MedianProjectedPoints!.Value
+                                               : null,
+                        StandingsPlace:    standingsPlace,
+                        TotalTeams:        totalTeams,
+                        PlayoffProjection: playoffProjection
                     );
                 }
-                catch
-                {
-                    return null;
-                }
+                catch { return null; }
             });
 
-            var results = await Task.WhenAll(rosterTasks);
+            var results = await Task.WhenAll(cardTasks);
             _leagueCards = results.Where(r => r is not null).Cast<LeagueCardVm>().ToList();
         }
 
-        // ── 4. League-wide sim stats ─────────────────────────────────
+        // ── 4. Platform sim stats ──────────────────────────────────────
         try
         {
             var sims = await http.GetFromJsonAsync<List<SimSummary>>(
                 $"api/v1/projections/simulations?season={_season}&week={_week}");
-
             if (sims is { Count: > 0 })
             {
-                _playerCount = sims.Count;
-                _topBoomPlayer = sims.MaxBy(s => s.BoomProbability)?.PlayerName ?? "—";
+                _playerCount      = sims.Count;
+                _topBoomPlayer    = sims.MaxBy(s => s.BoomProbability)?.PlayerName ?? "—";
                 _topCeilingPlayer = sims.MaxBy(s => s.Ceiling)?.PlayerName ?? "—";
             }
         }
         catch { }
 
-        // ── 5. Injury count ──────────────────────────────────────────
+        // ── 5. Injury count ────────────────────────────────────────────
         try
         {
-            var injuries = await http.GetFromJsonAsync<List<InjurySummary>>(
-                "api/v1/injuries/alerts");
+            var injuries = await http.GetFromJsonAsync<List<InjurySummary>>("api/v1/injuries/alerts");
             _leagueInjuryCount = injuries?.Count ?? 0;
         }
         catch { }
 
-        // ── Latest articles ────────────────────────────────────────────
+        // ── 6. Latest articles ─────────────────────────────────────────
         try
         {
             var articles = await http.GetFromJsonAsync<List<ArticleSummary>>(
@@ -342,26 +416,46 @@ else if (!_loading)
         Nav.NavigateTo("/my-league");
     }
 
-    // ── View models ──────────────────────────────────────────────────
-    private record LeagueCardVm(
-        string SleeperLeagueId,
-        string LeagueName,
-        string TeamName,
-        int Wins,
-        int Losses,
-        int WaiverPosition,
-        int InjuryCount,
-        int IrCount,
-        string? TopStarterName,
-        double? TopStarterPoints);
+    private static string Ordinal(int n) => (n % 100) switch
+    {
+        11 or 12 or 13 => $"{n}th",
+        _ => (n % 10) switch
+        {
+            1 => $"{n}st",
+            2 => $"{n}nd",
+            3 => $"{n}rd",
+            _ => $"{n}th"
+        }
+    };
 
-    // ── DTOs ─────────────────────────────────────────────────────────
+    private static string PlayoffChipClass(string projection) => projection switch
+    {
+        "In" or "Clinched" => "fc-chip-playoff-in",
+        "Bubble"            => "fc-chip-playoff-bubble",
+        _                   => "fc-chip-playoff-out"
+    };
+
+    // ── View models ─────────────────────────────────────────────────────
+    private record LeagueCardVm(
+        string  SleeperLeagueId,
+        string  LeagueName,
+        string  TeamName,
+        string? AvatarId,
+        int     Wins,
+        int     Losses,
+        int     WaiverPosition,
+        int     InjuryCount,
+        int     IrCount,
+        string? TopStarterName,
+        double? TopStarterPoints,
+        int     StandingsPlace,
+        int     TotalTeams,
+        string  PlayoffProjection);
+
+    // ── DTOs ─────────────────────────────────────────────────────────────
     private record NflContextResponse(
-        int CalendarSeason,
-        int CalendarWeek,
-        int ActiveSeason,
-        int ActiveWeek,
-        bool IsOverrideActive);
+        int CalendarSeason, int CalendarWeek,
+        int ActiveSeason, int ActiveWeek, bool IsOverrideActive);
 
     private record UserContextResponse(
         bool IsSleeperLinked,
@@ -372,40 +466,36 @@ else if (!_loading)
         string LeagueId,
         string LeagueName,
         int Season,
-        string Role);
+        string Role,
+        string? Avatar = null);
 
     private record MyRosterDto(
-        string TeamName,
-        string OwnerName,
-        string LeagueId,
-        int Wins,
-        int Losses,
-        int WaiverPosition,
+        string TeamName, string OwnerName, string LeagueId,
+        int Wins, int Losses, int WaiverPosition,
         List<MyRosterPlayerDto> Players);
 
     private record MyRosterPlayerDto(
-        string SleeperPlayerId,
-        string PlayerName,
-        string Position,
-        string NflTeam,
-        int? Age,
-        string? InjuryDesignation,
-        bool IsStarter,
-        bool IsOnIr,
-        double? MedianProjectedPoints,
-        string? ByeWeek);
+        string SleeperPlayerId, string PlayerName,
+        string Position, string NflTeam, int? Age,
+        string? InjuryDesignation, bool IsStarter, bool IsOnIr,
+        double? MedianProjectedPoints, string? ByeWeek);
+
+    private record LeagueStandingsDto(
+        string SleeperLeagueId, int Season, int Week,
+        List<TeamStandingDto> Teams);
+
+    private record TeamStandingDto(
+        string SleeperRosterId, string TeamName, string OwnerName,
+        int Wins, int Losses, int Ties, int WaiverPosition,
+        int Rank, decimal ProjectedPointsThisWeek,
+        decimal PointsFor, decimal PointsAgainst,
+        string? PlayoffProjection);
 
     private record SimSummary(
-        string PlayerName,
-        string Position,
-        decimal Ceiling,
-        decimal BoomProbability);
+        string PlayerName, string Position,
+        decimal Ceiling, decimal BoomProbability);
 
-    private record InjurySummary(
-        string PlayerId,
-        string Designation);
-
-    private List<ArticleSummary> _latestArticles = [];
+    private record InjurySummary(string PlayerId, string Designation);
 
     private record ArticleSummary(
         string Id, string PersonaName, string Title,
