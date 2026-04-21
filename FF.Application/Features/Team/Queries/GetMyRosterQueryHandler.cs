@@ -69,18 +69,19 @@ IsOnTaxi: taxiSet.Contains(sleeperPlayerId),
             .ThenBy(p => p.PlayerName)
             .ToList();
 
-        return new MyRosterDto(
-                    TeamName: rosterDoc.TeamName,
-                    OwnerName: rosterDoc.OwnerName,
-                    LeagueId: request.SleeperLeagueId,
-                    Wins: rosterDoc.Wins,
-                    Losses: rosterDoc.Losses,
-                    WaiverPosition: rosterDoc.WaiverPosition,
-                    Players: rosterPlayers);
+            return new MyRosterDto(
+                TeamName: rosterDoc.TeamName,
+                OwnerName: rosterDoc.OwnerName,
+                OwnerAvatar: rosterDoc.OwnerAvatar,    // ← NEW
+                LeagueId: request.SleeperLeagueId,
+                Wins: rosterDoc.Wins,
+                Losses: rosterDoc.Losses,
+                WaiverPosition: rosterDoc.WaiverPosition,
+                Players: rosterPlayers);
     }
 
     private static MyRosterDto BuildEmptyRoster(RosterPlayerDocument doc) =>
-        new(doc.TeamName, doc.OwnerName, doc.SleeperLeagueId, 0, 0, 0, []);
+        new(doc.TeamName, doc.OwnerName, doc.OwnerAvatar, doc.SleeperLeagueId, 0, 0, 0, []);
 
     private static int PositionOrder(string position) => position switch
     {

@@ -23,6 +23,36 @@
         }
     </MudText>
 </div>
+@if (!string.IsNullOrEmpty(_teamName))
+{
+    <div class="d-flex align-center gap-3 mb-4">
+        <div class="fc-league-avatar" style="width:48px;height:48px;border-radius:10px;">
+            @if (!string.IsNullOrEmpty(_ownerAvatar))
+            {
+                <img src="@(OwnerAvatarUrl(_ownerAvatar))"
+                     class="fc-league-avatar-img"
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+                <div class="fc-league-avatar-fallback" style="display:none">
+                    @(_teamName.Substring(0, Math.Min(2, _teamName.Length)).ToUpper())
+                </div>
+            }
+            else
+            {
+                <div class="fc-league-avatar-fallback">
+                    @(_teamName.Substring(0, Math.Min(2, _teamName.Length)).ToUpper())
+                </div>
+            }
+        </div>
+        <div>
+            <MudText Typo="Typo.subtitle1" Style="font-weight:700;color:var(--fc-text);">
+                @_teamName
+            </MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                @_ownerName
+            </MudText>
+        </div>
+    </div>
+}
 @* ── TABS ───────────────────────────────────────────── *@
 <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true"
          Class="fc-tabs mt-2"
@@ -643,6 +673,10 @@ else if (_roster is null)
 
     private HttpClient Http => HttpClientFactory.CreateClient("AuthAPI");
 
+    private string? _teamName;
+    private string? _ownerAvatar;
+    private string? _ownerName;   // ← add this
+
     // ── TEAM-002: Lineup Optimizer ─────────────────────────
     private bool _optimizing;
     private string? _optimizerError;
@@ -671,7 +705,10 @@ else if (_roster is null)
     private DraftPrepDto? _draftPrep;
     private string _draftPrepPosition = string.Empty;
 
-
+    private static string OwnerAvatarUrl(string? avatar) =>
+        string.IsNullOrEmpty(avatar) ? string.Empty :
+        avatar.StartsWith("http") ? avatar :
+        $"https://sleepercdn.com/avatars/thumbs/{avatar}";
 
     private async Task OptimizeMyLineupAsync()
     {
@@ -773,6 +810,10 @@ else if (_roster is null)
                 _roster = await response.Content.ReadFromJsonAsync<MyRosterDto>();
             else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
                 _noSleeper = true;
+
+            _teamName    = _roster?.TeamName;
+            _ownerAvatar = _roster?.OwnerAvatar;
+            _ownerName   = _roster?.OwnerName;
         }
         catch (Exception ex)
         {
@@ -839,6 +880,7 @@ else if (_roster is null)
     private record MyRosterDto(
         string TeamName,
         string OwnerName,
+        string? OwnerAvatar,    // ← add
         string LeagueId,
         int Wins,
         int Losses,

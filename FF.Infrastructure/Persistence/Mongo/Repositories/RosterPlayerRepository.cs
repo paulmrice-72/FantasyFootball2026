@@ -33,6 +33,8 @@ public class RosterPlayerRepository(
                 .Set(x => x.OwnerName, document.OwnerName)
                 .Set(x => x.TeamName, document.TeamName)
                 .Set(x => x.SleeperUserId, document.SleeperUserId)
+                .Set(x => x.SleeperUserId, document.SleeperUserId)
+                .Set(x => x.OwnerAvatar, document.OwnerAvatar)   // ← ADD
                 .Set(x => x.PlayerIds, document.PlayerIds)
                 .Set(x => x.StarterIds, document.StarterIds)
                 .Set(x => x.IrIds, document.IrIds)       // ← add
