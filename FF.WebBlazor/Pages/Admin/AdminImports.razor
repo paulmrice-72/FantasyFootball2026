@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
 @using Microsoft.AspNetCore.Components.Forms
+@inject NflContextClientService NflContext
 
 <PageTitle>Imports & Triggers — Admin — FantasyCombine.AI</PageTitle>
 
@@ -37,19 +38,6 @@
         <MudIcon Icon="@Icons.Material.Filled.Memory" Class="mr-2" Style="vertical-align:middle;" />
         Simulation Pipeline
     </MudText>
-    <MudItem xs="12" sm="6" md="4">
-        <MudButton FullWidth="true"
-                   Variant="Variant.Filled" Color="Color.Warning"
-                   StartIcon="@Icons.Material.Filled.BarChart"
-                   OnClick="RunStatsSync"
-                   Disabled="_statsBusy">
-            Stats Sync
-        </MudButton>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
-            Current season only
-        </MudText>
-        <MudText Typo="Typo.caption" Style="@StatsStatusStyle">@_statsStatus</MudText>
-    </MudItem>
     <MudGrid Spacing="3">
         <MudItem xs="12" sm="6" md="4">
             <MudButton FullWidth="true"
@@ -236,6 +224,39 @@
         <MudText Typo="Typo.caption" Style="@ArticlesStatusStyle">@_articlesStatus</MudText>
     </MudItem>
 </MudPaper>
+@* ── WAR ROOM BRIEFS — add after Writers' Room section, before Post-Draft Trigger Buttons ── *@
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.MilitaryTech" Class="mr-2" Style="vertical-align:middle;" />
+        War Room Briefs
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Generate War Room Briefs for all users with active league memberships.
+        Uses the season and week set above. Mirrors what the Sunday 3am job does.
+    </MudText>
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="6" md="4">
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.MilitaryTech"
+                       OnClick="RunGenerateBriefs" Disabled="_briefsBusy">
+                @if (_briefsBusy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    @("Generating — this takes ~30s...")
+                }
+                else
+                {
+                    @("Generate All Briefs")
+                }
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+    @if (!string.IsNullOrEmpty(_briefsStatus))
+    {
+        <MudAlert Severity="_briefsSeverity" Dense="true" Class="mt-3">@_briefsStatus</MudAlert>
+    }
+</MudPaper>
 @* ── Post-Draft Trigger Buttons ───────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -297,12 +318,18 @@
 @code {
     [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
 
-    private int _season = DateTime.UtcNow.Year;
+    private int _season;
+    private int _week;
     private bool _articlesBusy;
     private string _articlesStatus = string.Empty;
     private bool _articlesOk;
     private string ArticlesStatusStyle => string.IsNullOrEmpty(_articlesStatus) ? "display:none"
         : _articlesOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_season, _week) = await NflContext.GetContextAsync();
+    }
 
     private async Task RunArticleGeneration()
     {
@@ -341,6 +368,45 @@
         _snapOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
     private string ProjStatusStyle => string.IsNullOrEmpty(_projStatus) ? "display:none" :
         _projOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+
+    // ── War Room Briefs ────────────────────────────────────────────────────
+    private bool _briefsBusy;
+    private string _briefsStatus = string.Empty;
+    private Severity _briefsSeverity = Severity.Info;
+
+    private async Task RunGenerateBriefs()
+    {
+        _briefsBusy = true;
+        _briefsStatus = string.Empty;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsync(
+                $"api/v1/brief/generate-all?season={_season}&week={_week}", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<BriefGenerateResultDto>();
+                _briefsStatus = $"✓ {body?.Generated ?? 0} briefs generated" +
+                    (body?.Failed > 0 ? $", {body.Failed} failed." : ".");
+                _briefsSeverity = (body?.Failed ?? 0) > 0 ? Severity.Warning : Severity.Success;
+            }
+            else
+            {
+                _briefsStatus = $"Failed — {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                _briefsSeverity = Severity.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _briefsStatus = ex.Message;
+            _briefsSeverity = Severity.Error;
+        }
+        finally
+        {
+            _briefsBusy = false;
+        }
+    }
+
 
     // ── FantasyPros ──────────────────────────────────────────────────────────
     private IBrowserFile? _fpFile;
@@ -592,4 +658,6 @@
     // ── Response DTOs ────────────────────────────────────────────────────────
     private record ImportResultDto(int RowsImported);
     private record JobResultDto(string Message, int Count);
+
+    private record BriefGenerateResultDto(int Generated, int Failed, List<string> Errors);
 }

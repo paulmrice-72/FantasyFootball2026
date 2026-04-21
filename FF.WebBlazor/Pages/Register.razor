@@ -89,7 +89,7 @@
         }
 
         var authProvider = (CustomAuthStateProvider)AuthStateProvider;
-        authProvider.MarkUserAsAuthenticated(
+        await authProvider.MarkUserAsAuthenticatedAsync(
             result.AuthResponse.AccessToken,
             result.AuthResponse.RefreshToken,
             result.AuthResponse.AccessTokenExpiry);

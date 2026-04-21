@@ -65,6 +65,7 @@ public class SleeperPlayerDto
     [JsonPropertyName("college")]
     public string? College { get; set; }
 
+
 }
 
 // ── User ─────────────────────────────────────────────────────────────────────
@@ -127,6 +128,9 @@ public class SleeperLeagueDto
 
     [JsonPropertyName("previous_league_id")]
     public string? PreviousLeagueId { get; set; }  // useful for dynasty leagues
+
+    [JsonPropertyName("avatar")]
+    public string? Avatar { get; set; }
 
     //[JsonPropertyName("league_type")]
     //public int LeagueType { get; set; }  // 0=Redraft, 1=Keeper, 2=Dynasty
@@ -246,6 +250,9 @@ public class SleeperLeagueUserMetadataDto
 {
     [JsonPropertyName("team_name")]
     public string? TeamName { get; set; }
+
+    [JsonPropertyName("avatar")]
+    public string? Avatar { get; set; }    // ← ADD
 }
 
 // ── Transaction ───────────────────────────────────────────────────────────────

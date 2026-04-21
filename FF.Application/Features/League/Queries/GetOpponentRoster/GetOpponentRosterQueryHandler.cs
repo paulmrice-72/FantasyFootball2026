@@ -21,8 +21,7 @@ public class GetOpponentRosterQueryHandler(
 
         var playerIds = rosterDoc.PlayerIds;
         if (playerIds.Count == 0)
-            return new MyRosterDto(rosterDoc.TeamName, rosterDoc.OwnerName,
-                request.SleeperLeagueId, 0, 0, 0, []);
+            return new MyRosterDto(rosterDoc.TeamName, rosterDoc.OwnerName, null, request.SleeperLeagueId, 0, 0, 0, []);
 
         var players = await playerRepository.GetBySleeperIdsAsync(playerIds, cancellationToken);
         var simDocs = await simulationRepository.GetLatestBySleeperIdsAsync(
@@ -67,6 +66,7 @@ public class GetOpponentRosterQueryHandler(
         return new MyRosterDto(
             TeamName: rosterDoc.TeamName,
             OwnerName: rosterDoc.OwnerName,
+            OwnerAvatar: null,
             LeagueId: request.SleeperLeagueId,
             Wins: rosterDoc.Wins,
             Losses: rosterDoc.Losses,

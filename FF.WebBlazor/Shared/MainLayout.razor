@@ -294,14 +294,17 @@
         LeagueState.OnLeagueChanged -= HandleLeagueStateChanged;
     }
 
-    private async Task HandleLogout()
+private async Task HandleLogout()
+{
+    var tokenStore = ((CustomAuthStateProvider)AuthStateProvider).GetTokenStore();
+    if (await tokenStore.HasRefreshTokenAsync())
     {
-        var tokenStore = ((CustomAuthStateProvider)AuthStateProvider).GetTokenStore();
-        if (tokenStore.HasRefreshToken)
-            await AuthService.RevokeAsync(tokenStore.RefreshToken!);
-        ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsLoggedOut();
-        Navigation.NavigateTo("/login");
+        var refreshToken = await tokenStore.GetRefreshTokenAsync();
+        await AuthService.RevokeAsync(refreshToken!);
     }
+    await ((CustomAuthStateProvider)AuthStateProvider).MarkUserAsLoggedOutAsync();
+    Navigation.NavigateTo("/login");
+}
 
     // ── League selector ───────────────────────────────────────────────
     private List<LeagueItem> _leagues = [];
@@ -338,7 +341,8 @@
         int Season,
         string Role,
         bool IsActive = false,
-        string LeagueType = "Redraft");
+        string LeagueType = "Redraft",
+        string? Avatar = null);        // ← ADD
 
         private record UnreadCountResponse(int Count);
 }

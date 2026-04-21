@@ -61,17 +61,16 @@ public class SleeperLeagueImportService(
                 sleeperLeagueId: sleeperLeagueId,
                 season: season,
                 totalTeams: sleeperLeague.TotalRosters,
-                leagueType: MapLeagueType(sleeperLeague.Settings?.Type ?? 0)) ;  // ← add
-
+                leagueType: MapLeagueType(sleeperLeague.Settings?.Type ?? 0));
             _dbContext.Leagues.Add(league);
             isNewLeague = true;
-            _logger.LogInformation("Creating new league: {LeagueName}", league.Name);
         }
         else
         {
             league.UpdateLeagueType(MapLeagueType(sleeperLeague.Settings?.Type ?? 0));
-            _logger.LogInformation("Updating existing league: {LeagueName}", league.Name);
         }
+        // Sync avatar on every import/sync — idempotent, only marks dirty if changed
+        league.UpdateAvatar(sleeperLeague.Avatar);
 
         // Sync scoring settings from Sleeper on every import/sync
         if (sleeperLeague.ScoringSettings is not null)
@@ -153,9 +152,10 @@ public class SleeperLeagueImportService(
                 sleeperLeague.Settings?.DraftRounds ?? 3,
                 sleeperLeague.Settings?.TradePickLimit ?? 0);
 
-            // Sync roster slot configuration from Sleeper
             if (sleeperLeague.RosterPositions is { Count: > 0 })
                 league.UpdateRosterPositions(sleeperLeague.RosterPositions);
+
+            league.UpdateAvatar(sleeperLeague.Avatar);
 
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
@@ -247,6 +247,7 @@ public class SleeperLeagueImportService(
             var ownerName = "Unknown Owner";
             var teamName = $"Team {sleeperRoster.RosterId}";
             string? sleeperUserId = null;
+            string? ownerAvatar = null;      // ← ADD
 
             if (sleeperRoster.OwnerId is not null &&
                 userLookup.TryGetValue(sleeperRoster.OwnerId, out var owner))
@@ -254,6 +255,7 @@ public class SleeperLeagueImportService(
                 ownerName = owner.DisplayName ?? ownerName;
                 teamName = owner.Metadata?.TeamName ?? ownerName;
                 sleeperUserId = sleeperRoster.OwnerId;
+                ownerAvatar = owner.Metadata?.Avatar ?? owner.Avatar;  // ← prefer team avatar
             }
 
             return new RosterPlayerDocument
@@ -272,7 +274,9 @@ public class SleeperLeagueImportService(
                 Losses = sleeperRoster.Settings?.Losses ?? 0,
                 Ties = sleeperRoster.Settings?.Ties ?? 0,
                 WaiverPosition = sleeperRoster.Settings?.WaiverPosition ?? 0,
-                SyncedAt = DateTime.UtcNow
+                SyncedAt = DateTime.UtcNow, 
+                OwnerAvatar = ownerAvatar
+
             };
         }).ToList();
 

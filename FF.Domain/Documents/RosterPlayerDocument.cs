@@ -31,6 +31,6 @@ public class RosterPlayerDocument
     public int Ties { get; set; }
     public int WaiverPosition { get; set; }
     public DateTime SyncedAt { get; set; } = DateTime.UtcNow;
-
+    public string? OwnerAvatar { get; set; }
 
 }

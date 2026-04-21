@@ -1,4 +1,5 @@
-﻿using FF.Application.Identity.Interfaces;
+﻿// FF.Infrastructure/Persistence/SQL/Repositories/LeagueMembershipRepository.cs
+using FF.Application.Identity.Interfaces;
 using FF.Domain.Entities;
 using FF.Domain.ValueObjects;
 using FF.Infrastructure.Persistence.SQL;
@@ -24,7 +25,8 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
                     m.Season,
                     m.Role,
                     m.IsActive,
-                    l.LeagueType))   // ← was m.LeagueType, now l.LeagueType
+                    l.LeagueType,
+                    l.Avatar))          // ← NEW
             .ToListAsync(cancellationToken);
     }
 
@@ -35,16 +37,17 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
         string leagueName,
         int season,
         string role,
-        string leagueType,                  // ← add
+        string leagueType,
         CancellationToken cancellationToken = default)
     {
         var existing = await dbContext.LeagueMemberships
-            .FirstOrDefaultAsync(m => m.UserId == userId
-                && m.LeagueId == leagueId
-                && m.Season == season, cancellationToken);
+            .FirstOrDefaultAsync(m =>
+                m.UserId == userId &&
+                m.LeagueId == leagueId &&
+                m.Season == season,
+                cancellationToken);
 
-        if (existing is not null)
-            return;
+        if (existing is not null) return;
 
         dbContext.LeagueMemberships.Add(new LeagueMembership
         {
@@ -54,7 +57,7 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
             LeagueName = leagueName,
             Season = season,
             Role = role,
-            LeagueType = leagueType,        // ← add
+            LeagueType = leagueType,
             IsActive = true,
             LinkedAt = DateTime.UtcNow
         });
@@ -72,12 +75,13 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
         CancellationToken cancellationToken = default)
     {
         var existing = await dbContext.LeagueMemberships
-            .FirstOrDefaultAsync(m => m.UserId == userId
-                && m.LeagueId == leagueId
-                && m.Season == season, cancellationToken);
+            .FirstOrDefaultAsync(m =>
+                m.UserId == userId &&
+                m.LeagueId == leagueId &&
+                m.Season == season,
+                cancellationToken);
 
-        if (existing is not null)
-            return;
+        if (existing is not null) return;
 
         dbContext.LeagueMemberships.Add(new LeagueMembership
         {
@@ -94,7 +98,9 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<LeagueMembership>> GetMembershipsForUserAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<LeagueMembership>> GetMembershipsForUserAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
     {
         return await dbContext.LeagueMemberships
             .Where(m => m.UserId == userId && m.IsActive)

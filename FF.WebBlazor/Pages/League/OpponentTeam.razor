@@ -192,30 +192,28 @@ else
                 <MudIcon Icon="@Icons.Material.Filled.People" Class="mr-1" Style="vertical-align:middle;" />
                 Roster
             </MudText>
-            <MudTable Items="_roster.Players" Dense="true" Hover="true"
-                      GroupBy="_groupDefinition" Class="fc-table">
+            <MudTable Items="_roster.Players" Dense="true" Hover="true" GroupBy="_groupDefinition" Class="fc-table fc-roster-table      ">
                 <ColGroup>
-                    <col style="width:30%" />
-                    <col style="width:10%" />
-                    <col style="width:10%" />
-                    <col style="width:15%" />
-                    <col style="width:15%" />
-                    <col style="width:20%" />
+                    <col style="width:35%" />  @* Player *@
+                    <col style="width:10%" />  @* Team *@
+                    <col style="width:8%"  />  @* Age *@
+                    <col style="width:12%" />  @* Status *@
+                    <col style="width:12%" />  @* Proj Pts *@
+                    <col style="width:8%"  />  @* Bye *@
+                    <col style="width:15%" />  @* Role *@
                 </ColGroup>
                 <HeaderContent>
                     <MudTh>Player</MudTh>
                     <MudTh>Team</MudTh>
                     <MudTh>Age</MudTh>
-                    <MudTh>Role</MudTh>
+                    <MudTh>Status</MudTh>
                     <MudTh>Proj Pts</MudTh>
-                    <MudTh>Injury</MudTh>
+                    <MudTh>Bye</MudTh>
+                    <MudTh>Role</MudTh>
                 </HeaderContent>
                 <GroupHeaderTemplate>
                     <MudTh colspan="6" Class="fc-group-header">
                         <strong>@context.Key</strong>
-                        <MudChip T="string" Size="Size.Small" Class="ml-2">
-                            @context.Items.Count()
-                        </MudChip>
                     </MudTh>
                 </GroupHeaderTemplate>
                 <RowTemplate>
@@ -368,8 +366,13 @@ else
         int Wins, int Losses, int PlayerCount);
 
     private record MyRosterDto(
-        string TeamName, string OwnerName, string LeagueId,
-        int Wins, int Losses, int WaiverPosition,
+        string TeamName,
+        string OwnerName,
+        string? OwnerAvatar,    // ← ADD
+        string LeagueId,
+        int Wins,
+        int Losses,
+        int WaiverPosition,
         List<MyRosterPlayerDto> Players);
 
     private record MyRosterPlayerDto(

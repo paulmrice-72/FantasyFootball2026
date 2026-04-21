@@ -8,6 +8,7 @@ public record GetMyRosterQuery(string SleeperUserId, string SleeperLeagueId)
 public record MyRosterDto(
     string TeamName,
     string OwnerName,
+    string? OwnerAvatar,    // ← NEW
     string LeagueId,
     int Wins,
     int Losses,
