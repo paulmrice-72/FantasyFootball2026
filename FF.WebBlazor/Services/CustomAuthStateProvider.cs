@@ -1,4 +1,5 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿// FF.WebBlazor/Services/CustomAuthStateProvider.cs
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
 
@@ -20,27 +21,27 @@ public class CustomAuthStateProvider : AuthenticationStateProvider, IDisposable
         StartRefreshTimer();
     }
 
-    public override Task<AuthenticationState> GetAuthenticationStateAsync()
+    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        if (!_tokenStore.HasValidAccessToken)
-            return Task.FromResult(Anonymous);
+        if (!await _tokenStore.HasValidAccessTokenAsync())
+            return Anonymous;
 
-        var claims = ParseClaimsFromJwt(_tokenStore.AccessToken!);
+        var token = await _tokenStore.GetAccessTokenAsync();
+        var claims = ParseClaimsFromJwt(token!);
         var identity = new ClaimsIdentity(claims, "jwt");
-        var user = new ClaimsPrincipal(identity);
-
-        return Task.FromResult(new AuthenticationState(user));
+        return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 
-    public void MarkUserAsAuthenticated(string accessToken, string refreshToken, DateTime expiry)
+    public async Task MarkUserAsAuthenticatedAsync(
+        string accessToken, string refreshToken, DateTime expiry)
     {
-        _tokenStore.SetTokens(accessToken, refreshToken, expiry);
+        await _tokenStore.SetTokensAsync(accessToken, refreshToken, expiry);
         NotifyAuthStateChanged();
     }
 
-    public void MarkUserAsLoggedOut()
+    public async Task MarkUserAsLoggedOutAsync()
     {
-        _tokenStore.Clear();
+        await _tokenStore.ClearAsync();
         NotifyAuthStateChanged();
     }
 
@@ -53,7 +54,8 @@ public class CustomAuthStateProvider : AuthenticationStateProvider, IDisposable
 
     private void StartRefreshTimer()
     {
-        _refreshTimer = new Timer(async _ => await TryRefreshTokenAsync(),
+        _refreshTimer = new Timer(
+            async _ => await TryRefreshTokenAsync(),
             null,
             TimeSpan.FromMinutes(1),
             TimeSpan.FromMinutes(1));
@@ -61,19 +63,23 @@ public class CustomAuthStateProvider : AuthenticationStateProvider, IDisposable
 
     private async Task TryRefreshTokenAsync()
     {
-        if (!_tokenStore.HasRefreshToken) return;
+        if (!await _tokenStore.HasRefreshTokenAsync()) return;
 
-        var timeUntilExpiry = _tokenStore.AccessTokenExpiry - DateTime.UtcNow;
+        var expiry = await _tokenStore.GetAccessTokenExpiryAsync();
+        var timeUntilExpiry = expiry - DateTime.UtcNow;
         if (timeUntilExpiry > TimeSpan.FromMinutes(2)) return;
 
-        var result = await _authService.RefreshAsync(_tokenStore.RefreshToken!);
+        var refreshToken = await _tokenStore.GetRefreshTokenAsync();
+        var result = await _authService.RefreshAsync(refreshToken!);
+
         if (result is null)
         {
-            MarkUserAsLoggedOut();
+            await MarkUserAsLoggedOutAsync();
             return;
         }
 
-        _tokenStore.SetTokens(result.AccessToken, result.RefreshToken, result.AccessTokenExpiry);
+        await _tokenStore.SetTokensAsync(
+            result.AccessToken, result.RefreshToken, result.AccessTokenExpiry);
         NotifyAuthStateChanged();
     }
 

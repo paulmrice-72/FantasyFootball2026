@@ -1,9 +1,8 @@
-﻿// FF.API/Controllers/BriefController.cs
+// FF.API/Controllers/BriefController.cs
 using FF.Application.Interfaces.Persistence;
-using FF.Application.Interfaces.Services;
 using FF.Application.Services;
-using FF.Domain.Documents;
-using FF.Infrastructure.Services;
+using FF.Infrastructure.Jobs;
+using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -15,8 +14,7 @@ namespace FF.API.Controllers;
 [Authorize]
 public class BriefController(
     IWarRoomBriefRepository briefRepository,
-    WarRoomBriefService briefService,
-    ICoachRileyService coachRileyService) : ControllerBase
+    WarRoomBriefService briefService) : ControllerBase
 {
     [HttpGet("latest")]
     public async Task<IActionResult> GetLatest(
@@ -27,54 +25,26 @@ public class BriefController(
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
         var brief = await briefRepository.GetLatestAsync(userId, season, ct);
-        if (brief is null) return NotFound("No brief found. Trigger generation first.");
+        if (brief is null)
+            return NotFound("No brief found for this season/week.");
 
         return Ok(brief);
     }
 
-    [HttpPost("generate")]
-    public async Task<IActionResult> Generate(
-        [FromQuery] int season,
-        [FromQuery] int week,
-        CancellationToken ct)
+    [HttpPost("generate-all")]
+    [Authorize(Roles = "Admin")]
+    public IActionResult GenerateAll(
+        [FromQuery] int? season,
+        [FromQuery] int? week)
     {
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var email = User.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
-        if (string.IsNullOrEmpty(userId)) return Unauthorized();
+        BackgroundJob.Enqueue<WarRoomBriefJob>(
+            job => job.RunAsync(CancellationToken.None));
 
-        var brief = await briefService.GenerateBriefAsync(
-            userId, email, season, week, ct);
-
-        return Ok(brief);
-    }
-
-    // DEV ONLY — delete before commit
-    [HttpPost("test-riley")]
-    public async Task<IActionResult> TestRiley(CancellationToken ct)
-    {
-        var brief = new WarRoomBriefDocument
+        return Accepted(new
         {
-            Season = 2025,
-            Week = 10,
-            TopBoomCandidates =
-            [
-                new() { PlayerName = "Justin Jefferson", Position = "WR",
-                    NflTeam = "MIN", OpponentTeam = "LAR",
-                    BoomProbability = 0.42m, HighlightReason = "Soft CB matchup, target hog" }
-            ],
-            BustRisks =
-            [
-                new() { PlayerName = "Davante Adams", Position = "WR",
-                    NflTeam = "NYJ", OpponentTeam = "KC",
-                    BustProbability = 0.38m, HighlightReason = "Shadow coverage from Sauce Gardner" }
-            ],
-            Leagues =
-            [
-                new() { LeagueName = "Bizarro League", TeamName = "Paul's Squad" }
-            ]
-        };
-
-        var narrative = await coachRileyService.GenerateNarrativeAsync(brief, ct);
-        return Ok(new { narrative });
+            Message = "Brief generation job queued — check Hangfire dashboard for progress.",
+            Season = season,
+            Week = week
+        });
     }
 }
