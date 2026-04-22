@@ -122,16 +122,16 @@ public class BreakoutDetectionServiceTests
     }
 
     [Fact]
-    public void ScorePlayer_NoAge_ReturnsUnknown()
+    public void ScorePlayer_NoAge_DefaultsToRookieAge_AndScoresNormally()
     {
         var player = Player.Create("No", "Age", Position.WR, sleeperPlayerId: "s1");
-        // Age not set — remains null
+        // Age not set — should default to 22 (rookie assumption)
 
         var sut = CreateSut();
         var result = sut.ScorePlayer(player, null, null);
 
-        result.Classification.Should().Be(BreakoutClassification.Unknown);
-        result.Score.Should().Be(0);
+        result.Score.Should().BeGreaterThan(0);
+        result.Classification.Should().NotBe(BreakoutClassification.Unknown);
     }
 
     // ── Score ordering ────────────────────────────────────────────────────

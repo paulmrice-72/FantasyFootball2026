@@ -52,13 +52,17 @@ public class DfvCalculationServiceTests
     }
 
     private static DynastyValuationDocument MakeValuation(
-        string sleeperPlayerId, string position, int age,
-        double breakoutScore = 50.0) =>
-        new()
+        string sleeperPlayerId,
+        string position,
+        int age,
+        double breakoutScore = 50.0,
+        string nflTeam = "SF")          // ← add with default
+        => new()
         {
             SleeperPlayerId = sleeperPlayerId,
             Position = position,
             Age = age,
+            NflTeam = nflTeam,          // ← add this
             BreakoutScore = breakoutScore,
             BreakoutClassification = BreakoutClassification.OnCurve
         };
