@@ -34,7 +34,7 @@ public class DefensiveRankingRepository(
             .Set(x => x.CalculatedAt, document.CalculatedAt);
 
         await _collection.UpdateOneAsync(filter, update,
-            new UpdateOptions { IsUpsert = true }, ct);
+            new UpdateOptions { IsUpsert = true }, CancellationToken.None);
     }
 
     public async Task UpsertBatchAsync(

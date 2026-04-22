@@ -36,6 +36,6 @@ public class AgingCurveRepository(MongoDbContext context) : IAgingCurveRepositor
             .SetOnInsert(x => x.Id, document.Id);
 
         await _collection.UpdateOneAsync(filter, update,
-            new UpdateOptions { IsUpsert = true }, ct);
+            new UpdateOptions { IsUpsert = true }, CancellationToken.None);
     }
 }

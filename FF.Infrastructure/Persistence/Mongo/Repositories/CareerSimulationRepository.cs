@@ -14,7 +14,8 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
     {
         var filter = Builders<CareerSimulationDocument>.Filter
             .Eq(x => x.SleeperPlayerId, sleeperPlayerId);
-        return await _collection.Find(filter).FirstOrDefaultAsync(ct);
+        return await _collection.Find(filter)
+            .FirstOrDefaultAsync(CancellationToken.None);
     }
 
     public async Task<List<CareerSimulationDocument>> GetByPositionAsync(
@@ -24,10 +25,11 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
             .Eq(x => x.Position, position);
         return await _collection.Find(filter)
             .SortByDescending(x => x.CareerValueScore)
-            .ToListAsync(ct);
+            .ToListAsync(CancellationToken.None);
     }
 
-    public async Task UpsertAsync(CareerSimulationDocument document, CancellationToken ct = default)
+    public async Task UpsertAsync(
+        CareerSimulationDocument document, CancellationToken ct = default)
     {
         var filter = Builders<CareerSimulationDocument>.Filter
             .Eq(x => x.SleeperPlayerId, document.SleeperPlayerId);
@@ -47,14 +49,16 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
             .Set(x => x.Iterations, document.Iterations)
             .SetOnInsert(x => x.Id, document.Id);
 
-        await _collection.UpdateOneAsync(filter, update,
-            new UpdateOptions { IsUpsert = true }, ct);
+        await _collection.UpdateOneAsync(
+            filter, update,
+            new UpdateOptions { IsUpsert = true },
+            CancellationToken.None);  // ← never use request CT for MongoDB writes
     }
 
     public async Task UpsertBatchAsync(
         IEnumerable<CareerSimulationDocument> documents, CancellationToken ct = default)
     {
         foreach (var document in documents)
-            await UpsertAsync(document, ct);
+            await UpsertAsync(document, CancellationToken.None);
     }
 }

@@ -183,7 +183,7 @@ public class PlayerGameLogRepository(MongoDbContext context, ILogger<PlayerGameL
                 filter,
                 update,
                 new UpdateOptions { IsUpsert = true },
-                cancellationToken);
+                CancellationToken.None);
 
             if (result.UpsertedId != null)
                 Interlocked.Increment(ref inserted);

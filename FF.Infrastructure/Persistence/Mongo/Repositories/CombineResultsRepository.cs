@@ -53,7 +53,7 @@ public class CombineResultRepository(MongoDbContext context) : ICombineResultRep
                 filter,
                 update,
                 new UpdateOptions { IsUpsert = true },
-                cancellationToken);
+                CancellationToken.None);
         }
     }
 }

@@ -45,7 +45,7 @@ public class EmergenceAlertRepository : IEmergenceAlertRepository
                 .SetOnInsert(x => x.IsAcknowledged, false);
 
             await _collection.UpdateOneAsync(
-                filter, update, new UpdateOptions { IsUpsert = true }, ct);
+                filter, update, new UpdateOptions { IsUpsert = true }, CancellationToken.None);
         }
     }
 

@@ -62,6 +62,7 @@ public class AdminController(
         return Ok(new
         {
             settings.RegistrationsEnabled,
+            settings.AiJobsEnabled,
             settings.UpdatedAt,
             settings.UpdatedBy
         });
@@ -72,13 +73,15 @@ public class AdminController(
     {
         var settings = await platformSettingsRepo.GetAsync();
         settings.RegistrationsEnabled = request.RegistrationsEnabled;
+        settings.AiJobsEnabled = request.AiJobsEnabled;
         settings.UpdatedAt = DateTime.UtcNow;
         settings.UpdatedBy = User.Identity?.Name ?? "admin";
         await platformSettingsRepo.SaveAsync(settings);
         return NoContent();
     }
 
-    public record SetPlatformSettingsRequest(bool RegistrationsEnabled);
+    public record SetPlatformSettingsRequest(bool RegistrationsEnabled, bool AiJobsEnabled);
+
 
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers(CancellationToken ct)

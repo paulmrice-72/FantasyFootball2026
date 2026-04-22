@@ -57,7 +57,7 @@ public class ArticleRepository(MongoDbContext context) : IArticleRepository
             .Set(x => x.ReviewStatus, status)
             .Set(x => x.ReviewedBy, reviewedBy)
             .Set(x => x.ReviewedAt, DateTime.UtcNow);
-        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: CancellationToken.None);
     }
 
     public async Task IncrementRatingAsync(
@@ -67,7 +67,7 @@ public class ArticleRepository(MongoDbContext context) : IArticleRepository
         var update = thumbsUp
             ? Builders<ArticleDocument>.Update.Inc(x => x.ThumbsUp, 1)
             : Builders<ArticleDocument>.Update.Inc(x => x.ThumbsDown, 1);
-        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: CancellationToken.None);
     }
 
     public async Task DeleteAsync(string id, CancellationToken ct = default)
@@ -84,7 +84,7 @@ public class ArticleRepository(MongoDbContext context) : IArticleRepository
             .Set(x => x.AdminNotes, notes)
             .Set(x => x.NewTopic, newTopic)
             .Set(x => x.ReviewStatus, ArticleReviewStatus.Draft);
-        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: CancellationToken.None);
     }
 
     public async Task<IReadOnlyList<ArticleDocument>> GetByPersonaAsync(

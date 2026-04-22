@@ -4,4 +4,7 @@ namespace FF.Application.Features.Admin.Commands.SetPlatformSettings;
 
 public record SetPlatformSettingsCommand(
     bool RegistrationsEnabled,
-    string UpdatedBy) : IRequest;
+    bool AiJobsEnabled,
+    DateTime UpdatedAt,
+    string UpdatedBy  
+) : IRequest;

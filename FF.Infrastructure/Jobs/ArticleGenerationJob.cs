@@ -26,13 +26,24 @@ public class ArticleGenerationJob(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
     ILogger<ArticleGenerationJob> logger,
-    INflContextService nflContextService)
+    INflContextService nflContextService,
+    IPlatformSettingsRepository platformSettingsRepo)
 {
     private const string ApiUrl = "https://api.anthropic.com/v1/messages";
 
     [AutomaticRetry(Attempts = 2)]
-    public async Task RunAsync(CancellationToken ct = default)
+    public async Task RunAsync(CancellationToken ct = default, bool forceRun = false)
     {
+        if (!forceRun)
+        {
+            var settings = await platformSettingsRepo.GetAsync();
+            if (!settings.AiJobsEnabled)
+            {
+                logger.LogInformation("ArticleGenerationJob skipped — AiJobsEnabled is false");
+                return;
+            }
+        }
+
         var (season, week) = await nflContextService.GetContextAsync();
 
         logger.LogInformation(

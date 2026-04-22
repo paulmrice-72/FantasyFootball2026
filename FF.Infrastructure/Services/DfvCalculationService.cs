@@ -48,34 +48,26 @@ public class DfvCalculationService(
         // Calculate raw DFV for each player
         var rawDfvMap = new Dictionary<string, double>();
 
-        foreach (var valuation in valuations)
+        // ── Rookie DFV floor — prevent top prospects from normalizing to bottom ──
+        // Career sims for unplayed rookies underestimate true dynasty value.
+        // Apply a floor based on breakout score so top prospects surface correctly.
+        foreach (var valuation in valuations.Where(v => v.YearsExperience == 0))
         {
-            if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
+            if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var raw)) continue;
 
-            // FA QBs = out-of-league backups — zero value, skip DB call
-            if (valuation.Position == "QB" && string.IsNullOrEmpty(valuation.NflTeam))
+            // For rookies, blend raw DFV with a breakout-score-derived floor
+            // BreakoutScore 60+ → floor equivalent to ~rank 8 veteran (good but not elite)
+            // BreakoutScore 40+ → floor equivalent to ~rank 15 (solid prospect)
+            // BreakoutScore 20+ → floor equivalent to ~rank 25 (fringe starter)
+            var breakoutFloor = valuation.BreakoutScore switch
             {
-                rawDfvMap[valuation.SleeperPlayerId] = 0;
-                continue;
-            }
+                >= 60 => 400.0,   // blends into top 8 position range after normalization
+                >= 40 => 200.0,   // blends into rank 10-20 range
+                >= 20 => 100.0,   // blends into rank 20-30 range
+                _ => raw      // no floor — let the sim speak
+            };
 
-            // FA skill players (RB/WR/TE) may have legitimate value but rank below active players
-            var isFaSkillPlayer = string.IsNullOrEmpty(valuation.NflTeam)
-                && valuation.Position != "QB";
-
-            var careerSim = await careerSimRepository
-                .GetByPlayerIdAsync(valuation.SleeperPlayerId, ct);
-
-            if (careerSim is null)
-            {
-                rawDfvMap[valuation.SleeperPlayerId] = 0;
-                continue;
-            }
-
-            var raw = CalculateRawDfv(careerSim, valuation.Position);
-            var breakoutBoost = 1.0 + (valuation.BreakoutScore / 100.0) * 0.25;
-            var faPenalty = isFaSkillPlayer ? 0.60 : 1.0;   // 40% discount for unsigned skill players
-            rawDfvMap[valuation.SleeperPlayerId] = raw * breakoutBoost * faPenalty;
+            rawDfvMap[valuation.SleeperPlayerId] = Math.Max(raw, breakoutFloor);
         }
 
         // Normalize to 0-100 within each position group
