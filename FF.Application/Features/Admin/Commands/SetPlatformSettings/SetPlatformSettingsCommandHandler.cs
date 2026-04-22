@@ -10,6 +10,7 @@ public class SetPlatformSettingsCommandHandler(IPlatformSettingsRepository repo)
     {
         var settings = await repo.GetAsync();
         settings.RegistrationsEnabled = request.RegistrationsEnabled;
+        settings.AiJobsEnabled = request.AiJobsEnabled;
         settings.UpdatedAt = DateTime.UtcNow;
         settings.UpdatedBy = request.UpdatedBy;
         await repo.SaveAsync(settings);

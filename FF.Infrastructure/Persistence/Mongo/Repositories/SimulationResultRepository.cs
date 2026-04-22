@@ -57,7 +57,7 @@ public class SimulationResultRepository(
             await _collection.UpdateOneAsync(
                 Builders<SimulationResultDocument>.Filter.Eq(x => x.Id, existing.Id),
                 update,
-                cancellationToken: ct);
+                cancellationToken: CancellationToken.None);
         }
     }
 

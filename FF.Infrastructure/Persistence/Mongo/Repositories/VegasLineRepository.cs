@@ -41,7 +41,7 @@ public class VegasLineRepository(
 
             await _collection.UpdateOneAsync(
                 Builders<VegasLineDocument>.Filter.Eq(x => x.Id, existing.Id),
-                update, cancellationToken: ct);
+                update, cancellationToken: CancellationToken.None);
         }
     }
 

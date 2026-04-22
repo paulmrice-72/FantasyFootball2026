@@ -69,7 +69,8 @@
                 {
                     <MudChip T="string" Color="Color.Warning" Size="Size.Small" Class="mr-1">OVERRIDE</MudChip>
                     <MudText Typo="Typo.body1" Style="display:inline">
-                        Season <strong>@(_context.OverrideSeason ?? _context.CalendarSeason)</strong> — Week <strong>@(_context.OverrideWeek ?? _context.CalendarWeek)</strong>
+                        Season <strong>@(_context.OverrideSeason ?? _context.CalendarSeason)</strong> —
+                        Week <strong>@(_context.OverrideWeek ?? _context.CalendarWeek)</strong>
                     </MudText>
                 }
                 else
@@ -125,12 +126,12 @@
     }
     else
     {
+        @* ── Registrations toggle ── *@
         <MudGrid Spacing="2" AlignItems="Center">
             <MudItem xs="12" sm="8">
                 <MudText Typo="Typo.body1"><strong>Open Registrations</strong></MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    When off, new sign-ups return a &quot;registrations closed&quot; message.
-                    Existing logins are unaffected.
+                    When off, new sign-ups return a &quot;registrations closed&quot; message. Existing logins are unaffected.
                 </MudText>
             </MudItem>
             <MudItem xs="12" sm="4" Class="d-flex justify-end align-center">
@@ -140,18 +141,47 @@
                            UnCheckedColor="Color.Error"
                            Disabled="_settingsSaving"
                            Label="@(_registrationsEnabled ? "Open" : "Closed")"
-                           @bind-Value:after="SavePlatformSettings" />
+                           @bind-Value:after="SaveRegistrationsEnabled" />
             </MudItem>
         </MudGrid>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
-            Last updated @_settingsUpdatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt") by @_settingsUpdatedBy
-        </MudText>
-        @if (!string.IsNullOrEmpty(_settingsStatusMessage))
+        @if (!string.IsNullOrEmpty(_registrationsStatusMessage))
         {
-            <MudAlert Severity="_settingsStatusSeverity" Class="mt-3" Dense="true">
-                @_settingsStatusMessage
+            <MudAlert Severity="_registrationsStatusSeverity" Class="mt-2" Dense="true">
+                @_registrationsStatusMessage
             </MudAlert>
         }
+
+        <MudDivider Class="my-3" />
+
+        @* ── AI Jobs toggle ── *@
+        <MudGrid Spacing="2" AlignItems="Center">
+            <MudItem xs="12" sm="8">
+                <MudText Typo="Typo.body1"><strong>AI Jobs Enabled</strong></MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Controls ArticleGenerationJob (Tuesday) and WarRoomBriefJob (Sunday).
+                    Turn off during the off-season to prevent unnecessary API calls.
+                </MudText>
+            </MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex justify-end align-center">
+                <MudSwitch T="bool"
+                           @bind-Value="_aiJobsEnabled"
+                           Color="Color.Warning"
+                           UnCheckedColor="Color.Default"
+                           Disabled="_settingsSaving"
+                           Label="@(_aiJobsEnabled ? "Enabled" : "Disabled")"
+                           @bind-Value:after="SaveAiJobsEnabled" />
+            </MudItem>
+        </MudGrid>
+        @if (!string.IsNullOrEmpty(_aiJobsStatusMessage))
+        {
+            <MudAlert Severity="_aiJobsStatusSeverity" Class="mt-2" Dense="true">
+                @_aiJobsStatusMessage
+            </MudAlert>
+        }
+
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
+            Last updated @_settingsUpdatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt") by @_settingsUpdatedBy
+        </MudText>
     }
 </MudPaper>
 
@@ -159,7 +189,7 @@
     [Inject] NavigationManager Nav { get; set; } = default!;
     [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
 
-    // ── NFL Context ──────────────────────────────────────────────────────────
+    // ── NFL Context ────────────────────────────────────────────────────────────
     private NflContextDto? _context;
     private bool _contextLoading = true;
     private bool _saving = false;
@@ -168,21 +198,26 @@
     private string _statusMessage = string.Empty;
     private Severity _statusSeverity = Severity.Info;
 
-    // ── Platform Settings ────────────────────────────────────────────────────
+    // ── Platform Settings ──────────────────────────────────────────────────────
     private bool _settingsLoading = true;
     private bool _settingsSaving = false;
     private bool _registrationsEnabled = true;
+    private bool _aiJobsEnabled = false;
     private DateTime _settingsUpdatedAt;
     private string _settingsUpdatedBy = string.Empty;
-    private string _settingsStatusMessage = string.Empty;
-    private Severity _settingsStatusSeverity = Severity.Info;
+
+    // Per-toggle status messages — no shared field
+    private string _registrationsStatusMessage = string.Empty;
+    private Severity _registrationsStatusSeverity = Severity.Info;
+    private string _aiJobsStatusMessage = string.Empty;
+    private Severity _aiJobsStatusSeverity = Severity.Info;
 
     protected override async Task OnInitializedAsync()
     {
         await Task.WhenAll(LoadContext(), LoadPlatformSettings());
     }
 
-    // ── NFL Context methods ──────────────────────────────────────────────────
+    // ── NFL Context methods ────────────────────────────────────────────────────
     private async Task LoadContext()
     {
         _contextLoading = true;
@@ -201,10 +236,7 @@
             _statusMessage = "Failed to load NFL context.";
             _statusSeverity = Severity.Error;
         }
-        finally
-        {
-            _contextLoading = false;
-        }
+        finally { _contextLoading = false; }
     }
 
     private async Task SetOverride()
@@ -235,10 +267,7 @@
             _statusMessage = "Error contacting API.";
             _statusSeverity = Severity.Error;
         }
-        finally
-        {
-            _saving = false;
-        }
+        finally { _saving = false; }
     }
 
     private async Task ClearOverride()
@@ -263,13 +292,10 @@
             _statusMessage = "Error contacting API.";
             _statusSeverity = Severity.Error;
         }
-        finally
-        {
-            _saving = false;
-        }
+        finally { _saving = false; }
     }
 
-    // ── Platform Settings methods ────────────────────────────────────────────
+    // ── Platform Settings methods ──────────────────────────────────────────────
     private async Task LoadPlatformSettings()
     {
         _settingsLoading = true;
@@ -280,61 +306,96 @@
             if (dto is not null)
             {
                 _registrationsEnabled = dto.RegistrationsEnabled;
+                _aiJobsEnabled = dto.AiJobsEnabled;
                 _settingsUpdatedAt = dto.UpdatedAt;
                 _settingsUpdatedBy = dto.UpdatedBy;
             }
         }
         catch
         {
-            _settingsStatusMessage = "Failed to load platform settings.";
-            _settingsStatusSeverity = Severity.Error;
+            _registrationsStatusMessage = "Failed to load platform settings.";
+            _registrationsStatusSeverity = Severity.Error;
         }
-        finally
-        {
-            _settingsLoading = false;
-        }
+        finally { _settingsLoading = false; }
     }
 
-    private async Task SavePlatformSettings()
+    private async Task SaveRegistrationsEnabled()
     {
         _settingsSaving = true;
-        _settingsStatusMessage = string.Empty;
+        _registrationsStatusMessage = string.Empty;
         try
         {
             var http = HttpFactory.CreateClient("AuthAPI");
-            var response = await http.PutAsJsonAsync("api/v1/admin/platform-settings",
-                new { RegistrationsEnabled = _registrationsEnabled });
+            var response = await http.PutAsJsonAsync("api/v1/admin/platform-settings", new
+            {
+                RegistrationsEnabled = _registrationsEnabled,
+                AiJobsEnabled = _aiJobsEnabled
+            });
             if (response.IsSuccessStatusCode)
             {
-                _settingsStatusMessage = _registrationsEnabled
+                _registrationsStatusMessage = _registrationsEnabled
                     ? "Registrations opened."
                     : "Registrations closed. New sign-ups are blocked.";
-                _settingsStatusSeverity = _registrationsEnabled ? Severity.Success : Severity.Warning;
+                _registrationsStatusSeverity = _registrationsEnabled ? Severity.Success : Severity.Warning;
                 await LoadPlatformSettings();
             }
             else
             {
-                _settingsStatusMessage = "Failed to save settings.";
-                _settingsStatusSeverity = Severity.Error;
+                _registrationsStatusMessage = "Failed to save settings.";
+                _registrationsStatusSeverity = Severity.Error;
             }
         }
         catch
         {
-            _settingsStatusMessage = "Error contacting API.";
-            _settingsStatusSeverity = Severity.Error;
+            _registrationsStatusMessage = "Error contacting API.";
+            _registrationsStatusSeverity = Severity.Error;
         }
-        finally
-        {
-            _settingsSaving = false;
-        }
+        finally { _settingsSaving = false; }
     }
 
-    // ── DTOs ─────────────────────────────────────────────────────────────────
+    private async Task SaveAiJobsEnabled()
+    {
+        _settingsSaving = true;
+        _aiJobsStatusMessage = string.Empty;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var response = await http.PutAsJsonAsync("api/v1/admin/platform-settings", new
+            {
+                RegistrationsEnabled = _registrationsEnabled,
+                AiJobsEnabled = _aiJobsEnabled
+            });
+            if (response.IsSuccessStatusCode)
+            {
+                _aiJobsStatusMessage = _aiJobsEnabled
+                    ? "AI jobs enabled. Article generation and War Room Brief will run on schedule."
+                    : "AI jobs disabled. Scheduled AI jobs will be skipped.";
+                _aiJobsStatusSeverity = _aiJobsEnabled ? Severity.Success : Severity.Warning;
+                await LoadPlatformSettings();
+            }
+            else
+            {
+                _aiJobsStatusMessage = "Failed to save settings.";
+                _aiJobsStatusSeverity = Severity.Error;
+            }
+        }
+        catch
+        {
+            _aiJobsStatusMessage = "Error contacting API.";
+            _aiJobsStatusSeverity = Severity.Error;
+        }
+        finally { _settingsSaving = false; }
+    }
+
+    // ── DTOs ───────────────────────────────────────────────────────────────────
     private record NflContextDto(
         int CalendarSeason, int CalendarWeek,
         int? OverrideSeason, int? OverrideWeek,
         bool IsOverrideActive, DateTime UpdatedAt, string UpdatedBy);
 
     private record PlatformSettingsDto(
-        bool RegistrationsEnabled, DateTime UpdatedAt, string UpdatedBy);
+        bool RegistrationsEnabled,
+        bool AiJobsEnabled,
+        DateTime UpdatedAt,
+        string UpdatedBy);
 }

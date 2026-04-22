@@ -306,13 +306,13 @@ try
 
     RecurringJob.AddOrUpdate<WarRoomBriefJob>(
         "war-room-brief-sunday",
-        job => job.RunAsync(CancellationToken.None),
+        job => job.RunAsync(CancellationToken.None, true),
         "0 8 * * 0",   // Sunday 8am UTC = 3am ET
     utcOptions);
 
     RecurringJob.AddOrUpdate<ArticleGenerationJob>(
         "article-generation-weekly",
-        job => job.RunAsync(CancellationToken.None),
+        job => job.RunAsync(CancellationToken.None, true),
         "0 10 * * 2",   // Tuesdays 10am UTC
         utcOptions);
 

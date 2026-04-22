@@ -45,7 +45,7 @@ public class PffDraftGradeRepository(MongoDbContext context) : IPffDraftGradeRep
             await _collection.UpdateOneAsync(
                 filter, update,
                 new UpdateOptions { IsUpsert = true },
-                cancellationToken);
+                CancellationToken.None);
         }
     }
 }

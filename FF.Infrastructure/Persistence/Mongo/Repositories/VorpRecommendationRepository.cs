@@ -48,7 +48,7 @@ public class VorpRecommendationRepository : IVorpRecommendationRepository
                 .Set(x => x.ComputedAt, rec.ComputedAt);
 
             await _collection.UpdateOneAsync(
-                filter, update, new UpdateOptions { IsUpsert = true }, ct);
+                filter, update, new UpdateOptions { IsUpsert = true }, CancellationToken.None);
         }
     }
 

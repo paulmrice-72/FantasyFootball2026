@@ -44,6 +44,6 @@ public class WriterPersonaRepository(MongoDbContext context) : IWriterPersonaRep
         var update = Builders<WriterPersonaDocument>.Update
             .Push(x => x.PersistentFeedback, entry)
             .Set(x => x.UpdatedAt, DateTime.UtcNow);
-        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: CancellationToken.None);
     }
 }

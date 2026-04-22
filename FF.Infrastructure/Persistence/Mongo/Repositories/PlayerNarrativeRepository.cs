@@ -37,6 +37,6 @@ public class PlayerNarrativeRepository(MongoDbContext context)
         await Collection.UpdateOneAsync(
             filter, update,
             new UpdateOptions { IsUpsert = true },
-            ct);
+            CancellationToken.None);
     }
 }
