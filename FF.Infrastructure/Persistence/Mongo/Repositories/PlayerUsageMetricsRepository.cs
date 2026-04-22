@@ -71,7 +71,7 @@ public class PlayerUsageMetricsRepository : IPlayerUsageMetricsRepository
         await _collection.UpdateOneAsync(
             filter,
             update,
-            new UpdateOptions { IsUpsert = true }, ct);
+            new UpdateOptions { IsUpsert = true }, CancellationToken.None);
     }
 
     public async Task<IReadOnlyList<PlayerUsageMetricsDocument>> GetBySeasonAsync(

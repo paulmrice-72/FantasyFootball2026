@@ -46,7 +46,7 @@ public class ConsensusAdpRepository(MongoDbContext context) : IConsensusAdpRepos
             await _collection.UpdateOneAsync(
                 filter, update,
                 new UpdateOptions { IsUpsert = true },
-                cancellationToken);
+                CancellationToken.None);
         }
     }
 }

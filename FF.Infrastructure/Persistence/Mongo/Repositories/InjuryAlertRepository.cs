@@ -10,34 +10,36 @@ public class InjuryAlertRepository(MongoDbContext context) : IInjuryAlertReposit
         context.GetCollection<InjuryAlertDocument>("injury_alerts");
 
     public async Task UpsertBatchAsync(
-        IEnumerable<InjuryAlertDocument> alerts, CancellationToken ct = default)
+        IEnumerable<InjuryAlertDocument> alerts,
+        CancellationToken ct = default)
     {
         foreach (var alert in alerts)
         {
-            // Ensure Id is set — used as _id on insert
-            if (string.IsNullOrEmpty(alert.Id))
-                alert.Id = alert.SleeperPlayerId;
+            // Always stamp Id from SleeperPlayerId — single source of truth
+            alert.Id = alert.SleeperPlayerId;
 
             var filter = Builders<InjuryAlertDocument>.Filter
-                .Eq(x => x.SleeperPlayerId, alert.SleeperPlayerId);
+                .Eq(x => x.Id, alert.SleeperPlayerId);  // ← filter on _id, not SleeperPlayerId
 
             var update = Builders<InjuryAlertDocument>.Update
+                .Set(x => x.SleeperPlayerId, alert.SleeperPlayerId)
                 .Set(x => x.PlayerName, alert.PlayerName)
                 .Set(x => x.Position, alert.Position)
                 .Set(x => x.NflTeam, alert.NflTeam)
                 .Set(x => x.Designation, alert.Designation)
-                .Set(x => x.SyncedAt, alert.SyncedAt)
-                .SetOnInsert(x => x.Id, alert.SleeperPlayerId); // safe now — string serializer registered
+                .Set(x => x.SyncedAt, alert.SyncedAt);
+            // No SetOnInsert for _id — filtering on _id means MongoDB handles it automatically
 
             await _collection.UpdateOneAsync(
                 filter, update,
                 new UpdateOptions { IsUpsert = true },
-                ct);
+                CancellationToken.None);  // ← never use request CT for MongoDB writes
         }
     }
 
     public async Task<IReadOnlyList<InjuryAlertDocument>> GetActiveAlertsAsync(
-        string? position = null, CancellationToken ct = default)
+        string? position = null,
+        CancellationToken ct = default)
     {
         var filter = position is null
             ? Builders<InjuryAlertDocument>.Filter.Empty
@@ -47,12 +49,13 @@ public class InjuryAlertRepository(MongoDbContext context) : IInjuryAlertReposit
             .Find(filter)
             .SortBy(x => x.Position)
             .ThenBy(x => x.PlayerName)
-            .ToListAsync(ct);
+            .ToListAsync(CancellationToken.None);
     }
 
     public async Task DeleteAllAsync(CancellationToken ct = default)
     {
         await _collection.DeleteManyAsync(
-            Builders<InjuryAlertDocument>.Filter.Empty, ct);
+            Builders<InjuryAlertDocument>.Filter.Empty,
+            CancellationToken.None);
     }
 }

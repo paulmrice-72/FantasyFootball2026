@@ -61,7 +61,7 @@ public class PlayerProjectionRepository(
             await _collection.UpdateOneAsync(
                 Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Id, existing.Id),
                 update,
-                cancellationToken: ct);
+                cancellationToken: CancellationToken.None);
         }
     }
 

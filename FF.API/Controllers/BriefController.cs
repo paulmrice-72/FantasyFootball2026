@@ -38,7 +38,7 @@ public class BriefController(
         [FromQuery] int? week)
     {
         BackgroundJob.Enqueue<WarRoomBriefJob>(
-            job => job.RunAsync(CancellationToken.None));
+            job => job.RunAsync(CancellationToken.None, true));
 
         return Accepted(new
         {

@@ -48,7 +48,7 @@ public class RosterPlayerRepository(
 
             await _collection.UpdateOneAsync(
                 Builders<RosterPlayerDocument>.Filter.Eq(x => x.Id, existing.Id),
-                update, cancellationToken: ct);
+                update, cancellationToken: CancellationToken.None);
         }
     }
 

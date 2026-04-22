@@ -57,7 +57,7 @@ public class FantasyProsRookieRankingRepository(MongoDbContext context)
         await _collection.UpdateOneAsync(
             filter, update,
             new UpdateOptions { IsUpsert = true },
-            cancellationToken);
+            CancellationToken.None);
     }
     public async Task UpsertManyAsync(
         IEnumerable<FantasyProsRookieRankingDocument> documents,

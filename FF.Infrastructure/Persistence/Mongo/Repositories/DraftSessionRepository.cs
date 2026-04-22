@@ -59,6 +59,6 @@ public class DraftSessionRepository(MongoDbContext context) : IDraftSessionRepos
             .Set(x => x.Picks, document.Picks)
             .Set(x => x.UpdatedAt, document.UpdatedAt);
 
-        await _collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: CancellationToken.None);
     }
 }

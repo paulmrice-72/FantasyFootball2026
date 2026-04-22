@@ -12,6 +12,7 @@ public class GetPlatformSettingsQueryHandler(IPlatformSettingsRepository repo)
         var settings = await repo.GetAsync();
         return new PlatformSettingsDto(
             settings.RegistrationsEnabled,
+            settings.AiJobsEnabled,
             settings.UpdatedAt,
             settings.UpdatedBy);
     }

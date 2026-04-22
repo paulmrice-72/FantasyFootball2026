@@ -44,7 +44,7 @@ public class WarRoomBriefRepository(
 
             await _collection.UpdateOneAsync(
                 Builders<WarRoomBriefDocument>.Filter.Eq(x => x.Id, existing.Id),
-                update, cancellationToken: ct);
+                update, cancellationToken: CancellationToken.None);
 
             _logger.LogDebug("WarRoomBrief updated for User {UserId} Season {Season} Week {Week}",
                 document.UserId, document.Season, document.Week);

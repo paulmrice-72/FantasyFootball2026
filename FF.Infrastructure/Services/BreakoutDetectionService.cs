@@ -74,8 +74,7 @@ public class BreakoutDetectionService(
         PlayerUsageMetricsDocument? metrics,
         CareerSimulationDocument? careerSim)
     {
-        if (!player.Age.HasValue)
-            return new BreakoutScoreResult(0, BreakoutClassification.Unknown, []);
+        var age = player.Age ?? 22; // 22 = safe default for pre-draft rookie
 
         var signals = new List<string>();
         var pos = player.Position.ToString();
@@ -83,7 +82,7 @@ public class BreakoutDetectionService(
 
         // ── Signal 1: Age vs position peak (0-25 pts) ────────────────────
         var peakAge = GetPeakAge(pos);
-        var ageToGo = peakAge - player.Age.Value;
+        var ageToGo = peakAge - age;
         var ageScore = ageToGo switch
         {
             >= 3 and <= 5 => 25.0,
@@ -93,20 +92,22 @@ public class BreakoutDetectionService(
             _ => 2.0
         };
         score += ageScore;
-        if (ageToGo is >= 1 and <= 5) signals.Add($"Age {player.Age.Value} — {ageToGo}yr to peak");
+        if (ageToGo is >= 1 and <= 5) signals.Add($"Age {age} — {ageToGo}yr to peak");
 
         // ── Signal 2: Years experience sweet spot (0-20 pts) ─────────────
         var exp = player.YearsExperience ?? 0;
         var expScore = exp switch
         {
+            0 => 18.0,   // Rookie — high ceiling, no tread on tires
+            1 => 10.0,
             2 or 3 => 20.0,
             4 => 15.0,
-            1 => 10.0,
             5 => 8.0,
             _ => 2.0
         };
         score += expScore;
-        if (exp is 2 or 3) signals.Add($"Year {exp + 1} — prime breakout window");
+        if (exp == 0) signals.Add("Rookie — dynasty upside play");
+        else if (exp is 2 or 3) signals.Add($"Year {exp + 1} — prime breakout window");
 
         if (metrics is null)
         {
