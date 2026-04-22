@@ -31,7 +31,6 @@ public class DfvCalculationService(
     public async Task<List<DynastyValuationDocument>> CalculateAllAsync(
         int season, CancellationToken ct = default)
     {
-        // Load all existing valuations (have breakout scores from PBI-032)
         var valuations = new List<DynastyValuationDocument>();
         foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
         {
@@ -45,36 +44,59 @@ public class DfvCalculationService(
             return [];
         }
 
-        // Calculate raw DFV for each player
+        // ── Build raw DFV for every player ───────────────────────────────────
         var rawDfvMap = new Dictionary<string, double>();
 
-        // ── Rookie DFV floor — prevent top prospects from normalizing to bottom ──
+        foreach (var valuation in valuations)
+        {
+            if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
+
+            if (valuation.Position == "QB" && string.IsNullOrEmpty(valuation.NflTeam))
+            {
+                rawDfvMap[valuation.SleeperPlayerId] = 0;
+                continue;
+            }
+
+            var isFaSkillPlayer = string.IsNullOrEmpty(valuation.NflTeam)
+                && valuation.Position != "QB";
+
+            var careerSim = await careerSimRepository
+                .GetByPlayerIdAsync(valuation.SleeperPlayerId, ct);
+
+            if (careerSim is null)
+            {
+                rawDfvMap[valuation.SleeperPlayerId] = 0;
+                continue;
+            }
+
+            var raw = CalculateRawDfv(careerSim, valuation.Position);
+            var breakoutBoost = 1.0 + (valuation.BreakoutScore / 100.0) * 0.25;
+            var faPenalty = isFaSkillPlayer ? 0.60 : 1.0;
+            rawDfvMap[valuation.SleeperPlayerId] = raw * breakoutBoost * faPenalty;
+        }
+
+        // ── Rookie DFV floor — applied after raw DFV is populated ────────────
         // Career sims for unplayed rookies underestimate true dynasty value.
         // Apply a floor based on breakout score so top prospects surface correctly.
         foreach (var valuation in valuations.Where(v => v.YearsExperience == 0))
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var raw)) continue;
 
-            // For rookies, blend raw DFV with a breakout-score-derived floor
-            // BreakoutScore 60+ → floor equivalent to ~rank 8 veteran (good but not elite)
-            // BreakoutScore 40+ → floor equivalent to ~rank 15 (solid prospect)
-            // BreakoutScore 20+ → floor equivalent to ~rank 25 (fringe starter)
             var breakoutFloor = valuation.BreakoutScore switch
             {
-                >= 60 => 400.0,   // blends into top 8 position range after normalization
-                >= 40 => 200.0,   // blends into rank 10-20 range
-                >= 20 => 100.0,   // blends into rank 20-30 range
-                _ => raw      // no floor — let the sim speak
+                >= 60 => 400.0,
+                >= 40 => 200.0,
+                >= 20 => 100.0,
+                _ => raw
             };
 
             rawDfvMap[valuation.SleeperPlayerId] = Math.Max(raw, breakoutFloor);
         }
 
-        // Normalize to 0-100 within each position group
-        // Dynasty value is position-relative — a 90 WR vs a 90 RB are both elite at their pos
+        // ── Normalize to 0-100 within each position group ────────────────────
         NormalizeWithinPositions(valuations, rawDfvMap);
 
-        // Stamp results back onto valuation documents
+        // ── Stamp DiscountedFutureValue back onto documents ───────────────────
         foreach (var valuation in valuations)
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var raw)) continue;
