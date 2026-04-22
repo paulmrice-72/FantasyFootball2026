@@ -51,21 +51,6 @@
                 Load
             </MudButton>
         </MudItem>
-        <MudItem xs="12" sm="3" md="5" Class="d-flex align-end justify-end gap-2">
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Secondary"
-                       StartIcon="@Icons.Material.Filled.BarChart"
-                       Disabled="_computing"
-                       OnClick="RunDfv">
-                @(_computing ? "Computing..." : "Recalculate Values")
-            </MudButton>
-            <MudButton Variant="Variant.Text"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.SwapHoriz"
-                       Href="dynasty/trade">
-                Trade Analyzer
-            </MudButton>
-        </MudItem>
     </MudGrid>
 </MudPaper>
 
@@ -92,14 +77,10 @@
 {
     <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
 }
-
 @if (!_loading && _filtered.Count == 0 && _error is null)
 {
-    <MudAlert Severity="Severity.Info">
-        No dynasty valuations found. Click <strong>Recalculate Values</strong> to build rankings,
-        or run <strong>POST /api/v1/dynasty/career-simulations/run</strong> then
-        <strong>POST /api/v1/dynasty/breakout/run</strong> then
-        <strong>POST /api/v1/dynasty/dfv/calculate</strong> first.
+    <MudAlert Severity="Severity.Info" Class="mt-4">
+        No dynasty rankings available yet. Rankings are updated weekly — check back after Tuesday.
     </MudAlert>
 }
 else if (_filtered.Count > 0)
@@ -217,7 +198,6 @@ else if (_filtered.Count > 0)
     private string _search = string.Empty;
     private int _activeTab = 0;
     private bool _loading;
-    private bool _computing;
     private string? _error;
 
     private List<DynastyRow> _all = [];
@@ -244,9 +224,6 @@ else if (_filtered.Count > 0)
             var rows = await Http.GetFromJsonAsync<List<DynastyRow>>(
                 $"api/v1/dynasty/valuations?top={_topCount}{posParam}");
             _all = rows ?? [];
-
-            if (_all.Count == 0)
-                Snackbar.Add("No dynasty valuations found. Run Recalculate Values first.", Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -259,37 +236,6 @@ else if (_filtered.Count > 0)
         }
     }
 
-    private async Task RunDfv()
-    {
-        _computing = true;
-        await InvokeAsync(StateHasChanged);
-        try
-        {
-            // Chain: career sims → breakout → DFV
-            await Http.PostAsync($"api/v1/dynasty/career-simulations/run?season=2026", null);
-            await Http.PostAsync($"api/v1/dynasty/breakout/run?season=2026", null);
-            var resp = await Http.PostAsync($"api/v1/dynasty/dfv/calculate?season=2026", null);
-
-            if (resp.IsSuccessStatusCode)
-            {
-                Snackbar.Add("Dynasty values recalculated.", Severity.Success);
-                await LoadRankings();
-            }
-            else
-            {
-                Snackbar.Add("Recalculation failed — check API logs.", Severity.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _computing = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
 
     private async Task OpenPlayerDetail(DynastyRow player)
     {
