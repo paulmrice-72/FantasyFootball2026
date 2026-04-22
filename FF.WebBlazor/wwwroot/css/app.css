@@ -1028,3 +1028,17 @@ td.numeric,
 .fc-roster-table col:nth-child(7) {
     width: 15%;
 }
+
+.article-body p {
+    margin-bottom: 1rem;
+}
+
+.article-body h3 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.article-body strong {
+    font-weight: 600;
+}

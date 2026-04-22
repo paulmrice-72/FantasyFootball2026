@@ -57,7 +57,7 @@ else
                         </MudText>
                     </div>
                     <MudText Typo="Typo.h6" Class="mb-2" Style="color: var(--fc-amber);">@article.Title</MudText>
-                    <div style="line-height: 1.6;">@((MarkupString)(article.Body ?? string.Empty))</div>
+                    <div class="article-body" style="line-height: 1.6;">@((MarkupString)(article.Body ?? string.Empty))</div>
                     @if (article.ReviewStatus == ArticleReviewStatus.Approved)
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
