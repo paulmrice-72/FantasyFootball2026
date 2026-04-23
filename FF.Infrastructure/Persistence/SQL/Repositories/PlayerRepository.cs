@@ -11,9 +11,12 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
         => await DbSet.AsNoTracking()
             .FirstOrDefaultAsync(p => p.SleeperPlayerId == sleeperPlayerId, cancellationToken);
 
-    public async Task<IReadOnlyList<Player>> GetByPositionAsync(Position position, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Player>> GetByPositionAsync(
+        Position position,
+        CancellationToken cancellationToken = default)
         => await DbSet.AsNoTracking()
             .Where(p => p.Position == position)
+            .Where(p => p.FirstName != "Player" || p.LastName != "Invalid")
             .OrderBy(p => p.LastName)
             .ToListAsync(cancellationToken);
 
