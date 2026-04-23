@@ -1,4 +1,5 @@
-﻿using FF.Application.Interfaces.Repositories;
+﻿using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Repositories;
 using FF.Domain.Documents;
 using FF.Domain.Enums;
 using FF.Infrastructure.Services;
@@ -12,14 +13,27 @@ public class DfvCalculationServiceTests
 {
     private readonly Mock<ICareerSimulationRepository> _careerRepo = new();
     private readonly Mock<IDynastyValuationRepository> _valuationRepo = new();
+    private readonly Mock<IFantasyProsRookieRankingRepository> _fpRookieRepo = new();
 
-    private DfvCalculationService CreateSut() => new(
-        _careerRepo.Object,
-        _valuationRepo.Object,
-        NullLogger<DfvCalculationService>.Instance);
+    private DfvCalculationService CreateSut()
+    {
+        // Default: no rookie rankings — tests that don't care about FP rank
+        // get an empty list, which means no rookie floors are applied
+        _fpRookieRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        return new(
+            _careerRepo.Object,
+            _valuationRepo.Object,
+            _fpRookieRepo.Object,
+            NullLogger<DfvCalculationService>.Instance);
+    }
 
     private static CareerSimulationDocument MakeCareerSim(
-        string sleeperPlayerId, string position, int currentAge,
+        string sleeperPlayerId,
+        string position,
+        int currentAge,
         double yearOneValue = 150.0)
     {
         var projections = new List<CareerYearProjection>();
@@ -56,27 +70,26 @@ public class DfvCalculationServiceTests
         string position,
         int age,
         double breakoutScore = 50.0,
-        string nflTeam = "SF")          // ← add with default
+        string nflTeam = "SF",
+        int yearsExperience = 3) // default to veteran so rookie floors don't apply
         => new()
         {
             SleeperPlayerId = sleeperPlayerId,
             Position = position,
             Age = age,
-            NflTeam = nflTeam,          // ← add this
+            NflTeam = nflTeam,
             BreakoutScore = breakoutScore,
-            BreakoutClassification = BreakoutClassification.OnCurve
+            BreakoutClassification = BreakoutClassification.OnCurve,
+            YearsExperience = yearsExperience
         };
 
-    // ── CalculateRawDfv ───────────────────────────────────────────────────
-
+    // ── CalculateRawDfv ──────────────────────────────────────────────────────
     [Fact]
     public void CalculateRawDfv_ReturnsPositiveValue_ForValidCareerSim()
     {
         var sim = MakeCareerSim("s1", "WR", 24);
         var sut = CreateSut();
-
         var result = sut.CalculateRawDfv(sim, "WR");
-
         result.Should().BeGreaterThan(0);
     }
 
@@ -91,9 +104,7 @@ public class DfvCalculationServiceTests
             YearProjections = []
         };
         var sut = CreateSut();
-
         var result = sut.CalculateRawDfv(sim, "WR");
-
         result.Should().Be(0);
     }
 
@@ -104,10 +115,8 @@ public class DfvCalculationServiceTests
         var wrSim = MakeCareerSim("wr1", "WR", 24, yearOneValue: 150);
         var rbSim = MakeCareerSim("rb1", "RB", 24, yearOneValue: 150);
         var sut = CreateSut();
-
         var wrDfv = sut.CalculateRawDfv(wrSim, "WR");
         var rbDfv = sut.CalculateRawDfv(rbSim, "RB");
-
         // RB has 20% discount vs WR 12% — but RB also has 1.10 scarcity boost
         // Net effect: WR should still be higher or close
         // The test validates discount mechanics are applied differently
@@ -120,15 +129,12 @@ public class DfvCalculationServiceTests
         var eliteSim = MakeCareerSim("s1", "WR", 24, yearOneValue: 250);
         var averageSim = MakeCareerSim("s2", "WR", 24, yearOneValue: 100);
         var sut = CreateSut();
-
         var eliteDfv = sut.CalculateRawDfv(eliteSim, "WR");
         var averageDfv = sut.CalculateRawDfv(averageSim, "WR");
-
         eliteDfv.Should().BeGreaterThan(averageDfv);
     }
 
-    // ── CalculateAllAsync ─────────────────────────────────────────────────
-
+    // ── CalculateAllAsync ────────────────────────────────────────────────────
     [Fact]
     public async Task CalculateAllAsync_NoValuations_ReturnsEmpty()
     {
@@ -138,7 +144,6 @@ public class DfvCalculationServiceTests
 
         var sut = CreateSut();
         var result = await sut.CalculateAllAsync(2026);
-
         result.Should().BeEmpty();
     }
 
@@ -173,8 +178,7 @@ public class DfvCalculationServiceTests
         var result = await sut.CalculateAllAsync(2026);
 
         result.Should().HaveCount(3);
-        result.Should().AllSatisfy(v =>
-            v.TradeValue.Should().BeInRange(0, 100));
+        result.Should().AllSatisfy(v => v.TradeValue.Should().BeInRange(0, 100));
     }
 
     [Fact]
@@ -205,7 +209,6 @@ public class DfvCalculationServiceTests
 
         var elite = result.First(r => r.SleeperPlayerId == "elite");
         var bench = result.First(r => r.SleeperPlayerId == "bench");
-
         elite.TradeValue.Should().BeGreaterThan(bench.TradeValue);
     }
 
@@ -214,8 +217,8 @@ public class DfvCalculationServiceTests
     {
         var valuations = new List<DynastyValuationDocument>
         {
-            MakeValuation("has-sim",  "TE", 25),
-            MakeValuation("no-sim",   "TE", 26)
+            MakeValuation("has-sim", "TE", 25),
+            MakeValuation("no-sim", "TE", 26)
         };
 
         _valuationRepo
@@ -269,7 +272,50 @@ public class DfvCalculationServiceTests
 
         var highBo = result.First(r => r.SleeperPlayerId == "high-bo");
         var lowBo = result.First(r => r.SleeperPlayerId == "low-bo");
-
         highBo.TradeValue.Should().BeGreaterThan(lowBo.TradeValue);
+    }
+
+    [Fact]
+    public async Task CalculateAllAsync_RookieWithFpRank_GetsFloorBoost()
+    {
+        // Rookie with top FP rank should outrank a veteran with similar career sim
+        var valuations = new List<DynastyValuationDocument>
+        {
+            MakeValuation("rookie", "RB", 21, breakoutScore: 38, yearsExperience: 0),
+            MakeValuation("vet",    "RB", 28, breakoutScore: 38, yearsExperience: 5)
+        };
+
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("RB", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(valuations);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "RB"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetByPlayerIdAsync("rookie", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MakeCareerSim("rookie", "RB", 21, yearOneValue: 120));
+        _careerRepo
+            .Setup(r => r.GetByPlayerIdAsync("vet", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MakeCareerSim("vet", "RB", 28, yearOneValue: 120));
+
+        // Rookie has FP rank #1
+        _fpRookieRepo
+            .Setup(r => r.GetAllBySeasonAsync(2026, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new FantasyProsRookieRankingDocument
+            {
+                SleeperPlayerId = "rookie",
+                PlayerName = "Test Rookie",
+                Position = "RB",
+                FantasyProsRank = 1,
+                Season = 2026
+            }]);
+
+        var sut = CreateSut();
+        var result = await sut.CalculateAllAsync(2026);
+
+        var rookie = result.First(r => r.SleeperPlayerId == "rookie");
+        var vet = result.First(r => r.SleeperPlayerId == "vet");
+        rookie.TradeValue.Should().BeGreaterThan(vet.TradeValue);
     }
 }

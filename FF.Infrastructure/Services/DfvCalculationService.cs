@@ -1,4 +1,5 @@
-﻿using FF.Application.Interfaces.Repositories;
+﻿using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
@@ -8,6 +9,7 @@ namespace FF.Infrastructure.Services;
 public class DfvCalculationService(
     ICareerSimulationRepository careerSimRepository,
     IDynastyValuationRepository valuationRepository,
+    IFantasyProsRookieRankingRepository fpRookieRepository,
     ILogger<DfvCalculationService> logger) : IDfvCalculationService
 {
     // Annual discount rates by position — RBs depreciate fastest
@@ -19,17 +21,18 @@ public class DfvCalculationService(
         ["TE"] = 0.13
     };
 
-    // Position scarcity multipliers — QBs and TEs are scarcer in dynasty
+    // Position scarcity multipliers
     private static readonly Dictionary<string, double> ScarcityMultipliers = new()
     {
-        ["QB"] = 0.85,   // QB streaming is common — slight discount
-        ["RB"] = 1.10,   // bell cow RBs are scarce
-        ["WR"] = 1.00,   // baseline
-        ["TE"] = 1.15    // elite TEs are rarest
+        ["QB"] = 0.85, // QB streaming is common — slight discount
+        ["RB"] = 1.10, // bell cow RBs are scarce
+        ["WR"] = 1.00, // baseline
+        ["TE"] = 1.15  // elite TEs are rarest
     };
 
     public async Task<List<DynastyValuationDocument>> CalculateAllAsync(
-        int season, CancellationToken ct = default)
+        int season,
+        CancellationToken ct = default)
     {
         var valuations = new List<DynastyValuationDocument>();
         foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
@@ -44,7 +47,13 @@ public class DfvCalculationService(
             return [];
         }
 
-        // ── Build raw DFV for every player ───────────────────────────────────
+        // Load FP rookie rankings for this season — used to floor rookie raw DFV
+        var fpRookieRankings = await fpRookieRepository.GetAllBySeasonAsync(season, ct);
+        var fpRankMap = fpRookieRankings
+            .Where(r => r.SleeperPlayerId is not null)
+            .ToDictionary(r => r.SleeperPlayerId!, r => r.FantasyProsRank);
+
+        // ── Build raw DFV for every player ─────────────────────────────────
         var rawDfvMap = new Dictionary<string, double>();
 
         foreach (var valuation in valuations)
@@ -57,8 +66,9 @@ public class DfvCalculationService(
                 continue;
             }
 
+            // "FA" is a valid pre-draft state — only truly empty NflTeam is penalized
             var isFaSkillPlayer = string.IsNullOrEmpty(valuation.NflTeam)
-                && valuation.Position != "QB";
+                                  && valuation.Position != "QB";
 
             var careerSim = await careerSimRepository
                 .GetByPlayerIdAsync(valuation.SleeperPlayerId, ct);
@@ -75,28 +85,31 @@ public class DfvCalculationService(
             rawDfvMap[valuation.SleeperPlayerId] = raw * breakoutBoost * faPenalty;
         }
 
-        // ── Rookie DFV floor — applied after raw DFV is populated ────────────
-        // Career sims for unplayed rookies underestimate true dynasty value.
-        // Apply a floor based on breakout score so top prospects surface correctly.
         foreach (var valuation in valuations.Where(v => v.YearsExperience == 0))
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var raw)) continue;
 
-            var breakoutFloor = valuation.BreakoutScore switch
+            // Only apply rookie floor to consensus prospects (must have FP rank)
+            // and typical draft age (≤ 23) — excludes older undrafted free agents
+            if (!fpRankMap.TryGetValue(valuation.SleeperPlayerId, out var fpRank)) continue;
+            if (valuation.Age > 22) continue;
+
+            var rookieFloor = fpRank switch
             {
-                >= 60 => 400.0,
-                >= 40 => 200.0,
-                >= 20 => 100.0,
-                _ => raw
+                <= 5 => 500.0,
+                <= 15 => 380.0,
+                <= 30 => 250.0,
+                <= 50 => 150.0,
+                _ => 80.0
             };
 
-            rawDfvMap[valuation.SleeperPlayerId] = Math.Max(raw, breakoutFloor);
+            rawDfvMap[valuation.SleeperPlayerId] = Math.Max(raw, rookieFloor);
         }
 
-        // ── Normalize to 0-100 within each position group ────────────────────
+        // ── Normalize to 0-100 within each position group ──────────────────
         NormalizeWithinPositions(valuations, rawDfvMap);
 
-        // ── Stamp DiscountedFutureValue back onto documents ───────────────────
+        // ── Stamp DiscountedFutureValue back onto documents ─────────────────
         foreach (var valuation in valuations)
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var raw)) continue;
@@ -126,11 +139,10 @@ public class DfvCalculationService(
         return dfv * scarcity;
     }
 
-    // ── Private ───────────────────────────────────────────────────────────────
-
+    // ── Private ─────────────────────────────────────────────────────────────────
     private static void NormalizeWithinPositions(
-    List<DynastyValuationDocument> valuations,
-    Dictionary<string, double> rawDfvMap)
+        List<DynastyValuationDocument> valuations,
+        Dictionary<string, double> rawDfvMap)
     {
         var positions = new[] { "QB", "RB", "WR", "TE" };
 
@@ -145,17 +157,17 @@ public class DfvCalculationService(
 
             if (posPlayers.Count == 0) continue;
 
-            // Rank-based normalization — spreads values across the full range
+            // Rank-based normalization:
             // Rank 1 = 95, rank 10 = 75, rank 25 = 50, remainder scales to floor of 5
             for (int i = 0; i < posPlayers.Count; i++)
             {
-                var rank = i + 1;   // 1-based
+                var rank = i + 1;
                 double normalizedValue;
 
                 if (rank == 1)
                     normalizedValue = 95.0;
                 else if (rank <= 10)
-                    normalizedValue = 95.0 - ((rank - 1) * (20.0 / 9.0));   // 95 → 75
+                    normalizedValue = 95.0 - ((rank - 1) * (20.0 / 9.0)); // 95 → 75
                 else if (rank <= 25)
                     normalizedValue = 75.0 - ((rank - 10) * (25.0 / 15.0)); // 75 → 50
                 else
@@ -164,12 +176,11 @@ public class DfvCalculationService(
                 rawDfvMap[posPlayers[i].SleeperPlayerId] = Math.Round(normalizedValue, 2);
             }
 
-            // Zero out players with no raw value — keep them at 0, not ranked
+            // Zero out players with no raw value
             var zeroPlayers = valuations
                 .Where(v => v.Position == pos
                          && rawDfvMap.ContainsKey(v.SleeperPlayerId)
                          && rawDfvMap[v.SleeperPlayerId] == 0);
-
             foreach (var v in zeroPlayers)
                 rawDfvMap[v.SleeperPlayerId] = 0;
         }

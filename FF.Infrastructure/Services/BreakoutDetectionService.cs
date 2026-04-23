@@ -17,7 +17,8 @@ public class BreakoutDetectionService(
     private static readonly string[] ModelledPositions = ["QB", "RB", "WR", "TE"];
 
     public async Task<List<DynastyValuationDocument>> ScoreAllPlayersAsync(
-        int season, CancellationToken ct = default)
+        int season,
+        CancellationToken ct = default)
     {
         var results = new List<DynastyValuationDocument>();
 
@@ -31,7 +32,11 @@ public class BreakoutDetectionService(
             foreach (var player in players)
             {
                 if (player.SleeperPlayerId is null) continue;
-                if (!player.Age.HasValue) continue;
+
+                // FIX (DRAFT-SCORE-001): Pre-draft rookies often have no DOB in Sleeper yet.
+                // Default to age 21 for rookies (YearsExperience == 0) and 22 for everyone
+                // else rather than skipping them entirely.
+                var playerAge = player.Age ?? (player.YearsExperience == 0 ? 21 : 22);
 
                 PlayerUsageMetricsDocument? usage = null;
                 if (player.GsisId is not null)
@@ -50,7 +55,7 @@ public class BreakoutDetectionService(
                     PlayerName = player.FullName,
                     Position = posStr,
                     NflTeam = player.NflTeam ?? string.Empty,
-                    Age = player.Age.Value,
+                    Age = playerAge,
                     YearsExperience = player.YearsExperience,
                     Season = season,
                     BreakoutScore = scoreResult.Score,
@@ -75,12 +80,11 @@ public class BreakoutDetectionService(
         CareerSimulationDocument? careerSim)
     {
         var age = player.Age ?? 22; // 22 = safe default for pre-draft rookie
-
         var signals = new List<string>();
         var pos = player.Position.ToString();
         double score = 0;
 
-        // ── Signal 1: Age vs position peak (0-25 pts) ────────────────────
+        // ── Signal 1: Age vs position peak (0-25 pts) ──────────────────────
         var peakAge = GetPeakAge(pos);
         var ageToGo = peakAge - age;
         var ageScore = ageToGo switch
@@ -92,13 +96,14 @@ public class BreakoutDetectionService(
             _ => 2.0
         };
         score += ageScore;
-        if (ageToGo is >= 1 and <= 5) signals.Add($"Age {age} — {ageToGo}yr to peak");
+        if (ageToGo is >= 1 and <= 5)
+            signals.Add($"Age {age} — {ageToGo}yr to peak");
 
-        // ── Signal 2: Years experience sweet spot (0-20 pts) ─────────────
+        // ── Signal 2: Years experience sweet spot (0-20 pts) ───────────────
         var exp = player.YearsExperience ?? 0;
         var expScore = exp switch
         {
-            0 => 18.0,   // Rookie — high ceiling, no tread on tires
+            0 => 18.0, // Rookie — high ceiling, no tread on tires
             1 => 10.0,
             2 or 3 => 20.0,
             4 => 15.0,
@@ -106,8 +111,10 @@ public class BreakoutDetectionService(
             _ => 2.0
         };
         score += expScore;
-        if (exp == 0) signals.Add("Rookie — dynasty upside play");
-        else if (exp is 2 or 3) signals.Add($"Year {exp + 1} — prime breakout window");
+        if (exp == 0)
+            signals.Add("Rookie — dynasty upside play");
+        else if (exp is 2 or 3)
+            signals.Add($"Year {exp + 1} — prime breakout window");
 
         if (metrics is null)
         {
@@ -115,7 +122,7 @@ public class BreakoutDetectionService(
             return new BreakoutScoreResult(Math.Round(score, 1), classification, signals);
         }
 
-        // ── Signal 3: Usage trend (0-20 pts) ─────────────────────────────
+        // ── Signal 3: Usage trend (0-20 pts) ───────────────────────────────
         var usageTrend = GetUsageTrend(metrics, pos);
         if (usageTrend > 0.03m)
         {
@@ -133,7 +140,7 @@ public class BreakoutDetectionService(
             signals.Add("Usage declining");
         }
 
-        // ── Signal 4: Snap % trend (0-15 pts) ────────────────────────────
+        // ── Signal 4: Snap % trend (0-15 pts) ──────────────────────────────
         var snapTrend = metrics.SnapPct3Wk - metrics.SnapPctSeason;
         if (snapTrend > 0.05m)
         {
@@ -150,7 +157,7 @@ public class BreakoutDetectionService(
             signals.Add("Snap% declining");
         }
 
-        // ── Signal 5: WOPR trend (0-10 pts) — WR/TE only ─────────────────
+        // ── Signal 5: WOPR trend (0-10 pts) — WR/TE only ───────────────────
         if (pos is "WR" or "TE")
         {
             var woprTrend = metrics.Wopr3Wk - metrics.WoprSeason;
@@ -165,7 +172,7 @@ public class BreakoutDetectionService(
             }
         }
 
-        // ── Signal 6: aDOT rising (0-10 pts) — WR only ───────────────────
+        // ── Signal 6: aDOT rising (0-10 pts) — WR only ─────────────────────
         if (pos == "WR")
         {
             var adotTrend = metrics.ADot3Wk - metrics.ADotSeason;
@@ -187,8 +194,7 @@ public class BreakoutDetectionService(
             signals);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────
-
+    // ── Private helpers ─────────────────────────────────────────────────────
     private static decimal GetUsageTrend(PlayerUsageMetricsDocument m, string position) =>
         position switch
         {
@@ -208,12 +214,13 @@ public class BreakoutDetectionService(
             _ => BreakoutClassification.Unknown
         };
 
-    private static int GetPeakAge(string position) => position switch
-    {
-        "QB" => 29,
-        "RB" => 24,
-        "WR" => 26,
-        "TE" => 27,
-        _ => 26
-    };
+    private static int GetPeakAge(string position) =>
+        position switch
+        {
+            "QB" => 29,
+            "RB" => 24,
+            "WR" => 26,
+            "TE" => 27,
+            _ => 26
+        };
 }
