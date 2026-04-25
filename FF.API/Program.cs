@@ -341,6 +341,18 @@ try
         "0 12 * * *",   // Daily noon UTC — nflverse updates by morning after each draft day
         utcOptions);
 
+    RecurringJob.AddOrUpdate<RecalculateDynastyValuationsJob>(
+        "dynasty-recalculate-weekly",
+        job => job.RunAsync(2026, CancellationToken.None),
+        "0 7 * * 3",  // Wednesday 7:00 UTC — after simulation (6am) and Vegas sync (5am)
+        utcOptions);
+
+    RecurringJob.AddOrUpdate<SyncDepthChartsJob>(
+        "depth-chart-sync-weekly",
+        job => job.RunAsync(2026, CancellationToken.None),
+        "0 8 * * 3",  // Wednesday 8:00 UTC — after dynasty pipeline
+        utcOptions);
+
     BackgroundJob.Enqueue<SeedPickValuesJob>(job => job.SeedAsync());
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",

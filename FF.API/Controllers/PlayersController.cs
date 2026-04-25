@@ -1,5 +1,6 @@
 ﻿// FF.API/Controllers/PlayersController.cs
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Repositories;
 using FF.Application.Players.Commands.BackfillCollegeTeam;
 using FF.Application.Players.Commands.SyncPlayers;
 using FF.Application.Players.Queries.GetAllPlayers;
@@ -17,7 +18,8 @@ public class PlayersController(
     IPlayerRepository playerRepository,
     ISimulationResultRepository simulationRepo,
     IPlayerProjectionRepository projectionRepo,
-    IPlayerUsageMetricsRepository usageMetricsRepo) : ControllerBase
+    IPlayerUsageMetricsRepository usageMetricsRepo,
+    IDepthChartRepository _depthChartRepository) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
@@ -163,5 +165,28 @@ public class PlayersController(
         return result.IsSuccess
             ? Ok(result.Value)
             : BadRequest(result.Error.Message);
+    }
+
+    [HttpGet("{sleeperPlayerId}/depth-chart")]
+    public async Task<IActionResult> GetDepthChart(
+    string sleeperPlayerId,
+    [FromQuery] int season = 2026,
+    CancellationToken ct = default)
+    {
+        var rows = await _depthChartRepository.GetByPlayerAsync(sleeperPlayerId, season, ct);
+        if (rows.Count == 0)
+            return Ok(new { available = false, message = "Depth chart sync has not run yet for this season." });
+
+        var latest = rows.First();  // already sorted by Week desc
+        return Ok(new
+        {
+            available = true,
+            week = latest.Week,
+            nflTeam = latest.NflTeam,
+            position = latest.Position,
+            depthPosition = latest.DepthPosition,
+            depthTeam = latest.DepthTeam,
+            formationPosition = latest.FormationPosition
+        });
     }
 }
