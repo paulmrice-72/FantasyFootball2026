@@ -71,8 +71,9 @@
     </TitleContent>
 
     <DialogContent>
-        <MudTabs @bind-ActivePanelIndex="_activeTab" Elevation="0" Rounded="true"
-                 Class="mt-1" PanelClass="pt-3">
+        <MudTabs ActivePanelIndex="_activeTab"
+                 ActivePanelIndexChanged="OnTabChanged"
+                 Elevation="0" Rounded="true" Class="mt-1" PanelClass="pt-3">
 
             @* ══════════════════════════════════════════════════════════
                TAB 0 — OVERVIEW
@@ -355,28 +356,89 @@
             @* ══════════════════════════════════════════════════════════
                TAB 3 — DEPTH CHART
                ════════════════════════════════════════════════════════ *@
-            <MudTabPanel Text="Depth Chart">
-                <MudAlert Severity="Severity.Info" Class="mb-4">
-                    Depth chart data requires a one-time sync from nflverse. Run
-                    <strong>POST /api/v1/admin/jobs/run-depth-chart-sync</strong> from the admin panel
-                    to populate depth positions. This will be wired to the Admin UI in a future session.
-                </MudAlert>
-
-                @* Placeholder card — shows team at least *@
-                @if (!string.IsNullOrEmpty(Player.NflTeam))
-                {
-                    <div class="d-flex align-center gap-3">
-                        <MudIcon Icon="@Icons.Material.Filled.Groups"
-                                 Style="color:var(--fc-cyan); font-size:2rem;" />
-                        <div>
-                            <MudText Typo="Typo.subtitle1" Style="font-weight:700;">@Player.NflTeam</MudText>
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                @Player.Position depth chart — pending sync
-                            </MudText>
-                        </div>
-                    </div>
-                }
-            </MudTabPanel>
+<MudTabPanel Text="Depth Chart">
+    @if (_depthLoading)
+    {
+        <div class="d-flex justify-center pa-6">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        </div>
+    }
+    else if (_depthData is null)
+    {
+        <MudAlert Severity="Severity.Info">
+            Depth chart data is populated weekly on Wednesdays. Check back after the first sync runs,
+            or trigger it manually from the admin panel.
+        </MudAlert>
+        @if (!string.IsNullOrEmpty(Player.NflTeam))
+        {
+            <div class="d-flex align-center gap-3 mt-3">
+                <MudIcon Icon="@Icons.Material.Filled.Groups"
+                         Style="color:var(--fc-cyan); font-size:2rem;" />
+                <div>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:700;">@Player.NflTeam</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        @Player.Position depth chart — pending sync
+                    </MudText>
+                </div>
+            </div>
+        }
+    }
+    else if (!_depthData.Available)
+    {
+        <MudAlert Severity="Severity.Info">@_depthData.Message</MudAlert>
+    }
+    else
+    {
+        <div class="d-flex flex-wrap gap-3 mb-4">
+            <MudPaper Class="pa-3" Elevation="0"
+                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                         Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">
+                    Depth Position
+                </MudText>
+                <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                    @_depthData.DepthPosition
+                </MudText>
+            </MudPaper>
+            <MudPaper Class="pa-3" Elevation="0"
+                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                         Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">
+                    Depth
+                </MudText>
+                            <MudText Typo="Typo.h5" Style="@($"font-weight:700; color:{GetDepthColor(_depthData.DepthTeam)};")">
+                    @GetDepthLabel(_depthData.DepthTeam)
+                </MudText>
+            </MudPaper>
+            <MudPaper Class="pa-3" Elevation="0"
+                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                         Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">
+                    NFL Team
+                </MudText>
+                <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                    @_depthData.NflTeam
+                </MudText>
+            </MudPaper>
+            @if (!string.IsNullOrEmpty(_depthData.FormationPosition))
+            {
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">
+                        Formation
+                    </MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                        @_depthData.FormationPosition
+                    </MudText>
+                </MudPaper>
+            }
+        </div>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            Week @_depthData.Week · Updated via nflverse
+        </MudText>
+    }
+</MudTabPanel>
 
             @* ══════════════════════════════════════════════════════════
                TAB 4 — TRADE
@@ -453,11 +515,69 @@
     private string? _narrative;
     private bool _narrativeLoading;
     private bool _narrativeLoaded;
+    private DepthChartResponse? _depthData;
+    private bool _depthLoading;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _activeTab = (int)DefaultTab;
+        if (DefaultTab == PlayerCardTab.DepthChart)
+            await LoadDepthChartAsync();
     }
+
+    // Call this when user clicks the Depth Chart tab
+    // Wire: <MudTabs ... ActivePanelIndexChanged="OnTabChanged">
+    private async Task OnTabChanged(int index)
+    {
+        _activeTab = index;
+        if (index == (int)PlayerCardTab.DepthChart && _depthData is null && !_depthLoading)
+            await LoadDepthChartAsync();
+    }
+
+    private async Task LoadDepthChartAsync()
+    {
+        _depthLoading = true;
+        StateHasChanged();
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var response = await http.GetAsync(
+                $"api/v1/players/{Player.SleeperPlayerId}/depth-chart");
+            if (response.IsSuccessStatusCode)
+                _depthData = await response.Content.ReadFromJsonAsync<DepthChartResponse>();
+        }
+        catch { /* non-fatal — shows null state */ }
+        finally
+        {
+            _depthLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetDepthLabel(int depthTeam) => depthTeam switch
+    {
+        1 => "Starter",
+        2 => "Backup",
+        3 => "3rd String",
+        _ => $"Depth {depthTeam}"
+    };
+
+    private static string GetDepthColor(int depthTeam) => depthTeam switch
+    {
+        1 => "#34D399",
+        2 => "#F59E0B",
+        _ => "#94a3b8"
+    };
+
+    private record DepthChartResponse(
+        bool Available,
+        string? Message,
+        int Week,
+        string? NflTeam,
+        string? Position,
+        string? DepthPosition,
+        int DepthTeam,
+        string? FormationPosition);
 
     private async Task GenerateNarrative()
     {

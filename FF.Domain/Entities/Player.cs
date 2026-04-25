@@ -14,30 +14,30 @@ public class Player : Entity
     public string? NflTeam { get; private set; }
     public int? JerseyNumber { get; private set; }
     public string? SleeperPlayerId { get; private set; }
-    // ── Age ───────────────────────────────────────────────────────────────────
-    public int? Age { get; private set; }           // Sleeper-synced
-    public DateOnly? BirthDate { get; private set; } // combine-sourced
 
-    public int? ComputedAge =>
-        BirthDate.HasValue
-            ? (int)((DateTime.UtcNow - BirthDate.Value.ToDateTime(TimeOnly.MinValue)).TotalDays / 365.25)
-            : Age;
+    // ── Age ─────────────────────────────────────────────────────────────────
+    public int? Age { get; private set; }
+    public DateOnly? BirthDate { get; private set; }
+    public int? ComputedAge => BirthDate.HasValue
+        ? (int)((DateTime.UtcNow - BirthDate.Value.ToDateTime(TimeOnly.MinValue)).TotalDays / 365.25)
+        : Age;
 
     public void UpdateBirthDate(DateOnly birthDate)
     {
         BirthDate = birthDate;
         SetUpdated();
     }
+
     public int? YearsExperience { get; private set; }
     public string? GsisId { get; set; }
     public string? InjuryStatus { get; private set; }
 
-    // ── E10 Dynasty Draft ─────────────────────────────────────────────────
+    // ── E10 Dynasty Draft ────────────────────────────────────────────────────
     public int? DraftRound { get; private set; }
     public int? DraftPick { get; private set; }
     public string? CollegeTeam { get; private set; }
 
-    private Player() { }
+     private Player() { }
 
     public static Player Create(
         string firstName,
@@ -72,7 +72,7 @@ public class Player : Entity
         SetUpdated();
     }
 
-   public void UpdateFields(
+    public void UpdateFields(
         string firstName,
         string lastName,
         Position position,
@@ -94,9 +94,6 @@ public class Player : Entity
         if (collegeTeam != null) CollegeTeam = collegeTeam;
     }
 
-    /// <summary>
-    /// Populated after NFL draft (April 24-26). Null until draft occurs.
-    /// </summary>
     public void UpdateDraftCapital(int? draftRound, int? draftPick, string? collegeTeam)
     {
         DraftRound = draftRound;

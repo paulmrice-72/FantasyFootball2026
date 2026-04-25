@@ -14,4 +14,5 @@ public interface IPlayerRepository : IRepository<Player>
     Task<IReadOnlyList<Player>> GetBySleeperIdsAsync(IEnumerable<string> sleeperPlayerIds, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Player>> GetPlayersNeedingCollegeBackfillAsync(CancellationToken cancellationToken = default);
     new Task<IReadOnlyList<Player>> GetAllAsync(CancellationToken cancellationToken = default);
+    /// <summary>Bulk-updates DepthPosition and DepthTeam on players matched by GsisId.</summary>
 }

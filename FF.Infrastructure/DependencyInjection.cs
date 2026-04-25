@@ -219,6 +219,12 @@ public static class DependencyInjection
         services.AddScoped<SystemHealthCheckJob>();
         services.AddScoped<LeagueSyncJob>();
         services.AddScoped<PlayerSyncJob>();
+        // After: services.AddScoped<IDynastyValuationRepository, DynastyValuationRepository>();
+        services.AddScoped<IDepthChartRepository, DepthChartRepository>();
+
+        // After: services.AddScoped<NflverseDraftPickSyncJob>();
+        services.AddScoped<RecalculateDynastyValuationsJob>();
+        services.AddScoped<SyncDepthChartsJob>();
 
         // Sleeper Identity
         services.AddScoped<IUserRepository, UserRepository>();
@@ -492,6 +498,18 @@ public static class DependencyInjection
                     cm.SetIgnoreExtraElements(true);
                     cm.MapIdMember(c => c.Id)
                         .SetSerializer(new StringSerializer(BsonType.String));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(DepthChartDocument)))
+            {
+                BsonClassMap.RegisterClassMap<DepthChartDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                        .SetIdGenerator(StringObjectIdGenerator.Instance)
+                        .SetSerializer(new StringSerializer(BsonType.ObjectId));
                 });
             }
         }

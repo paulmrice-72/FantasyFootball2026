@@ -1,4 +1,6 @@
 ﻿// FF.Application/Interfaces/Services/INflverseDownloadService.cs
+using FF.Domain.Documents;
+
 namespace FF.Application.Interfaces.Services;
 
 
@@ -19,6 +21,7 @@ public interface INflverseDownloadService
     Task<NflverseDownloadResult> DownloadRostersAsync(
         int season,
         CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DepthChartDocument>> DownloadDepthChartsAsync(int season, CancellationToken ct = default);
 }
 
 public class NflverseDownloadResult

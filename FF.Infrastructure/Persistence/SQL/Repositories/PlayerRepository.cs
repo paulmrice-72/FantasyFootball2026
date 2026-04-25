@@ -68,4 +68,5 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
     public async new Task<IReadOnlyList<Player>> GetAllAsync(
     CancellationToken cancellationToken = default) =>
     await DbSet.AsNoTracking().ToListAsync(cancellationToken);
+
 }
