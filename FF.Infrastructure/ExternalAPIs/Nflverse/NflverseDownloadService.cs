@@ -23,45 +23,70 @@ public class NflverseDownloadService(
         int season, CancellationToken cancellationToken = default)
     {
         var startedAt = DateTime.UtcNow;
-        var url = $"{BaseUrl}/player_stats_{season}.csv";
-        var savePath = Path.Combine(
-            _settings.BasePath, "nflfastr", $"player_stats_{season}.csv");
-
-        _logger.LogInformation(
-            "Downloading nflverse player stats for season {Season} from {Url}", season, url);
-
-        try
+        // Try current season first, fall back to prior year
+        // nflverse publishes season aggregate ~4-8 weeks post-Super Bowl
+        // New naming convention (2025+): player_stats_season_{year}.csv
+        // Legacy naming (pre-2025): player_stats_{year}.csv
+        var seasonsToTry = new[]
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-            response.EnsureSuccessStatusCode();
-            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-            await File.WriteAllBytesAsync(savePath, bytes, cancellationToken);
-            var duration = DateTime.UtcNow - startedAt;
-            _logger.LogInformation(
-                "Downloaded player_stats_{Season}.csv — {Size:N0} bytes in {Duration}",
-                season, bytes.Length, duration);
-            return new NflverseDownloadResult
-            {
-                Success = true,
-                Season = season,
-                SavedPath = savePath,
-                FileSizeBytes = bytes.Length,
-                Duration = duration
-            };
-        }
-        catch (Exception ex)
+            (season,     $"{BaseUrl}/player_stats_season_{season}.csv"),
+            (season - 1, $"{BaseUrl}/player_stats_season_{season - 1}.csv"),
+            (season - 1, $"{BaseUrl}/player_stats_{season - 1}.csv"),  // legacy fallback
+        };
+
+        foreach (var (s, url) in seasonsToTry)
         {
-            _logger.LogError(ex,
-                "Failed to download nflverse player stats for season {Season}", season);
-            return new NflverseDownloadResult
+            try
             {
-                Success = false,
-                Season = season,
-                ErrorMessage = ex.Message,
-                Duration = DateTime.UtcNow - startedAt
-            };
+                _logger.LogInformation(
+                    "Trying nflverse player stats {Season} from {Url}", s, url);
+
+                var response = await _httpClient.GetAsync(url, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "player_stats_{Season} returned {Status} — trying next",
+                        s, response.StatusCode);
+                    continue;
+                }
+
+                var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                var savePath = Path.Combine(
+                    _settings.BasePath, "nflfastr", $"player_stats_{s}.csv");
+                Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+                await File.WriteAllBytesAsync(savePath, bytes, cancellationToken);
+
+                var duration = DateTime.UtcNow - startedAt;
+                _logger.LogInformation(
+                    "Downloaded player stats season {Season} — {Size:N0} bytes in {Duration}",
+                    s, bytes.Length, duration);
+
+                return new NflverseDownloadResult
+                {
+                    Success = true,
+                    Season = s,
+                    SavedPath = savePath,
+                    FileSizeBytes = bytes.Length,
+                    Duration = duration
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed attempting player_stats_{Season} — trying next", s);
+            }
         }
+
+        // All attempts exhausted
+        _logger.LogError(
+            "No player stats data available for season {Season} or prior", season);
+        return new NflverseDownloadResult
+        {
+            Success = false,
+            Season = season,
+            ErrorMessage = $"player_stats not found for {season} or {season - 1}",
+            Duration = DateTime.UtcNow - startedAt
+        };
     }
 
     private const string SnapCountsBaseUrl =
