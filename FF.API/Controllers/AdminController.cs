@@ -8,6 +8,7 @@ using FF.Application.Interfaces.Services;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Services;
+using Hangfire;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -190,19 +191,12 @@ public class AdminController(
     // ── Job triggers ─────────────────────────────────────────────────────────
 
     [HttpPost("jobs/run-career-sims")]
-    public async Task<IActionResult> RunCareerSims(
-        [FromBody] RunJobRequest request,
-        [FromServices] ICareerSimulationService careerSimService,
-        [FromServices] ICareerSimulationRepository careerSimRepository,
-        CancellationToken ct)
+    public IActionResult RunCareerSims([FromBody] RunJobRequest request)
     {
-        logger.LogInformation("Admin triggered career sims — season {Season}", request.Season);
-        var results = await careerSimService.SimulateAllPlayersAsync(request.Season, ct);
-
-        foreach (var sim in results)
-            await careerSimRepository.UpsertAsync(sim, ct);
-
-        return Ok(new { Message = $"Career sims complete.", Count = results.Count });
+        logger.LogInformation("Admin enqueuing career sims — season {Season}", request.Season);
+        var jobId = BackgroundJob.Enqueue<RecalculateDynastyValuationsJob>(
+            job => job.RunAsync(request.Season, CancellationToken.None));
+        return Accepted(new { Message = $"Dynasty pipeline queued — job {jobId}. Monitor at /hangfire.", JobId = jobId });
     }
 
     [HttpPost("jobs/run-dfv")]
@@ -214,9 +208,7 @@ public class AdminController(
     {
         logger.LogInformation("Admin triggered DFV calculation — season {Season}", request.Season);
         var results = await dfvService.CalculateAllAsync(request.Season, ct);
-
         await valuationRepository.UpsertBatchAsync(results, ct);
-
         return Ok(new { Message = "DFV calculation complete.", Count = results.Count });
     }
 

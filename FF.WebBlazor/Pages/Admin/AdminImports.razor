@@ -457,7 +457,7 @@
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
-                _fpStatus = $"✓ {body?.RowsImported ?? 0} rows imported for season {_season}.";
+                _fpStatus = $"✓ {body?.Imported ?? 0} rows imported for season {_season}. ({body?.Unmatched ?? 0} unmatched)";
                 _fpSeverity = Severity.Success;
                 _fpFile = null;
             }
@@ -488,7 +488,7 @@
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
-                _pffStatus = $"✓ {body?.RowsImported ?? 0} rows imported for season {_season}.";
+                _pffStatus = $"✓ {body?.Imported ?? 0} rows imported for season {_season}. ({body?.Unmatched ?? 0} unmatched)";
                 _pffSeverity = Severity.Success;
                 _pffFile = null;
             }
@@ -519,7 +519,7 @@
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
-                _adpStatus = $"✓ {body?.RowsImported ?? 0} rows imported for season {_season}.";
+                _adpStatus = $"✓ {body?.Imported ?? 0} rows imported for season {_season}.";
                 _adpSeverity = Severity.Success;
                 _adpFile = null;
             }
@@ -576,11 +576,9 @@
                 new { Season = _season });
             _simsOk = resp.IsSuccessStatusCode;
             if (_simsOk)
-            {
-                var body = await resp.Content.ReadFromJsonAsync<JobResultDto>();
-                _simsStatus = $"Done ✓ — {body?.Count ?? 0} players simulated";
-            }
-            else _simsStatus = $"Failed ({(int)resp.StatusCode})";
+                _simsStatus = "Queued ✓ — monitor at /hangfire";
+            else
+                _simsStatus = $"Failed ({(int)resp.StatusCode})";
         }
         catch (Exception ex) { _simsOk = false; _simsStatus = ex.Message; }
         finally { _simsBusy = false; }
@@ -596,11 +594,9 @@
                 new { Season = _season });
             _dfvOk = resp.IsSuccessStatusCode;
             if (_dfvOk)
-            {
-                var body = await resp.Content.ReadFromJsonAsync<JobResultDto>();
-                _dfvStatus = $"Done ✓ — {body?.Count ?? 0} players valued";
-            }
-            else _dfvStatus = $"Failed ({(int)resp.StatusCode})";
+                _dfvStatus = "Queued ✓ — monitor at /hangfire";
+            else
+                _dfvStatus = $"Failed ({(int)resp.StatusCode})";
         }
         catch (Exception ex) { _dfvOk = false; _dfvStatus = ex.Message; }
         finally { _dfvBusy = false; }
@@ -656,7 +652,7 @@
     }
 
     // ── Response DTOs ────────────────────────────────────────────────────────
-    private record ImportResultDto(int RowsImported);
+    private record ImportResultDto(int Imported, int Unmatched, int Season);
     private record JobResultDto(string Message, int Count);
 
     private record BriefGenerateResultDto(int Generated, int Failed, List<string> Errors);
