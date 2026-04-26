@@ -27,6 +27,7 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
 
             // Load all rookies for name matching
             var rookies = await playerRepository.GetRookiesAsync(null, cancellationToken);
+
             // Use first match if normalized names collide — handles placeholder/duplicate names
             var nameMap = rookies
                 .Where(p => p.SleeperPlayerId != null)
@@ -48,7 +49,8 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
                 if (string.IsNullOrEmpty(sleeperPlayerId))
                 {
                     logger.LogWarning(
-                        "FP Import: No Sleeper match for '{PlayerName}'", row.PlayerName);
+                        "FP Import: No Sleeper match for '{PlayerName}'",
+                        row.PlayerName);
                     unmatched++;
                 }
 
@@ -86,15 +88,17 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
         }
     }
 
-    // ── CSV parsing ───────────────────────────────────────────────────────
-    // Expected header: Rank,PlayerName,Position,Team,PositionRank,Tier
-    // PositionRank and Tier columns are optional
-    // Expected FP export header:
+    // ── CSV parsing ──────────────────────────────────────────────────────
+    // Handles FantasyPros ECR export format:
     // "RK","PLAYER NAME",TEAM,"POS","AGE","BEST","WORST","AVG.","STD.DEV","ECR VS. ADP"
     private static List<FpRow> ParseCsv(string csv)
     {
         var rows = new List<FpRow>();
-        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        // Normalize line endings — FantasyPros exports CRLF on Windows
+        var normalized = csv.Replace("\r\n", "\n").Replace("\r", "\n");
+        var lines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
         if (lines.Length < 2) return rows;
 
         var headers = lines[0].Split(',')
@@ -118,16 +122,15 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
 
         foreach (var line in lines.Skip(1))
         {
-            // Handle quoted fields with commas inside
             var cols = SplitCsvLine(line);
             if (cols.Length <= Math.Max(iRank, iName)) continue;
-            if (!int.TryParse(Safe(cols, iRank), out var rank)) continue;
+
+            var rankStr = Safe(cols, iRank).Trim();
+            if (!int.TryParse(rankStr, out var rank)) continue;
 
             // Strip position rank suffix: "RB1" -> "RB", "WR2" -> "WR"
             var rawPos = Safe(cols, iPos).ToUpperInvariant();
             var position = new string(rawPos.TakeWhile(char.IsLetter).ToArray());
-
-            // Derive position rank from suffix digit if present
             var posRankStr = new string(rawPos.SkipWhile(char.IsLetter).ToArray());
             int.TryParse(posRankStr, out var positionRank);
 
@@ -169,13 +172,13 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
         return result.ToArray();
     }
 
-    private static string Safe(string[] cols, int idx) =>
-        idx >= 0 && idx < cols.Length ? cols[idx].Trim().Trim('"') : string.Empty;
+    private static string Safe(string[] cols, int idx)
+        => idx >= 0 && idx < cols.Length ? cols[idx].Trim().Trim('"') : string.Empty;
 
     // Normalize: lowercase, strip punctuation, handle "Jr", "III" etc
-    private static string NormalizeName(string name) =>
-        new string([.. name.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c == ' ')])
-        .Trim();
+    private static string NormalizeName(string name)
+        => new string([.. name.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c == ' ')])
+            .Trim();
 
     private record FpRow(int Rank, string PlayerName, string Position, string Team, int PositionRank, string? Tier);
 }
