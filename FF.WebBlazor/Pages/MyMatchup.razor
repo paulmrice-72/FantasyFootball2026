@@ -99,6 +99,37 @@ else
                 </MudText>
             </MudItem>
         </MudGrid>
+
+        @* ── INTELLIGENCE SUMMARIES (MATCHUP-003) ──────────────────────────────── *@
+        @{
+            var myStarters = _matchup.MyTeam.Players.Where(p => p.IsStarter).ToList();
+            var gameScriptSummary = BuildGameScriptSummary(myStarters);
+            var boomBustSummary = BuildBoomBustSummary(myStarters);
+        }
+        @if (gameScriptSummary is not null || boomBustSummary is not null)
+        {
+            <MudDivider Class="my-3" />
+            <MudGrid Spacing="1">
+                @if (gameScriptSummary is not null)
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            <MudIcon Icon="@Icons.Material.Filled.SportsFootball" Size="Size.Small" Class="mr-1" Style="vertical-align:middle;" />
+                            @gameScriptSummary
+                        </MudText>
+                    </MudItem>
+                }
+                @if (boomBustSummary is not null)
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            <MudIcon Icon="@Icons.Material.Filled.Insights" Size="Size.Small" Class="mr-1" Style="vertical-align:middle;" />
+                            @boomBustSummary
+                        </MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
     </MudPaper>
 
     @* Scoring format label *@
@@ -112,7 +143,7 @@ else
     @* ── SIDE-BY-SIDE PLAYER TABLES ──────────────────────────────────────────── *@
     <MudGrid Spacing="3">
 
-        @* My starters *@
+        @* ── MY SIDE ── *@
         <MudItem xs="12" md="6">
             <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-2">MY STARTERS</MudText>
             <MudPaper Elevation="0" Class="fc-table-paper">
@@ -127,7 +158,13 @@ else
                     <RowTemplate>
                         <MudTd>
                             <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.NflTeam</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @context.NflTeam
+                                @if (!string.IsNullOrEmpty(context.OpponentTeam))
+                                {
+                                    <span> vs @context.OpponentTeam</span>
+                                }
+                            </MudText>
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small" Class="@PositionClass(context.Position)" Variant="Variant.Filled">
@@ -136,6 +173,10 @@ else
                         </MudTd>
                         <MudTd>
                             @RenderProjectedPoints(context, true)
+                            @* Boom / Bust chips *@
+                            @RenderBoomBust(context)
+                            @* Game script tag *@
+                            @RenderGameScript(context)
                         </MudTd>
                         <MudTd>
                             @if (!string.IsNullOrEmpty(context.InjuryDesignation))
@@ -160,7 +201,7 @@ else
                             <MudTh>Player</MudTh>
                             <MudTh>Pos</MudTh>
                             <MudTh>Proj</MudTh>
-                            <MudTh>Status</MudTh>
+                            <MudTh></MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>
@@ -174,8 +215,16 @@ else
                             </MudTd>
                             <MudTd>
                                 @RenderProjectedPoints(context, false)
+                                @RenderBoomBust(context)
                             </MudTd>
                             <MudTd>
+                                @* Consider starting flag *@
+                                @if (ShouldConsiderStarting(context, _matchup.MyTeam.Players))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
+                                        Consider Starting
+                                    </MudChip>
+                                }
                                 @if (!string.IsNullOrEmpty(context.InjuryDesignation))
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="@InjuryColor(context.InjuryDesignation)" Variant="Variant.Filled">
@@ -189,7 +238,7 @@ else
             }
         </MudItem>
 
-        @* Opponent starters *@
+        @* ── OPPONENT SIDE ── *@
         <MudItem xs="12" md="6">
             <div class="d-flex align-center gap-3 mb-2">
                 <MudText Typo="Typo.subtitle2" Class="fc-section-label">OPPONENT STARTERS</MudText>
@@ -210,7 +259,13 @@ else
                     <RowTemplate>
                         <MudTd>
                             <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.NflTeam</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @context.NflTeam
+                                @if (!string.IsNullOrEmpty(context.OpponentTeam))
+                                {
+                                    <span> vs @context.OpponentTeam</span>
+                                }
+                            </MudText>
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small" Class="@PositionClass(context.Position)" Variant="Variant.Filled">
@@ -219,6 +274,8 @@ else
                         </MudTd>
                         <MudTd>
                             @RenderProjectedPoints(context, false)
+                            @RenderBoomBust(context)
+                            @RenderGameScript(context)
                         </MudTd>
                         <MudTd>
                             @if (!string.IsNullOrEmpty(context.InjuryDesignation))
@@ -231,12 +288,42 @@ else
                     </RowTemplate>
                 </MudTable>
             </MudPaper>
+
+            @* Collapsible opponent bench *@
+            @if (_matchup.Opponent.Players.Any(p => !p.IsStarter))
+            {
+                <MudExpansionPanels Class="mt-3" Elevation="0">
+                    <MudExpansionPanel Text="View opponent bench" Dense="true">
+                        <MudTable Items="@_matchup.Opponent.Players.Where(p => !p.IsStarter).ToList()"
+                                  Dense="true" Hover="true" Class="fc-table">
+                            <HeaderContent>
+                                <MudTh>Player</MudTh>
+                                <MudTh>Pos</MudTh>
+                                <MudTh>Proj</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.NflTeam</MudText>
+                                </MudTd>
+                                <MudTd>
+                                    <MudChip T="string" Size="Size.Small" Class="@PositionClass(context.Position)" Variant="Variant.Filled">
+                                        @context.Position
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd>
+                                    @RenderProjectedPoints(context, false)
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            }
         </MudItem>
     </MudGrid>
 }
 
 @* ── PROJECTION BREAKDOWN POPOVERS ──────────────────────────────────────────── *@
-@* One popover per player — keyed by SleeperPlayerId to avoid ID collisions *@
 @if (_matchup is not null)
 {
     foreach (var player in _matchup.MyTeam.Players.Concat(_matchup.Opponent.Players))
@@ -252,30 +339,23 @@ else
                 <MudPaper Class="pa-3" Elevation="2" Style="min-width:240px; max-width:300px;">
                     <div class="d-flex justify-space-between align-center mb-2">
                         <MudText Typo="Typo.subtitle2" Style="font-weight:700;">@p.PlayerName</MudText>
-                        <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                       Size="Size.Small"
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
                                        OnClick="@(() => ClosePopover())" />
                     </div>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2 d-block">
                         Projection Model — @p.ProjectionBreakdown.ScoringFormat · Wk @p.ProjectionBreakdown.Week
                     </MudText>
                     <MudDivider Class="mb-2" />
-
-                    @* Projected points (scoring-format-adjusted) *@
                     <div class="d-flex justify-space-between mb-1">
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">Projected Pts</MudText>
                         <MudText Typo="Typo.caption" Style="font-weight:600; color:var(--fc-cyan);">
                             @p.ProjectionBreakdown.ProjectedPoints.ToString("F1")
                         </MudText>
                     </div>
-
-                    @* Weighted average baseline *@
                     <div class="d-flex justify-space-between mb-1">
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">Wtd Avg Baseline</MudText>
                         <MudText Typo="Typo.caption">@p.ProjectionBreakdown.WeightedAvgPoints.ToString("F1")</MudText>
                     </div>
-
-                    @* Matchup adjustment *@
                     <div class="d-flex justify-space-between mb-1">
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">Matchup Factor</MudText>
                         <MudText Typo="Typo.caption" Style="@FactorStyle(p.ProjectionBreakdown.MatchupAdjustmentFactor)">
@@ -284,8 +364,6 @@ else
                                 : $"{((p.ProjectionBreakdown.MatchupAdjustmentFactor - 1) * 100):F0}%")
                         </MudText>
                     </div>
-
-                    @* Snap % *@
                     @if (p.ProjectionBreakdown.SnapPctInput > 0)
                     {
                         <div class="d-flex justify-space-between mb-1">
@@ -293,8 +371,6 @@ else
                             <MudText Typo="Typo.caption">@((p.ProjectionBreakdown.SnapPctInput * 100).ToString("F0"))%</MudText>
                         </div>
                     }
-
-                    @* Target share (skill positions) *@
                     @if (p.ProjectionBreakdown.TargetShareInput > 0)
                     {
                         <div class="d-flex justify-space-between mb-1">
@@ -302,10 +378,7 @@ else
                             <MudText Typo="Typo.caption">@((p.ProjectionBreakdown.TargetShareInput * 100).ToString("F0"))%</MudText>
                         </div>
                     }
-
-                    @* Game script *@
-                    @if (!string.IsNullOrEmpty(p.ProjectionBreakdown.GameScript) &&
-                         p.ProjectionBreakdown.GameScript != "Unknown")
+                    @if (!string.IsNullOrEmpty(p.ProjectionBreakdown.GameScript) && p.ProjectionBreakdown.GameScript != "Unknown")
                     {
                         <div class="d-flex justify-space-between mb-1">
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">Game Script</MudText>
@@ -314,8 +387,6 @@ else
                             </MudText>
                         </div>
                     }
-
-                    @* Vegas spread *@
                     @if (p.ProjectionBreakdown.SpreadInput != 0)
                     {
                         <div class="d-flex justify-space-between mb-1">
@@ -327,8 +398,6 @@ else
                             </MudText>
                         </div>
                     }
-
-                    @* Sim range (floor/ceiling from parent DTO) *@
                     @if (p.FloorProjectedPoints.HasValue && p.CeilingProjectedPoints.HasValue)
                     {
                         <MudDivider Class="my-2" />
@@ -337,6 +406,23 @@ else
                             <MudText Typo="Typo.caption">
                                 @p.FloorProjectedPoints.Value.ToString("F1") – @p.CeilingProjectedPoints.Value.ToString("F1")
                             </MudText>
+                        </div>
+                    }
+                    @if (p.BoomProbability.HasValue || p.BustProbability.HasValue)
+                    {
+                        <div class="d-flex justify-space-between mt-1">
+                            @if (p.BoomProbability.HasValue)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Boom: @((p.BoomProbability.Value * 100).ToString("F0"))%
+                                </MudText>
+                            }
+                            @if (p.BustProbability.HasValue)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    Bust: @((p.BustProbability.Value * 100).ToString("F0"))%
+                                </MudText>
+                            }
                         </div>
                     }
                 </MudPaper>
@@ -352,7 +438,7 @@ else
     private MyMatchupDto? _matchup;
     private int _week;
     private int _season;
-    private string? _openPopoverId;   // SleeperPlayerId of currently open popover
+    private string? _openPopoverId;
 
     private HttpClient Http => HttpClientFactory.CreateClient("AuthAPI");
 
@@ -377,9 +463,17 @@ else
             if (string.IsNullOrEmpty(leagueId))
             {
                 var context = await Http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
-                if (context?.IsSleeperLinked != true) { _noSleeper = true; return; }
+                if (context?.IsSleeperLinked != true)
+                {
+                    _noSleeper = true;
+                    return;
+                }
                 leagueId = context.ActiveLeagueId;
-                if (string.IsNullOrEmpty(leagueId)) { _noLeague = true; return; }
+                if (string.IsNullOrEmpty(leagueId))
+                {
+                    _noLeague = true;
+                    return;
+                }
                 LeagueState.ActiveLeagueId = leagueId;
             }
 
@@ -401,61 +495,158 @@ else
         }
     }
 
-    // ── Popover helpers ──────────────────────────────────────────────────────────
+    // ── Intelligence helpers (MATCHUP-003) ────────────────────────────────────
 
-    private bool IsPopoverOpen(string sleeperPlayerId) => _openPopoverId == sleeperPlayerId;
-
-    private void TogglePopover(string sleeperPlayerId)
+    /// <summary>
+    /// Returns a one-line game script summary based on the dominant theme across starters.
+    /// Null when no starters have game script data.
+    /// </summary>
+    private static string? BuildGameScriptSummary(List<MyMatchupPlayerDto> starters)
     {
-        _openPopoverId = _openPopoverId == sleeperPlayerId ? null : sleeperPlayerId;
+        var scripts = starters
+            .Where(p => !string.IsNullOrEmpty(p.GameScript) && p.GameScript != "Unknown" && p.GameScript != "Competitive")
+            .Select(p => p.GameScript!)
+            .ToList();
+
+        if (scripts.Count == 0) return null;
+
+        var favored = scripts.Count(s => s is "Favored" or "Favorable" or "High Ceiling");
+        var underdog = scripts.Count(s => s is "Underdog" or "Unfavorable" or "Negative");
+
+        if (favored > 0 && underdog == 0)
+            return $"Favorable game scripts across your lineup — projected positive game flow ({favored} starter{(favored == 1 ? "" : "s")})";
+        if (underdog > 0 && favored == 0)
+            return $"Your starters face underdog game scripts — volume risk this week ({underdog} starter{(underdog == 1 ? "" : "s")})";
+        if (favored > underdog)
+            return $"Mixed scripts with a favorable lean — {favored} favored, {underdog} underdog";
+        if (underdog > favored)
+            return $"Mixed scripts with underdog lean — evaluate individual matchups below";
+        return "Mixed game scripts this week — evaluate individual matchups below";
     }
 
-    private void ClosePopover() => _openPopoverId = null;
+    /// <summary>
+    /// Returns a boom/bust team summary. Null when no players exceed thresholds.
+    /// Boom threshold: 25%. Bust threshold: 30%.
+    /// </summary>
+    private static string? BuildBoomBustSummary(List<MyMatchupPlayerDto> starters)
+    {
+        var boomCount = starters.Count(p => p.BoomProbability.HasValue && p.BoomProbability.Value >= 0.25);
+        var bustCount = starters.Count(p => p.BustProbability.HasValue && p.BustProbability.Value >= 0.30);
 
-    // Renders the projected-points cell — clickable if breakdown exists, plain text otherwise
+        if (boomCount == 0 && bustCount == 0) return null;
+
+        if (boomCount > 0 && bustCount == 0)
+            return $"High ceiling lineup — {boomCount} starter{(boomCount == 1 ? "" : "s")} with 25%+ boom probability";
+        if (bustCount > 0 && boomCount == 0)
+            return $"Bust risk — {bustCount} starter{(bustCount == 1 ? "" : "s")} flagged with 30%+ bust probability";
+        return $"Boom/bust week — {boomCount} high-ceiling, {bustCount} bust-risk starter{(bustCount == 1 ? "" : "s")}";
+    }
+
+    /// <summary>
+    /// Returns true if a bench player's median projection exceeds the weakest
+    /// starter at the same position (or FLEX-eligible position).
+    /// </summary>
+    private static bool ShouldConsiderStarting(MyMatchupPlayerDto bench, List<MyMatchupPlayerDto> allPlayers)
+    {
+        if (!bench.MedianProjectedPoints.HasValue || bench.MedianProjectedPoints.Value <= 0)
+            return false;
+
+        var startersAtPos = allPlayers
+            .Where(p => p.IsStarter && p.Position == bench.Position && p.MedianProjectedPoints.HasValue)
+            .ToList();
+
+        if (startersAtPos.Count == 0) return false;
+
+        var weakestStarter = startersAtPos.Min(p => p.MedianProjectedPoints!.Value);
+        return bench.MedianProjectedPoints.Value > weakestStarter;
+    }
+
+    // ── Render fragments ───────────────────────────────────────────────────────
+
     private RenderFragment RenderProjectedPoints(MyMatchupPlayerDto player, bool isMySide) =>
         @<text>
-            @if (player.ProjectionBreakdown is not null)
-            {
-                var pid = player.SleeperPlayerId;
-                <span @onclick="@(() => TogglePopover(pid))"
-                      style="cursor:pointer; text-decoration:underline dotted;"
-                      title="Click to see projection breakdown">
-                    <MudText Typo="Typo.body2"
-                             Class="@(isMySide ? "fc-stat fc-cyan" : "fc-stat fc-ceiling")">
-                        @(player.MedianProjectedPoints.HasValue
-                            ? player.MedianProjectedPoints.Value.ToString("F1")
-                            : "—")
+            <div style="text-align:center;">
+                @if (player.ProjectionBreakdown is not null)
+                {
+                    var pid = player.SleeperPlayerId;
+                    <span @onclick="@(() => TogglePopover(pid))"
+                          style="cursor:pointer; text-decoration:underline dotted;"
+                          title="Click to see projection breakdown">
+                        <MudText Typo="Typo.body2" Class="@(isMySide ? "fc-stat fc-cyan" : "fc-stat fc-ceiling")">
+                            @(player.MedianProjectedPoints.HasValue ? player.MedianProjectedPoints.Value.ToString("F1") : "—")
+                        </MudText>
+                    </span>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="@(isMySide ? "fc-stat fc-cyan" : "mud-text-secondary")">
+                        @(player.MedianProjectedPoints.HasValue ? player.MedianProjectedPoints.Value.ToString("F1") : "—")
                     </MudText>
-                </span>
-            }
-            else
+                }
+                @if (player.FloorProjectedPoints.HasValue && player.CeilingProjectedPoints.HasValue)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-size:0.68rem;">
+                        @player.FloorProjectedPoints.Value.ToString("F1") – @player.CeilingProjectedPoints.Value.ToString("F1")
+                    </MudText>
+                }
+            </div>
+        </text>;
+
+    private RenderFragment RenderBoomBust(MyMatchupPlayerDto player) =>
+        @<text>
+            @if (player.BoomProbability.HasValue && player.BoomProbability.Value >= 0.25)
             {
-                <MudText Typo="Typo.body2"
-                         Class="@(isMySide ? "fc-stat fc-cyan" : "mud-text-secondary")">
-                    @(player.MedianProjectedPoints.HasValue
-                        ? player.MedianProjectedPoints.Value.ToString("F1")
-                        : "—")
-                </MudText>
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined"
+                         Style="height:18px; font-size:0.65rem;" title="@($"Boom prob: {player.BoomProbability.Value * 100:F0}%")">
+                    🔥 Boom
+                </MudChip>
+            }
+            @if (player.BustProbability.HasValue && player.BustProbability.Value >= 0.30)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined"
+                         Style="height:18px; font-size:0.65rem;" title="@($"Bust prob: {player.BustProbability.Value * 100:F0}%")">
+                    ⚠️ Bust
+                </MudChip>
             }
         </text>;
 
-    // ── Style helpers ────────────────────────────────────────────────────────────
+    private RenderFragment RenderGameScript(MyMatchupPlayerDto player) =>
+        @<text>
+            @if (player.GameScript is "Favored" or "Favorable" or "High Ceiling")
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined"
+                         Style="height:18px; font-size:0.65rem;">
+                    Favored
+                </MudChip>
+            }
+            else if (player.GameScript is "Underdog" or "Unfavorable" or "Negative")
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined"
+                         Style="height:18px; font-size:0.65rem;">
+                    Dog
+                </MudChip>
+            }
+        </text>;
 
+    // ── Popover helpers ────────────────────────────────────────────────────────
+    private bool IsPopoverOpen(string sleeperPlayerId) => _openPopoverId == sleeperPlayerId;
+    private void TogglePopover(string sleeperPlayerId)
+        => _openPopoverId = _openPopoverId == sleeperPlayerId ? null : sleeperPlayerId;
+    private void ClosePopover() => _openPopoverId = null;
+
+    // ── Style helpers ──────────────────────────────────────────────────────────
     private static string FactorStyle(double factor) =>
         factor >= 1.05 ? "color:var(--fc-green); font-weight:600;" :
-        factor <= 0.95 ? "color:var(--mud-palette-error); font-weight:600;" :
-        "";
+        factor <= 0.95 ? "color:var(--mud-palette-error); font-weight:600;" : "";
 
     private static string GameScriptStyle(string script) => script switch
     {
-        "Favorable" or "High Ceiling" => "color:var(--fc-green); font-weight:600;",
-        "Unfavorable" or "Negative" => "color:var(--mud-palette-error); font-weight:600;",
+        "Favorable" or "High Ceiling" or "Favored" => "color:var(--fc-green); font-weight:600;",
+        "Unfavorable" or "Negative" or "Underdog"  => "color:var(--mud-palette-error); font-weight:600;",
         _ => ""
     };
 
-    // ── League / season handlers ─────────────────────────────────────────────────
-
+    // ── League / season handlers ───────────────────────────────────────────────
     private void OnLeagueChangedHandler() => _ = InvokeAsync(async () =>
     {
         await LoadMatchupAsync();
@@ -470,8 +661,8 @@ else
     private static Color InjuryColor(string d) => d switch
     {
         "Out" or "D" or "IR" => Color.Error,
-        "Q" or "Doubtful" => Color.Warning,
-        _ => Color.Default
+        "Q" or "Doubtful"    => Color.Warning,
+        _                    => Color.Default
     };
 
     private static string PositionClass(string pos) => pos switch
@@ -480,11 +671,10 @@ else
         "RB" => "fc-chip-rb",
         "WR" => "fc-chip-wr",
         "TE" => "fc-chip-te",
-        _ => ""
+        _    => ""
     };
 
-    // ── Local DTOs ───────────────────────────────────────────────────────────────
-
+    // ── Local DTOs ─────────────────────────────────────────────────────────────
     private record UserContextResponse(
         bool IsSleeperLinked,
         string? ActiveLeagueId,
@@ -520,10 +710,14 @@ else
         double? MedianProjectedPoints,
         double? FloorProjectedPoints,
         double? CeilingProjectedPoints,
+        double? BoomProbability,
+        double? BustProbability,
+        string? GameScript,
+        string? OpponentTeam,
         string? InjuryDesignation,
         string? LeagueId,
         string? ScoringFormat,
-        ProjectionBreakdownDto? ProjectionBreakdown);   // NEW
+        ProjectionBreakdownDto? ProjectionBreakdown);
 
     private record ProjectionBreakdownDto(
         double ProjectedPoints,
