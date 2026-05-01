@@ -96,4 +96,17 @@ public class PlayerProjectionRepository(
             Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Week, week));
         return await _collection.Find(filter).FirstOrDefaultAsync(ct);
     }
+    public async Task<IReadOnlyList<PlayerProjectionDocument>> GetBySleeperIdsAsync(
+    IEnumerable<string> sleeperIds, int season, int week, CancellationToken ct = default)
+    {
+        var ids = sleeperIds.ToList();
+        if (ids.Count == 0) return [];
+
+        var filter = Builders<PlayerProjectionDocument>.Filter.And(
+            Builders<PlayerProjectionDocument>.Filter.In(x => x.SleeperPlayerId, ids),
+            Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Season, season),
+            Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Week, week));
+
+        return await _collection.Find(filter).ToListAsync(ct);
+    }
 }

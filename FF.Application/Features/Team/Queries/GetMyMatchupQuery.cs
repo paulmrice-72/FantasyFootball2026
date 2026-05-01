@@ -1,5 +1,4 @@
 ﻿// FF.Application/Features/Team/Queries/GetMyMatchupQuery.cs
-using FF.Application.Interfaces.Services;
 using MediatR;
 
 namespace FF.Application.Features.Team.Queries;
@@ -34,10 +33,24 @@ public record MyMatchupPlayerDto(
     string Position,
     string NflTeam,
     bool IsStarter,
-    string? SlotLabel,           // e.g. "QB", "FLEX", "BN" — from RosterConfig
+    string? SlotLabel,
     double? MedianProjectedPoints,
     double? FloorProjectedPoints,
     double? CeilingProjectedPoints,
     string? InjuryDesignation,
     Guid? LeagueId,
-    string? ScoringFormat);
+    string? ScoringFormat,
+    ProjectionBreakdownDto? ProjectionBreakdown);   // NEW
+
+// NEW — projection model inputs surfaced per-player
+public record ProjectionBreakdownDto(
+    double ProjectedPoints,
+    double WeightedAvgPoints,
+    double MatchupAdjustmentFactor,
+    double SnapPctInput,
+    double TargetShareInput,
+    string GameScript,
+    double SpreadInput,
+    string ScoringFormat,
+    int Season,
+    int Week);

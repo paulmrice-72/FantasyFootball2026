@@ -1,4 +1,4 @@
-﻿// FF.Application/Interfaces/IPlayerProjectionRepository.cs
+﻿// FF.Application/Interfaces/Persistence/IPlayerProjectionRepository.cs
 using FF.Domain.Documents;
 
 namespace FF.Application.Interfaces.Persistence;
@@ -10,4 +10,6 @@ public interface IPlayerProjectionRepository
     Task<IReadOnlyList<PlayerProjectionDocument>> GetByWeekAsync(int season, int week, CancellationToken ct = default);
     Task<IReadOnlyList<PlayerProjectionDocument>> GetByPositionAsync(int season, int week, string position, CancellationToken ct = default);
     Task<PlayerProjectionDocument?> GetByPlayerAsync(string playerId, int season, int week, CancellationToken ct = default);
+    Task<IReadOnlyList<PlayerProjectionDocument>> GetBySleeperIdsAsync(
+        IEnumerable<string> sleeperIds, int season, int week, CancellationToken ct = default);
 }
