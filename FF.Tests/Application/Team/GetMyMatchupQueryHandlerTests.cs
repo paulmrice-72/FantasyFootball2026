@@ -1,6 +1,7 @@
 ﻿using FF.Application.Features.Team.Queries;
 using FF.Application.Interfaces.External;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using FF.Domain.Entities;
 using FF.Domain.Enums;
@@ -73,23 +74,37 @@ public class GetMyMatchupQueryHandlerTests
         };
 
     private static GetMyMatchupQueryHandler BuildHandler(
-        ISleeperMatchupService? matchupService = null,
-        IRosterPlayerRepository? rosterRepo = null,
-        IPlayerRepository? playerRepo = null,
-        ISimulationResultRepository? simRepo = null,
-        IInjuryAlertRepository? injuryRepo = null)
+    ISleeperMatchupService? matchupService = null,
+    IRosterPlayerRepository? rosterRepo = null,
+    IPlayerRepository? playerRepo = null,
+    ISimulationResultRepository? simRepo = null,
+    IInjuryAlertRepository? injuryRepo = null,
+    ILeagueRepository? leagueRepo = null,
+    ILeagueContextResolverService? leagueCtxResolver = null)
     {
         matchupService ??= Substitute.For<ISleeperMatchupService>();
         rosterRepo ??= Substitute.For<IRosterPlayerRepository>();
         playerRepo ??= Substitute.For<IPlayerRepository>();
         simRepo ??= Substitute.For<ISimulationResultRepository>();
         injuryRepo ??= Substitute.For<IInjuryAlertRepository>();
+        leagueRepo ??= Substitute.For<ILeagueRepository>();
+        leagueCtxResolver ??= Substitute.For<ILeagueContextResolverService>();
 
         injuryRepo.GetActiveAlertsAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns([]);
 
+        // Default: no league found — handler degrades gracefully
+        leagueRepo.GetBySleeperIdAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns((FF.Domain.Entities.League?)null);
+
         return new GetMyMatchupQueryHandler(
-            matchupService, rosterRepo, playerRepo, simRepo, injuryRepo,
+            matchupService,
+            rosterRepo,
+            playerRepo,
+            simRepo,
+            injuryRepo,
+            leagueRepo,
+            leagueCtxResolver,
             NullLogger<GetMyMatchupQueryHandler>.Instance);
     }
 
@@ -315,5 +330,52 @@ public class GetMyMatchupQueryHandlerTests
         result.Should().NotBeNull();
         result!.MyWinProbability.Should().BeGreaterThan(0.5);
         result.OpponentWinProbability.Should().BeLessThan(0.5);
+    }
+
+    [Fact]
+    public async Task Sleeper_empty_slot_placeholders_are_not_marked_as_starters()
+    {
+        // Sleeper returns "0" for unfilled roster slots — should be excluded from starter set
+        var startersWithPlaceholder = new List<string> { "S-QB1", "0", "S-WR1", "0", "S-RB1" };
+
+        var matchupSvc = Substitute.For<ISleeperMatchupService>();
+        matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<SleeperMatchupEntry>
+            {
+            new(MatchupId, int.Parse(MyRosterId), startersWithPlaceholder, MyPlayerIds),
+            new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds)
+            }.AsReadOnly());
+
+        var myRosterDoc = MakeRosterDoc(SleeperUserId, MyRosterId, MyPlayerIds, "Team A", "Paul");
+        var oppRosterDoc = MakeRosterDoc("user-002", OppRosterId, OppPlayerIds, "Team B", "John");
+
+        var rosterRepo = Substitute.For<IRosterPlayerRepository>();
+        rosterRepo.GetBySleeperUserIdAsync(SleeperUserId, LeagueId, Arg.Any<CancellationToken>())
+            .Returns(myRosterDoc);
+        rosterRepo.GetByLeagueAsync(LeagueId, Arg.Any<CancellationToken>())
+            .Returns(new List<RosterPlayerDocument> { myRosterDoc, oppRosterDoc }
+                .AsReadOnly() as IReadOnlyList<RosterPlayerDocument>);
+
+        var allIds = MyPlayerIds.Concat(OppPlayerIds).ToList();
+        var playerRepo = Substitute.For<IPlayerRepository>();
+        playerRepo.GetBySleeperIdsAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
+            .Returns(allIds.Select(id => MakePlayer(id, "WR")).ToList());
+
+        var simRepo = Substitute.For<ISimulationResultRepository>();
+        simRepo.GetLatestBySleeperIdsAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(allIds.Select(id => MakeSim(id)).ToList()
+                .AsReadOnly() as IReadOnlyList<SimulationResultDocument>);
+
+        var handler = BuildHandler(matchupSvc, rosterRepo, playerRepo, simRepo);
+        var result = await handler.Handle(
+            new GetMyMatchupQuery(SleeperUserId, LeagueId, Season, Week),
+            CancellationToken.None);
+
+        result.Should().NotBeNull();
+        // "0" placeholders must never appear as starters
+        result!.MyTeam.Players.Where(p => p.IsStarter)
+            .Should().NotContain(p => p.SleeperPlayerId == "0");
+        // Only real player IDs should be starters
+        result.MyTeam.Players.Count(p => p.IsStarter).Should().Be(3); // QB1, WR1, RB1
     }
 }

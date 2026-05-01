@@ -370,26 +370,41 @@ else
 
     // ── DTOs ──────────────────────────────────────────────────────────────────
     private record UserContextResponse(
-        bool IsSleeperLinked, string? ActiveLeagueId, List<LeagueItem>? Leagues);
+        bool IsSleeperLinked,
+        string? ActiveLeagueId,
+        List<LeagueItem>? Leagues);
+
     private record LeagueItem(string LeagueId, string LeagueName, int Season, string Role);
 
     private record MyMatchupDto(
-        int Week, int Season,
-        MyMatchupSideDto MyTeam, MyMatchupSideDto Opponent,
-        double MyWinProbability, double OpponentWinProbability);
+        int Week,
+        int Season,
+        string? ScoringFormat,
+        MyMatchupSideDto MyTeam,
+        MyMatchupSideDto Opponent,
+        double MyWinProbability,
+        double OpponentWinProbability);
 
     private record MyMatchupSideDto(
         string TeamName,
         string OwnerName,
-        string? SleeperRosterId,        // ← add this
+        string? SleeperRosterId,
         double TotalProjectedPoints,
         double ProjectedFloor,
         double ProjectedCeiling,
         List<MyMatchupPlayerDto> Players);
 
     private record MyMatchupPlayerDto(
-        string SleeperPlayerId, string PlayerName, string Position, string NflTeam,
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        string NflTeam,
         bool IsStarter,
-        double? MedianProjectedPoints, double? FloorProjectedPoints, double? CeilingProjectedPoints,
-        string? InjuryDesignation);
+        string? SlotLabel,
+        double? MedianProjectedPoints,
+        double? FloorProjectedPoints,
+        double? CeilingProjectedPoints,
+        string? InjuryDesignation,
+        string? LeagueId,
+        string? ScoringFormat);
 }
