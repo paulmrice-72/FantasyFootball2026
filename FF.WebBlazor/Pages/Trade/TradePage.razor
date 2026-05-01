@@ -1,4 +1,4 @@
-﻿@page "/trade"
+@page "/trade"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
@@ -31,14 +31,9 @@
 <div class="d-flex align-center mb-4 gap-3">
     <MudText Typo="Typo.body2" Class="mud-text-secondary">Mode:</MudText>
     <MudToggleGroup T="TradeMode" @bind-Value="_mode" SelectionMode="SelectionMode.SingleSelection"
-                    Color="Color.Primary" CheckMark="false" Delimiters="false"
-                    Rounded="true" Class="fc-mode-toggle">
-        <MudToggleItem Value="TradeMode.Dynasty"
-                       Text="Dynasty"
-                       UnselectedIcon="@Icons.Material.Filled.Timeline" />
-        <MudToggleItem Value="TradeMode.Redraft"
-                       Text="Redraft"
-                       UnselectedIcon="@Icons.Material.Filled.CalendarToday" />
+                    Color="Color.Primary" CheckMark="false" Delimiters="false" Rounded="true" Class="fc-mode-toggle">
+        <MudToggleItem Value="TradeMode.Dynasty" Text="Dynasty" UnselectedIcon="@Icons.Material.Filled.Timeline" />
+        <MudToggleItem Value="TradeMode.Redraft" Text="Redraft" UnselectedIcon="@Icons.Material.Filled.CalendarToday" />
     </MudToggleGroup>
     @if (_mode == TradeMode.Redraft)
     {
@@ -76,15 +71,13 @@
                              ResetValueOnEmptyText="true"
                              CoerceText="false" />
 
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Primary"
-                       Size="Size.Small"
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.Add"
                        Disabled="@(_mySearchResult is null)"
-                       OnClick="AddToMySide"
-                       Class="mb-3">
+                       OnClick="AddToMySide" Class="mb-3">
                 Add
             </MudButton>
+
             @* ── PICK SELECTOR ───────────────────────────── *@
             @if (_mode == TradeMode.Dynasty)
             {
@@ -116,6 +109,7 @@
                     Add Pick
                 </MudButton>
             }
+
             @if (_mySide.Count == 0)
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">No players added yet.</MudText>
@@ -124,13 +118,10 @@
             {
                 @foreach (var player in _mySide)
                 {
-                    <MudPaper Class="pa-2 mb-2 d-flex align-center justify-space-between"
-                              Elevation="1"
+                    <MudPaper Class="pa-2 mb-2 d-flex align-center justify-space-between" Elevation="1"
                               Style="background:rgba(255,255,255,0.03);">
                         <div>
-                            @{
-                                var tp = player;
-                            }
+                            @{ var tp = player; }
                             <MudButton Variant="Variant.Text"
                                        Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
                                        OnClick="@(() => _ = OpenPlayerCardAsync(tp))">
@@ -143,8 +134,7 @@
                                 </span>
                             </MudText>
                         </div>
-                        <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                       Size="Size.Small"
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
                                        Color="Color.Error"
                                        OnClick="@(() => RemoveFromMySide(player))" />
                     </MudPaper>
@@ -163,10 +153,8 @@
     @* ── CENTRE ────────────────────────────────────────────── *@
     <MudItem xs="12" md="2" Class="d-flex flex-column align-center justify-center">
         <MudIcon Icon="@Icons.Material.Filled.SwapHoriz"
-                 Style="font-size:2.5rem;color:var(--fc-cyan);opacity:0.4;"
-                 Class="mb-3" />
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
+                 Style="font-size:2.5rem;color:var(--fc-cyan);opacity:0.4;" Class="mb-3" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
                    StartIcon="@Icons.Material.Filled.Calculate"
                    FullWidth="true"
                    Disabled="@(_analyzing || _mySide.Count == 0 || _theirSide.Count == 0)"
@@ -175,11 +163,8 @@
         </MudButton>
         @if (_mySide.Count > 0 || _theirSide.Count > 0)
         {
-            <MudButton Variant="Variant.Text"
-                       Color="Color.Default"
-                       Size="Size.Small"
-                       Class="mt-2"
-                       OnClick="ClearAll">
+            <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
+                       Class="mt-2" OnClick="ClearAll">
                 Clear
             </MudButton>
         }
@@ -208,34 +193,32 @@
                              ResetValueOnEmptyText="true"
                              CoerceText="false" />
 
-            <MudButton Variant="Variant.Outlined"
-                       Color="Color.Primary"
-                       Size="Size.Small"
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.Add"
                        Disabled="@(_theirSearchResult is null)"
-                       OnClick="AddToTheirSide"
-                       Class="mb-3">
+                       OnClick="AddToTheirSide" Class="mb-3">
                 Add
             </MudButton>
-            @* ── PICK SELECTOR ───────────────────────────── *@
+
+            @* ── PICK SELECTOR — FIX: bound to _theirPickYear/Round/Tier ─── *@
             @if (_mode == TradeMode.Dynasty)
             {
                 <MudDivider Class="my-2" />
                 <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1">Add Draft Pick</MudText>
                 <div class="d-flex gap-2 mb-2">
-                    <MudSelect T="int" @bind-Value="_myPickYear" Label="Year" Variant="Variant.Outlined"
+                    <MudSelect T="int" @bind-Value="_theirPickYear" Label="Year" Variant="Variant.Outlined"
                                Margin="Margin.Dense" Style="max-width:120px;">
                         <MudSelectItem Value="2026">2026</MudSelectItem>
                         <MudSelectItem Value="2027">2027</MudSelectItem>
                         <MudSelectItem Value="2028">2028</MudSelectItem>
                     </MudSelect>
-                    <MudSelect T="int" @bind-Value="_myPickRound" Label="Round" Variant="Variant.Outlined"
+                    <MudSelect T="int" @bind-Value="_theirPickRound" Label="Round" Variant="Variant.Outlined"
                                Margin="Margin.Dense" Style="max-width:90px;">
                         <MudSelectItem Value="1">1st</MudSelectItem>
                         <MudSelectItem Value="2">2nd</MudSelectItem>
                         <MudSelectItem Value="3">3rd</MudSelectItem>
                     </MudSelect>
-                    <MudSelect T="string" @bind-Value="_myPickTier" Label="Tier" Variant="Variant.Outlined"
+                    <MudSelect T="string" @bind-Value="_theirPickTier" Label="Tier" Variant="Variant.Outlined"
                                Margin="Margin.Dense" Style="max-width:90px;">
                         <MudSelectItem Value="@("Early")">Early</MudSelectItem>
                         <MudSelectItem Value="@("Mid")">Mid</MudSelectItem>
@@ -244,10 +227,11 @@
                 </div>
                 <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
                            StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="AddPickToMySide" Class="mb-3">
+                           OnClick="AddPickToTheirSide" Class="mb-3">
                     Add Pick
                 </MudButton>
             }
+
             @if (_theirSide.Count == 0)
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">No players added yet.</MudText>
@@ -256,13 +240,10 @@
             {
                 @foreach (var player in _theirSide)
                 {
-                    <MudPaper Class="pa-2 mb-2 d-flex align-center justify-space-between"
-                              Elevation="1"
+                    <MudPaper Class="pa-2 mb-2 d-flex align-center justify-space-between" Elevation="1"
                               Style="background:rgba(255,255,255,0.03);">
                         <div>
-                            @{
-                                var tp = player;
-                            }
+                            @{ var tp = player; }
                             <MudButton Variant="Variant.Text"
                                        Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
                                        OnClick="@(() => _ = OpenPlayerCardAsync(tp))">
@@ -275,8 +256,7 @@
                                 </span>
                             </MudText>
                         </div>
-                        <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                       Size="Size.Small"
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
                                        Color="Color.Error"
                                        OnClick="@(() => RemoveFromTheirSide(player))" />
                     </MudPaper>
@@ -315,14 +295,12 @@
                 </MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Redraft Verdict</MudText>
             </MudItem>
-
             <MudItem xs="12" sm="5">
                 <MudText Typo="Typo.subtitle2" Class="mb-2">Projected Points Comparison</MudText>
                 <div class="d-flex align-center gap-3 mb-1">
                     <MudText Typo="Typo.body2" Style="min-width:80px;">You Give</MudText>
                     <MudProgressLinear Value="@RedraftBarPct(_redraftResult.MyTotal)"
-                                       Color="Color.Error" Rounded="true" Size="Size.Medium"
-                                       Style="flex:1;" />
+                                       Color="Color.Error" Rounded="true" Size="Size.Medium" Style="flex:1;" />
                     <MudText Typo="Typo.body2" Class="fc-stat"
                              Style="min-width:50px;font-family:'JetBrains Mono',monospace;">
                         @_redraftResult.MyTotal.ToString("F1") pts
@@ -331,20 +309,16 @@
                 <div class="d-flex align-center gap-3">
                     <MudText Typo="Typo.body2" Style="min-width:80px;">You Get</MudText>
                     <MudProgressLinear Value="@RedraftBarPct(_redraftResult.TheirTotal)"
-                                       Color="Color.Success" Rounded="true" Size="Size.Medium"
-                                       Style="flex:1;" />
+                                       Color="Color.Success" Rounded="true" Size="Size.Medium" Style="flex:1;" />
                     <MudText Typo="Typo.body2" Class="fc-stat"
                              Style="min-width:50px;font-family:'JetBrains Mono',monospace;">
                         @_redraftResult.TheirTotal.ToString("F1") pts
                     </MudText>
                 </div>
                 <MudText Typo="Typo.caption" Class="mt-2" Style="@("color:" + gc + ";")">
-                    @(diff >= 0
-                        ? $"You gain {Math.Abs(diff):F1} projected points"
-                        : $"You lose {Math.Abs(diff):F1} projected points")
+                    @(diff >= 0 ? $"You gain {Math.Abs(diff):F1} projected points" : $"You lose {Math.Abs(diff):F1} projected points")
                 </MudText>
             </MudItem>
-
             <MudItem xs="12" sm="4">
                 <MudText Typo="Typo.subtitle2" Class="mb-2">Player Breakdown</MudText>
                 @foreach (var p in _redraftResult.MyPlayers)
@@ -371,9 +345,9 @@
 @if (_mode == TradeMode.Dynasty && _dynastyResult is not null)
 {
     var gc = GradeColor(_dynastyResult.Grade);
+
     <MudPaper Class="pa-4 mb-4" Elevation="2" Style="@("border-left:4px solid " + gc + ";")">
         <MudGrid Spacing="3">
-
             <MudItem xs="12" sm="3" Class="d-flex flex-column align-center justify-center">
                 <MudText Typo="Typo.h2"
                          Style="@("font-weight:900;color:" + gc + ";font-family:'JetBrains Mono',monospace;")">
@@ -381,14 +355,12 @@
                 </MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Trade Grade</MudText>
             </MudItem>
-
             <MudItem xs="12" sm="5">
                 <MudText Typo="Typo.subtitle2" Class="mb-2">Value Comparison</MudText>
                 <div class="d-flex align-center gap-3 mb-1">
                     <MudText Typo="Typo.body2" Style="min-width:80px;">You Give</MudText>
                     <MudProgressLinear Value="@ValueBarPct(_dynastyResult.MySideValue)"
-                                       Color="Color.Error" Rounded="true" Size="Size.Medium"
-                                       Style="flex:1;" />
+                                       Color="Color.Error" Rounded="true" Size="Size.Medium" Style="flex:1;" />
                     <MudText Typo="Typo.body2" Class="fc-stat"
                              Style="min-width:40px;font-family:'JetBrains Mono',monospace;">
                         @_dynastyResult.MySideValue.ToString("F1")
@@ -397,8 +369,7 @@
                 <div class="d-flex align-center gap-3">
                     <MudText Typo="Typo.body2" Style="min-width:80px;">You Get</MudText>
                     <MudProgressLinear Value="@ValueBarPct(_dynastyResult.TheirSideValue)"
-                                       Color="Color.Success" Rounded="true" Size="Size.Medium"
-                                       Style="flex:1;" />
+                                       Color="Color.Success" Rounded="true" Size="Size.Medium" Style="flex:1;" />
                     <MudText Typo="Typo.body2" Class="fc-stat"
                              Style="min-width:40px;font-family:'JetBrains Mono',monospace;">
                         @_dynastyResult.TheirSideValue.ToString("F1")
@@ -408,7 +379,6 @@
                     @_dynastyResult.Recommendation
                 </MudText>
             </MudItem>
-
             <MudItem xs="12" sm="4">
                 @if (_dynastyResult.KeyInsights.Count > 0)
                 {
@@ -416,8 +386,7 @@
                     @foreach (var insight in _dynastyResult.KeyInsights)
                     {
                         <div class="d-flex align-start mb-1">
-                            <MudIcon Icon="@Icons.Material.Filled.Lightbulb"
-                                     Size="Size.Small"
+                            <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Size="Size.Small"
                                      Style="color:var(--fc-cyan);margin-right:6px;margin-top:2px;" />
                             <MudText Typo="Typo.body2">@insight</MudText>
                         </div>
@@ -482,36 +451,41 @@
 }
 
 @code {
-    // ── Mode ──────────────────────────────────────────────────
+    // ── Mode ────────────────────────────────────────────────── 
     private enum TradeMode { Dynasty, Redraft }
     private TradeMode _mode = TradeMode.Dynasty;
 
     [SupplyParameterFromQuery(Name = "mode")]
     public string? ModeParam { get; set; }
 
-    // ── State ─────────────────────────────────────────────────
+    // ── State ───────────────────────────────────────────────── 
     private List<TradePlayerItem> _mySide = [];
     private List<TradePlayerItem> _theirSide = [];
-
     private PlayerSearchResult? _mySearchResult;
     private PlayerSearchResult? _theirSearchResult;
-
     private bool _analyzing;
     private TradeResultModel? _dynastyResult;
     private RedraftResultModel? _redraftResult;
-
     private List<TradeHistoryItem> _history = [];
     private List<PlayerSearchResult> _allPlayers = [];
     private bool _playersLoaded;
 
     private HttpClient Http => HttpClientFactory.CreateClient("AuthAPI");
-    // Pick selector state
+
+    // ── Pick selector state ──────────────────────────────────── 
+    // FIX: each side has its own independent year/round/tier bindings
     private int _myPickYear = 2026;
     private int _myPickRound = 1;
     private string _myPickTier = "Mid";
-    private int _theirPickYear = 2026;
-    private int _theirPickRound = 1;
-    private string _theirPickTier = "Mid";
+
+    private int _theirPickYear = 2026;   // was incorrectly bound to _myPickYear
+    private int _theirPickRound = 1;     // was incorrectly bound to _myPickRound
+    private string _theirPickTier = "Mid"; // was incorrectly bound to _myPickTier
+
+    // FIX: counter to give each pick a unique slot identity so that
+    // two picks with identical Year/Round/Tier can coexist and be 
+    // removed individually (e.g. two 2026 Mid 1sts)
+    private int _pickSlotCounter = 0;
 
     private void AddPickToMySide()
     {
@@ -519,7 +493,11 @@
             string.Empty,
             $"{_myPickYear} {_myPickTier} {OrdinalRound(_myPickRound)}",
             "PICK", 0, 0,
-            true, _myPickRound, _myPickTier, _myPickYear));
+            IsDraftPick: true,
+            PickRound: _myPickRound,
+            PickTier: _myPickTier,
+            PickYear: _myPickYear,
+            PickSlot: ++_pickSlotCounter));
         _dynastyResult = null;
         _redraftResult = null;
     }
@@ -530,7 +508,11 @@
             string.Empty,
             $"{_theirPickYear} {_theirPickTier} {OrdinalRound(_theirPickRound)}",
             "PICK", 0, 0,
-            true, _theirPickRound, _theirPickTier, _theirPickYear));
+            IsDraftPick: true,
+            PickRound: _theirPickRound,
+            PickTier: _theirPickTier,
+            PickYear: _theirPickYear,
+            PickSlot: ++_pickSlotCounter));
         _dynastyResult = null;
         _redraftResult = null;
     }
@@ -542,10 +524,10 @@
         3 => "3rd",
         _ => $"{round}th"
     };
-    // ── Lifecycle ─────────────────────────────────────────────
+
+    // ── Lifecycle ───────────────────────────────────────────── 
     protected override async Task OnInitializedAsync()
     {
-        // Honour ?mode=dynasty or ?mode=redraft from query string
         if (ModeParam?.Equals("redraft", StringComparison.OrdinalIgnoreCase) == true)
             _mode = TradeMode.Redraft;
 
@@ -559,7 +541,7 @@
         ClearAll();
     }
 
-    // ── Data loading ──────────────────────────────────────────
+    // ── Data loading ────────────────────────────────────────── 
     private async Task LoadPlayersForSearch()
     {
         try
@@ -586,7 +568,7 @@
         catch { /* non-fatal */ }
     }
 
-    // ── Search ────────────────────────────────────────────────
+    // ── Search ──────────────────────────────────────────────── 
     private Task<IEnumerable<PlayerSearchResult>> SearchPlayers(
         string value, CancellationToken ct)
     {
@@ -600,21 +582,24 @@
         return Task.FromResult(results);
     }
 
-    // ── Add / Remove ──────────────────────────────────────────
+    // ── Add / Remove ────────────────────────────────────────── 
     private void AddToMySide()
     {
         if (_mySearchResult is null) return;
+
         if (_mySide.Any(p => p.SleeperPlayerId == _mySearchResult.SleeperPlayerId))
         {
             Snackbar.Add("Player already added.", Severity.Warning);
             return;
         }
+
         _mySide.Add(new TradePlayerItem(
             _mySearchResult.SleeperPlayerId,
             _mySearchResult.PlayerName,
             _mySearchResult.Position,
             _mySearchResult.Age,
             _mySearchResult.TradeValue));
+
         _mySearchResult = null;
         _dynastyResult = null;
         _redraftResult = null;
@@ -623,17 +608,20 @@
     private void AddToTheirSide()
     {
         if (_theirSearchResult is null) return;
+
         if (_theirSide.Any(p => p.SleeperPlayerId == _theirSearchResult.SleeperPlayerId))
         {
             Snackbar.Add("Player already added.", Severity.Warning);
             return;
         }
+
         _theirSide.Add(new TradePlayerItem(
             _theirSearchResult.SleeperPlayerId,
             _theirSearchResult.PlayerName,
             _theirSearchResult.Position,
             _theirSearchResult.Age,
             _theirSearchResult.TradeValue));
+
         _theirSearchResult = null;
         _dynastyResult = null;
         _redraftResult = null;
@@ -661,7 +649,7 @@
         _redraftResult = null;
     }
 
-    // ── Analyze ───────────────────────────────────────────────
+    // ── Analyze ─────────────────────────────────────────────── 
     private async Task AnalyzeTrade()
     {
         if (_mySide.Count == 0 || _theirSide.Count == 0) return;
@@ -701,8 +689,8 @@
                     .ToList(),
                 Season = 2026
             };
-            var response = await Http.PostAsJsonAsync("api/v1/trade/analyze", request);
 
+            var response = await Http.PostAsJsonAsync("api/v1/trade/analyze", request);
             if (response.IsSuccessStatusCode)
             {
                 _dynastyResult = await response.Content.ReadFromJsonAsync<TradeResultModel>();
@@ -764,18 +752,16 @@
         }
     }
 
-    // ── Display helpers ───────────────────────────────────────
+    // ── Display helpers ─────────────────────────────────────── 
     private string ValueDisplay(TradePlayerItem player)
     {
         if (_mode == TradeMode.Redraft)
         {
-            // Show redraft value if we've run an analysis, else dynasty value as fallback
             if (_redraftResult is not null)
             {
                 var all = _redraftResult.MyPlayers.Concat(_redraftResult.TheirPlayers);
                 var match = all.FirstOrDefault(p => p.SleeperPlayerId == player.SleeperPlayerId);
-                if (match is not null)
-                    return $"{match.MedianProjectedPoints:F1} pts ({match.ValueLabel})";
+                if (match is not null) return $"{match.MedianProjectedPoints:F1} pts ({match.ValueLabel})";
             }
             return $"Dynasty Val {player.TradeValue:F1}";
         }
@@ -789,8 +775,9 @@
     private double ValueBarPct(double value) =>
         MaxDynastyValue > 0 ? value / MaxDynastyValue * 100.0 : 0;
 
-    private double MaxRedraftValue => _redraftResult is null ? 1 :
-        Math.Max(_redraftResult.MyTotal, _redraftResult.TheirTotal);
+    private double MaxRedraftValue => _redraftResult is null
+        ? 1
+        : Math.Max(_redraftResult.MyTotal, _redraftResult.TheirTotal);
 
     private double RedraftBarPct(double value) =>
         MaxRedraftValue > 0 ? value / MaxRedraftValue * 100.0 : 0;
@@ -805,7 +792,7 @@
         _ => "#888888"
     };
 
-    // ── DTOs ──────────────────────────────────────────────────
+    // ── DTOs ────────────────────────────────────────────────── 
     private record PlayerSearchResult(
         string SleeperPlayerId,
         string PlayerName,
@@ -813,6 +800,8 @@
         int Age,
         double TradeValue);
 
+    // FIX: added PickSlot to uniquely identify each pick so two picks
+    // of the same Round/Tier/Year can coexist and be removed independently
     private record TradePlayerItem(
         string SleeperPlayerId,
         string PlayerName,
@@ -822,7 +811,8 @@
         bool IsDraftPick = false,
         int? PickRound = null,
         string? PickTier = null,
-        int? PickYear = null);
+        int? PickYear = null,
+        int PickSlot = 0);    // ← new: unique slot counter
 
     private record RedraftValueDto(
         string SleeperPlayerId,
@@ -865,7 +855,7 @@
 
     private async Task OpenPlayerCardAsync(TradePlayerItem player)
     {
-        if (player.IsDraftPick) return; // no card for draft picks
+        if (player.IsDraftPick) return;
 
         var data = new PlayerCardDialog.PlayerCardData(
             SleeperPlayerId: player.SleeperPlayerId,
@@ -897,16 +887,18 @@
             DynastyTradeValue: player.TradeValue);
 
         var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, data },
-        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Trade }
-    };
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Trade }
+        };
+
         var options = new DialogOptions
         {
             MaxWidth = MaxWidth.Small,
             FullWidth = true,
             CloseButton = true
         };
+
         await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
     }
 }

@@ -658,7 +658,8 @@ else
     private void AddPickToMySide()
     {
         if (_mySelectedPick is null) return;
-        var id = $"pick-my-{_mySelectedPick.Season}-{_mySelectedPick.Round}";
+        var id = $"pick-my-{_mySelectedPick.Season}-{_mySelectedPick.Round}-{_mySelectedPick.OriginalTeamName}";
+        // e.g. "pick-my-2026-1-TeamA" vs "pick-my-2026-1-TeamB"
         if (_mySide.Any(i => i.Id == id))
         {
             Snackbar.Add("Pick already added.", Severity.Warning);
@@ -700,7 +701,8 @@ else
     private void AddPickToTheirSide()
     {
         if (_theirSelectedPick is null) return;
-        var id = $"pick-their-{_theirSelectedPick.Season}-{_theirSelectedPick.Round}";
+        var id = $"pick-their-{_theirSelectedPick.Season}-{_theirSelectedPick.Round}-{_theirSelectedPick.OriginalTeamName}";
+        // e.g. "pick-my-2026-1-TeamA" vs "pick-my-2026-1-TeamB"
         if (_theirSide.Any(i => i.Id == id))
         {
             Snackbar.Add("Pick already added.", Severity.Warning);

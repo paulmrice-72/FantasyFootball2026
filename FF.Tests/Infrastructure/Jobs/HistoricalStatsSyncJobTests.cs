@@ -22,14 +22,20 @@ public class HistoricalStatsSyncJobTests
         _mockImportService = new Mock<IHistoricalStatsImportService>();
         _mockDownloadService = new Mock<INflverseDownloadService>();
         _mockResolutionService = new Mock<IPlayerIdResolutionService>();
-        _mockNflContext = new Mock<INflContextService>();          // ← add
+        _mockNflContext = new Mock<INflContextService>();
         _mockLogger = new Mock<ILogger<HistoricalStatsSyncJob>>();
+
+        // FIX: Moq returns null Task for unmocked async methods, causing
+        // NullReferenceException on await. Always set up GetSeasonAsync.
+        _mockNflContext
+            .Setup(x => x.GetSeasonAsync())
+            .ReturnsAsync(2026);
 
         _job = new HistoricalStatsSyncJob(
             _mockImportService.Object,
             _mockDownloadService.Object,
             _mockResolutionService.Object,
-            _mockNflContext.Object,                                      // ← add
+            _mockNflContext.Object,
             _mockLogger.Object);
     }
 
@@ -37,13 +43,15 @@ public class HistoricalStatsSyncJobTests
     public async Task SyncCurrentSeasonAsync_CallsImportService_WithCurrentSeason()
     {
         // Arrange
-        var expectedSeason = DateTime.UtcNow.Month >= 3
-            ? DateTime.UtcNow.Year
-            : DateTime.UtcNow.Year - 1;
+        // FIX: use the fixed season the mock returns (2026) rather than
+        // recalculating from DateTime.UtcNow, which could diverge from
+        // what the mock-controlled job actually uses.
+        const int expectedSeason = 2026;
 
         _mockDownloadService
             .Setup(x => x.DownloadCurrentSeasonAsync(
-                expectedSeason, It.IsAny<CancellationToken>()))
+                expectedSeason,
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NflverseDownloadResult
             {
                 Success = true,
@@ -53,7 +61,8 @@ public class HistoricalStatsSyncJobTests
 
         _mockImportService
             .Setup(x => x.ImportSeasonAsync(
-                expectedSeason, It.IsAny<CancellationToken>()))
+                expectedSeason,
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HistoricalImportResult
             {
                 TotalInserted = 0,
@@ -63,7 +72,6 @@ public class HistoricalStatsSyncJobTests
         _mockResolutionService
             .Setup(x => x.BackfillMissingSleeperIdsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new PlayerIdResolutionResult(0, 0, 0, []));
-
 
         // Act
         await _job.SyncCurrentSeasonAsync();
@@ -80,7 +88,8 @@ public class HistoricalStatsSyncJobTests
         // Arrange
         _mockDownloadService
             .Setup(x => x.DownloadCurrentSeasonAsync(
-                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NflverseDownloadResult
             {
                 Success = true,
@@ -90,7 +99,8 @@ public class HistoricalStatsSyncJobTests
 
         _mockImportService
             .Setup(x => x.ImportSeasonAsync(
-                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HistoricalImportResult
             {
                 TotalInserted = 0,
@@ -114,7 +124,8 @@ public class HistoricalStatsSyncJobTests
         // Arrange
         _mockDownloadService
             .Setup(x => x.DownloadCurrentSeasonAsync(
-                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NflverseDownloadResult
             {
                 Success = true,
@@ -124,7 +135,8 @@ public class HistoricalStatsSyncJobTests
 
         _mockImportService
             .Setup(x => x.ImportSeasonAsync(
-                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("MongoDB connection failed"));
 
         // Act
@@ -141,7 +153,8 @@ public class HistoricalStatsSyncJobTests
         // Arrange --- download fails, import should never be called
         _mockDownloadService
             .Setup(x => x.DownloadCurrentSeasonAsync(
-                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NflverseDownloadResult
             {
                 Success = false,
@@ -159,16 +172,17 @@ public class HistoricalStatsSyncJobTests
         // Import should never have been called
         _mockImportService.Verify(
             x => x.ImportSeasonAsync(
-                It.IsAny<int>(), It.IsAny<CancellationToken>()),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Theory]
-    [InlineData(1, 2025)]   // January  --- still in prior season
-    [InlineData(2, 2025)]   // February --- still in prior season
-    [InlineData(3, 2026)]   // March    --- new season year begins
-    [InlineData(9, 2026)]   // September --- season underway
-    [InlineData(12, 2026)]  // December --- season underway
+    [InlineData(1, 2025)]  // January   --- still in prior season
+    [InlineData(2, 2025)]  // February  --- still in prior season
+    [InlineData(3, 2026)]  // March     --- new season year begins
+    [InlineData(9, 2026)]  // September --- season underway
+    [InlineData(12, 2026)] // December  --- season underway
     public void NflSeasonLogic_ReturnsCorrectYear_ForGivenMonth(int month, int expectedYear)
     {
         const int currentYear = 2026;
