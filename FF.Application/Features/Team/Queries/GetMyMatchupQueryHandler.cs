@@ -1,6 +1,7 @@
 ﻿// FF.Application/Features/Team/Queries/GetMyMatchupQueryHandler.cs
 using FF.Application.Interfaces.External;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,8 @@ public class GetMyMatchupQueryHandler(
     IPlayerRepository playerRepository,
     ISimulationResultRepository simulationRepository,
     IInjuryAlertRepository injuryAlertRepository,
+    ILeagueRepository leagueRepository,
+    ILeagueContextResolverService leagueContextResolver,
     ILogger<GetMyMatchupQueryHandler> logger)
     : IRequestHandler<GetMyMatchupQuery, MyMatchupDto?>
 {
@@ -23,7 +26,18 @@ public class GetMyMatchupQueryHandler(
             "Loading matchup for user {SleeperUserId} league {LeagueId} week {Week}",
             request.SleeperUserId, request.SleeperLeagueId, request.Week);
 
-        // 1 — Get all matchups for this week from Sleeper
+        // 1 — Resolve league context (scoring format, roster config)
+        var league = await leagueRepository.GetBySleeperIdAsync(
+            request.SleeperLeagueId, request.Season, cancellationToken);
+
+        LeagueContext? leagueCtx = null;
+        if (league is not null)
+            leagueCtx = await leagueContextResolver.ResolveAsync(league.Id, cancellationToken);
+
+        var scoringFormatLabel = leagueCtx?.ScoringFormat.ToString() ?? "HalfPpr";
+        var rosterConfig = leagueCtx?.RosterConfig;
+
+        // 2 — Get all matchups for this week from Sleeper
         var matchups = await sleeperMatchupService.GetMatchupsAsync(
             request.SleeperLeagueId, request.Week, cancellationToken);
 
@@ -34,7 +48,7 @@ public class GetMyMatchupQueryHandler(
             return null;
         }
 
-        // 2 — Find the user's roster document to get their SleeperRosterId
+        // 3 — Find the user's roster document
         var myRosterDoc = await rosterPlayerRepository.GetBySleeperUserIdAsync(
             request.SleeperUserId, request.SleeperLeagueId, cancellationToken);
 
@@ -44,9 +58,9 @@ public class GetMyMatchupQueryHandler(
             return null;
         }
 
-        // 3 — Match user's roster to their Sleeper matchup entry
-        var myMatchupEntry = matchups.FirstOrDefault(m =>
-            m.RosterId.ToString() == myRosterDoc.SleeperRosterId);
+        // 4 — Match to Sleeper matchup entry
+        var myMatchupEntry = matchups.FirstOrDefault(
+            m => m.RosterId.ToString() == myRosterDoc.SleeperRosterId);
 
         if (myMatchupEntry is null)
         {
@@ -55,10 +69,10 @@ public class GetMyMatchupQueryHandler(
             return null;
         }
 
-        // 4 — Find opponent's matchup entry (same matchup_id, different roster)
-        var opponentEntry = matchups.FirstOrDefault(m =>
-            m.MatchupId == myMatchupEntry.MatchupId &&
-            m.RosterId != myMatchupEntry.RosterId);
+        // 5 — Find opponent
+        var opponentEntry = matchups.FirstOrDefault(
+            m => m.MatchupId == myMatchupEntry.MatchupId
+              && m.RosterId != myMatchupEntry.RosterId);
 
         if (opponentEntry is null)
         {
@@ -66,22 +80,22 @@ public class GetMyMatchupQueryHandler(
             return null;
         }
 
-        // 5 — Get opponent's roster document (for team name/owner)
+        // 6 — Get opponent roster doc
         var allRosterDocs = await rosterPlayerRepository.GetByLeagueAsync(
             request.SleeperLeagueId, cancellationToken);
 
-        var opponentRosterDoc = allRosterDocs.FirstOrDefault(r =>
-            r.SleeperRosterId == opponentEntry.RosterId.ToString());
+        var opponentRosterDoc = allRosterDocs.FirstOrDefault(
+            r => r.SleeperRosterId == opponentEntry.RosterId.ToString());
 
         var opponentTeamName = opponentRosterDoc?.TeamName ?? "Opponent";
         var opponentOwnerName = opponentRosterDoc?.OwnerName ?? "Unknown";
 
-        // 6 — Collect all player IDs from both sides
+        // 7 — Collect all player IDs from both sides
         var myPlayerIds = myRosterDoc.PlayerIds;
         var opponentPlayerIds = opponentRosterDoc?.PlayerIds ?? [];
         var allPlayerIds = myPlayerIds.Concat(opponentPlayerIds).Distinct().ToList();
 
-        // 7 — Bulk load player details + sim results + injuries
+        // 8 — Bulk load player details, sim results, injuries
         var players = await playerRepository.GetBySleeperIdsAsync(allPlayerIds, cancellationToken);
         var playerLookup = players.ToDictionary(p => p.SleeperPlayerId!, p => p);
 
@@ -95,32 +109,50 @@ public class GetMyMatchupQueryHandler(
             .GroupBy(i => i.SleeperPlayerId!)
             .ToDictionary(g => g.Key, g => g.First());
 
-        // 8 — Build starters sets from Sleeper matchup entry
-        var myStarterSet = (myMatchupEntry.Starters ?? []).ToHashSet();
-        var oppStarterSet = (opponentEntry.Starters ?? []).ToHashSet();
+        // 9 — Build starter sets — filter Sleeper's "0" empty-slot placeholders
+        var myStarterSet = (myMatchupEntry.Starters ?? [])
+            .Where(s => s != "0").ToHashSet();
+        var oppStarterSet = (opponentEntry.Starters ?? [])
+            .Where(s => s != "0").ToHashSet();
 
-        // 9 — Assemble both sides
+        // 10 — Assemble both sides
         var mySide = BuildSide(
-            myRosterDoc.TeamName, myRosterDoc.OwnerName,
+            myRosterDoc.TeamName,
+            myRosterDoc.OwnerName,
             myRosterDoc.SleeperRosterId,
-            myPlayerIds, myStarterSet,
-            playerLookup, simLookup, injuryLookup);
+            myPlayerIds,
+            myStarterSet,
+            playerLookup,
+            simLookup,
+            injuryLookup,
+            league?.Id,
+            scoringFormatLabel);
 
         var oppSide = BuildSide(
-            opponentTeamName, opponentOwnerName,
-            opponentRosterDoc.SleeperRosterId,
-            opponentPlayerIds, oppStarterSet,
-            playerLookup, simLookup, injuryLookup);
+            opponentTeamName,
+            opponentOwnerName,
+            opponentRosterDoc?.SleeperRosterId,
+            opponentPlayerIds,
+            oppStarterSet,
+            playerLookup,
+            simLookup,
+            injuryLookup,
+            league?.Id,
+            scoringFormatLabel);
 
-        // 10 — Win probability from projected totals
+        // 11 — Win probability
         var (myWinProb, oppWinProb) = CalculateWinProbability(
-            mySide.TotalProjectedPoints, oppSide.TotalProjectedPoints,
-            mySide.ProjectedFloor, oppSide.ProjectedFloor,
-            mySide.ProjectedCeiling, oppSide.ProjectedCeiling);
+            mySide.TotalProjectedPoints,
+            oppSide.TotalProjectedPoints,
+            mySide.ProjectedFloor,
+            oppSide.ProjectedFloor,
+            mySide.ProjectedCeiling,
+            oppSide.ProjectedCeiling);
 
         return new MyMatchupDto(
             Week: request.Week,
             Season: request.Season,
+            ScoringFormat: scoringFormatLabel,
             MyTeam: mySide,
             Opponent: oppSide,
             MyWinProbability: myWinProb,
@@ -128,13 +160,16 @@ public class GetMyMatchupQueryHandler(
     }
 
     private static MyMatchupSideDto BuildSide(
-        string teamName, string ownerName,
+        string teamName,
+        string ownerName,
         string? rosterId,
         IEnumerable<string> playerIds,
         HashSet<string> starterSet,
         Dictionary<string, FF.Domain.Entities.Player> playerLookup,
         Dictionary<string, FF.Domain.Documents.SimulationResultDocument> simLookup,
-        Dictionary<string, FF.Domain.Documents.InjuryAlertDocument> injuryLookup)
+        Dictionary<string, FF.Domain.Documents.InjuryAlertDocument> injuryLookup,
+        Guid? leagueId,
+        string scoringFormat)
     {
         var matchupPlayers = playerIds.Select(sleeperPlayerId =>
         {
@@ -148,48 +183,55 @@ public class GetMyMatchupQueryHandler(
                 Position: player?.Position.ToString() ?? "?",
                 NflTeam: player?.NflTeam ?? "—",
                 IsStarter: starterSet.Contains(sleeperPlayerId),
+                SlotLabel: starterSet.Contains(sleeperPlayerId) ? "STR" : "BN",
                 MedianProjectedPoints: sim is not null ? (double)sim.Median : null,
                 FloorProjectedPoints: sim is not null ? (double)sim.Floor : null,
                 CeilingProjectedPoints: sim is not null ? (double)sim.Ceiling : null,
-                InjuryDesignation: injury?.Designation);
+                InjuryDesignation: injury?.Designation,
+                LeagueId: leagueId,
+                ScoringFormat: scoringFormat);
         })
         .OrderByDescending(p => p.IsStarter)
         .ThenBy(p => PositionOrder(p.Position))
         .ThenBy(p => p.PlayerName)
         .ToList();
 
-        // Sum starters only for projected totals
         var starters = matchupPlayers.Where(p => p.IsStarter).ToList();
+
+        // Pooled floor/ceiling: centre on median sum ± pooled std dev
+        // Each player's std dev ≈ (ceiling - floor) / 4 (normal approximation)
         var totalMedian = starters.Sum(p => p.MedianProjectedPoints ?? 0);
-        var totalFloor = starters.Sum(p => p.FloorProjectedPoints ?? 0);
-        var totalCeiling = starters.Sum(p => p.CeilingProjectedPoints ?? 0);
+        var pooledVariance = starters.Sum(p =>
+        {
+            var spread = (p.CeilingProjectedPoints ?? 0) - (p.FloorProjectedPoints ?? 0);
+            var stdDev = spread / 4.0;
+            return stdDev * stdDev;
+        });
+        var pooledStdDev = Math.Sqrt(pooledVariance);
+
+        var teamFloor = totalMedian - pooledStdDev;
+        var teamCeiling = totalMedian + pooledStdDev;
 
         return new MyMatchupSideDto(
             TeamName: teamName,
             OwnerName: ownerName,
-            SleeperRosterId: rosterId,      // ← add this
+            SleeperRosterId: rosterId,
             TotalProjectedPoints: totalMedian,
-            ProjectedFloor: totalFloor,
-            ProjectedCeiling: totalCeiling,
+            ProjectedFloor: teamFloor,
+            ProjectedCeiling: teamCeiling,
             Players: matchupPlayers);
     }
 
-    /// <summary>
-    /// Estimates win probability using a logistic function on the projected point spread.
-    /// A 10-point spread ≈ 75% win probability, which is reasonable for fantasy.
-    /// </summary>
     private static (double myWinProb, double oppWinProb) CalculateWinProbability(
         double myMedian, double oppMedian,
         double myFloor, double oppFloor,
         double myCeiling, double oppCeiling)
     {
-        // Blended score: weight median heavily, small adjustment for range overlap
         var spread = myMedian - oppMedian;
         var myRange = myCeiling - myFloor;
         var oppRange = oppCeiling - oppFloor;
         var avgRange = (myRange + oppRange) / 2.0;
 
-        // k controls steepness: at k=0.1, a 10pt spread → ~73% win prob
         const double k = 0.10;
         var adjustedSpread = avgRange > 0 ? spread / (1 + 0.05 * avgRange) : spread;
         var myWinProb = 1.0 / (1.0 + Math.Exp(-k * adjustedSpread));
