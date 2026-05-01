@@ -17,77 +17,66 @@ namespace FF.Infrastructure.ExternalApis.Sleeper;
 
 public interface ISleeperApiClient
 {
-    // ── NFL State ─────────────────────────────────────────────────────────
-    // Call this to find out the current week and season type.
-    // Use this before any week-specific calls so you know which week to pass.
-
+    // ── NFL State ───────────────────────────────────────────────────────── 
     [Get("/v1/state/nfl")]
     Task<SleeperNflStateDto> GetNflStateAsync(CancellationToken cancellationToken = default);
 
-    // ── Players ───────────────────────────────────────────────────────────
-    // Returns ALL NFL players as a dictionary: { "player_id": SleeperPlayerDto }
-    // This is a ~2MB response. Call it once weekly via Hangfire, not on demand.
-    // Sleeper asks that you cache this and not hammer it repeatedly.
-
+    // ── Players ─────────────────────────────────────────────────────────── 
     [Get("/v1/players/nfl")]
     Task<Dictionary<string, SleeperPlayerDto>> GetAllPlayersAsync(CancellationToken cancellationToken = default);
 
-    // ── User ──────────────────────────────────────────────────────────────
-    // Look up a Sleeper user by their username (not user_id).
-    // Use this first to get the user_id needed for league lookups.
-
+    // ── User ────────────────────────────────────────────────────────────── 
     [Get("/v1/user/{username}")]
     Task<SleeperUserDto> GetUserByUsernameAsync(string username, CancellationToken cancellationToken = default);
 
     [Get("/v1/user/{userId}")]
     Task<SleeperUserDto> GetUserByIdAsync(string userId, CancellationToken cancellationToken = default);
 
-    // ── Leagues ───────────────────────────────────────────────────────────
-    // Get all leagues for a user in a given season.
-    // sport is always "nfl" for our purposes.
-
+    // ── Leagues ─────────────────────────────────────────────────────────── 
     [Get("/v1/user/{userId}/leagues/nfl/{season}")]
     Task<List<SleeperLeagueDto>> GetLeaguesForUserAsync(string userId, string season, CancellationToken cancellationToken = default);
-
-    // Get full details for a single league including scoring settings.
-    // This is where you get the scoring_settings dictionary to understand
-    // how points are calculated (PPR, half-PPR, etc.)
 
     [Get("/v1/league/{leagueId}")]
     Task<SleeperLeagueDto> GetLeagueAsync(string leagueId, CancellationToken cancellationToken = default);
 
-    // ── Rosters ───────────────────────────────────────────────────────────
-    // Get all rosters (teams) in a league.
-    // Each roster has a list of player_ids on the team.
-    // Match roster.OwnerId to a SleeperLeagueUserDto.UserId to get the owner's name.
-
+    // ── Rosters ─────────────────────────────────────────────────────────── 
     [Get("/v1/league/{leagueId}/rosters")]
     Task<List<SleeperRosterDto>> GetRostersAsync(string leagueId, CancellationToken cancellationToken = default);
 
-    // ── Users in League ───────────────────────────────────────────────────
-    // Get all users (owners) in a league.
-    // The metadata.team_name field has their custom team name.
-
+    // ── Users in League ─────────────────────────────────────────────────── 
     [Get("/v1/league/{leagueId}/users")]
     Task<List<SleeperLeagueUserDto>> GetUsersInLeagueAsync(string leagueId, CancellationToken cancellationToken = default);
 
-    // ── Transactions ──────────────────────────────────────────────────────
-    // Get transactions for a league for a given waiver round (week number).
-    // Covers trades, waiver claims, and free agent adds/drops.
-    // Call with round = 1 through 18 (or current week) to get full history.
-
+    // ── Transactions ────────────────────────────────────────────────────── 
     [Get("/v1/league/{leagueId}/transactions/{round}")]
     Task<List<SleeperTransactionDto>> GetTransactionsAsync(string leagueId, int round, CancellationToken cancellationToken = default);
 
-    // ── Matchups ──────────────────────────────────────────────────────────
-    // Get matchup data for a specific week.
-    // Returns one entry per roster. Match entries with the same matchup_id
-    // to find each team's opponent for that week.
-
+    // ── Matchups ────────────────────────────────────────────────────────── 
     [Get("/v1/league/{leagueId}/matchups/{week}")]
     Task<List<SleeperMatchupDto>> GetMatchupsAsync(string leagueId, int week, CancellationToken cancellationToken = default);
 
+    // ── Traded picks (league level) ──────────────────────────────────────
+    // Returns all picks that have changed hands for future seasons.
+    // roster_id = original owner, owner_id = current owner.
     [Get("/v1/league/{leagueId}/traded_picks")]
     Task<List<SleeperDraftPickDto>> GetTradedPicksAsync(
-        string leagueId, CancellationToken cancellationToken = default);
+        string leagueId,
+        CancellationToken cancellationToken = default);
+
+    // ── Drafts ───────────────────────────────────────────────────────────
+    // Returns all drafts for a league (most recent first).
+    // Dynasty leagues have one startup draft + annual rookie drafts.
+    [Get("/v1/league/{leagueId}/drafts")]
+    Task<List<SleeperLeagueDraftDto>> GetDraftsForLeagueAsync(
+        string leagueId,
+        CancellationToken cancellationToken = default);
+
+    // ── Draft picks ──────────────────────────────────────────────────────
+    // Returns all picks in a specific draft with actual pick_no and draft_slot.
+    // Used to get the real slot number (e.g. 1.07) once draft order is set.
+    // Only available after the draft order has been randomized by the commissioner.
+    [Get("/v1/draft/{draftId}/picks")]
+    Task<List<SleeperDraftPickDetailDto>> GetDraftPicksAsync(
+        string draftId,
+        CancellationToken cancellationToken = default);
 }
