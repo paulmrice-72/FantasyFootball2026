@@ -37,12 +37,15 @@ public record MyMatchupPlayerDto(
     double? MedianProjectedPoints,
     double? FloorProjectedPoints,
     double? CeilingProjectedPoints,
+    double? BoomProbability,      // NEW — MATCHUP-003
+    double? BustProbability,      // NEW — MATCHUP-003
+    string? GameScript,           // NEW — MATCHUP-003
+    string? OpponentTeam,         // NEW — MATCHUP-003
     string? InjuryDesignation,
     Guid? LeagueId,
     string? ScoringFormat,
-    ProjectionBreakdownDto? ProjectionBreakdown);   // NEW
+    ProjectionBreakdownDto? ProjectionBreakdown);
 
-// NEW — projection model inputs surfaced per-player
 public record ProjectionBreakdownDto(
     double ProjectedPoints,
     double WeightedAvgPoints,

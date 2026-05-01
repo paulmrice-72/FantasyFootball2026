@@ -187,8 +187,8 @@ public class GetMyMatchupQueryHandlerTests
         matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<SleeperMatchupEntry>
             {
-                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds, MyPlayerIds.Take(5).ToList()),
-                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds, OppPlayerIds.Take(5).ToList())
+                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds.Take(5).ToList(), MyPlayerIds),
+                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds)
             }.AsReadOnly());
 
         var myRosterDoc = MakeRosterDoc(SleeperUserId, MyRosterId, MyPlayerIds, "Great Jeans", "Paul");

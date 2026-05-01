@@ -206,6 +206,10 @@ public class GetMyMatchupQueryHandler(
                 MedianProjectedPoints: sim is not null ? (double)sim.Median : null,
                 FloorProjectedPoints: sim is not null ? (double)sim.Floor : null,
                 CeilingProjectedPoints: sim is not null ? (double)sim.Ceiling : null,
+                BoomProbability: sim is not null ? (double)sim.BoomProbability : null,   // NEW
+                BustProbability: sim is not null ? (double)sim.BustProbability : null,   // NEW
+                GameScript: sim?.GameScript,                                              // NEW
+                OpponentTeam: sim?.OpponentTeam,                                          // NEW
                 InjuryDesignation: injury?.Designation,
                 LeagueId: leagueId,
                 ScoringFormat: scoringFormat,
