@@ -2,79 +2,51 @@
 using FF.Application.Interfaces.Services;
 using Microsoft.Extensions.Logging;
 
-namespace FF.Infrastructure.Jobs
+namespace FF.Infrastructure.Jobs;
+
+public class HistoricalStatsSyncJob(
+    IHistoricalStatsImportService importService,
+    INflverseDownloadService downloadService,
+    IPlayerIdResolutionService resolutionService,
+    INflContextService nflContext,
+    ILogger<HistoricalStatsSyncJob> logger)
 {
-    public class HistoricalStatsSyncJob(
-        IHistoricalStatsImportService importService,
-        INflverseDownloadService downloadService,
-        IPlayerIdResolutionService resolutionService,
-        ILogger<HistoricalStatsSyncJob> logger)
+    // Hangfire-safe no-arg entry point
+    public Task RunAsync() => SyncCurrentSeasonAsync();
+
+    public async Task SyncCurrentSeasonAsync(int? season = null)
     {
-        private readonly IHistoricalStatsImportService _importService = importService;
-        private readonly INflverseDownloadService _downloadService = downloadService;
-        private readonly IPlayerIdResolutionService _resolutionService = resolutionService;
-        private readonly ILogger<HistoricalStatsSyncJob> _logger = logger;
+        var currentSeason = season ?? await nflContext.GetSeasonAsync();
 
-        public async Task SyncCurrentSeasonAsync(int? season = null)
+        logger.LogInformation("Hangfire weekly sync starting for season {Season}", currentSeason);
+
+        try
         {
-            var currentSeason = season ?? GetCurrentNflSeason();
-            _logger.LogInformation(
-                "Hangfire weekly sync starting for season {Season}", currentSeason);
-
-            try
+            var download = await downloadService.DownloadCurrentSeasonAsync(currentSeason);
+            if (!download.Success)
             {
-                // Step 1 — Download latest CSV from nflverse
-                var download = await _downloadService
-                    .DownloadCurrentSeasonAsync(currentSeason);
-
-                if (!download.Success)
-                {
-                    _logger.LogError(
-                        "nflverse download failed for season {Season}: {Error}",
-                        currentSeason, download.ErrorMessage);
-                    throw new Exception(
-                        $"nflverse download failed: {download.ErrorMessage}");
-                }
-
-                _logger.LogInformation(
-                    "Downloaded player_stats_{Season}.csv — {Size:N0} bytes",
-                    currentSeason, download.FileSizeBytes);
-
-                // Step 2 — Import the downloaded CSV into MongoDB
-                var result = await _importService.ImportSeasonAsync(currentSeason);
-
-                _logger.LogInformation(
-                    "Hangfire weekly sync complete. Season {Season}: " +
-                    "{Inserted} inserted, {Replaced} replaced, duration={Duration}",
-                    currentSeason,
-                    result.TotalInserted,
-                    result.TotalReplaced,
-                    result.Duration);
-
-                // Step 3 — Backfill any new documents missing SleeperPlayerId
-                _logger.LogInformation(
-                    "Running SleeperPlayerId backfill after season {Season} import",
-                    currentSeason);
-
-                var resolution = await _resolutionService.BackfillMissingSleeperIdsAsync();
-
-                _logger.LogInformation(
-                    "SleeperPlayerId backfill complete — " +
-                    "Resolved: {Resolved}, Unresolved: {Unresolved}",
-                    resolution.Resolved, resolution.Unresolved);
+                logger.LogError("nflverse download failed for season {Season}: {Error}",
+                    currentSeason, download.ErrorMessage);
+                throw new Exception($"nflverse download failed: {download.ErrorMessage}");
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Hangfire weekly sync FAILED for season {Season}", currentSeason);
-                throw;
-            }
+
+            logger.LogInformation("Downloaded player_stats_{Season}.csv — {Size:N0} bytes",
+                currentSeason, download.FileSizeBytes);
+
+            var result = await importService.ImportSeasonAsync(currentSeason);
+            logger.LogInformation(
+                "Hangfire weekly sync complete. Season {Season}: {Inserted} inserted, {Replaced} replaced, duration={Duration}",
+                currentSeason, result.TotalInserted, result.TotalReplaced, result.Duration);
+
+            logger.LogInformation("Running SleeperPlayerId backfill after season {Season} import", currentSeason);
+            var resolution = await resolutionService.BackfillMissingSleeperIdsAsync();
+            logger.LogInformation("SleeperPlayerId backfill complete — Resolved: {Resolved}, Unresolved: {Unresolved}",
+                resolution.Resolved, resolution.Unresolved);
         }
-
-        private static int GetCurrentNflSeason()
+        catch (Exception ex)
         {
-            var now = DateTime.UtcNow;
-            return now.Month >= 3 ? now.Year : now.Year - 1;
+            logger.LogError(ex, "Hangfire weekly sync FAILED for season {Season}", currentSeason);
+            throw;
         }
     }
 }

@@ -15,18 +15,21 @@ public class HistoricalStatsSyncJobTests
     private readonly Mock<ILogger<HistoricalStatsSyncJob>> _mockLogger;
     private readonly HistoricalStatsSyncJob _job;
     private readonly Mock<IPlayerIdResolutionService> _mockResolutionService;
+    private readonly Mock<INflContextService> _mockNflContext;
 
     public HistoricalStatsSyncJobTests()
     {
         _mockImportService = new Mock<IHistoricalStatsImportService>();
         _mockDownloadService = new Mock<INflverseDownloadService>();
         _mockResolutionService = new Mock<IPlayerIdResolutionService>();
+        _mockNflContext = new Mock<INflContextService>();          // ← add
         _mockLogger = new Mock<ILogger<HistoricalStatsSyncJob>>();
 
         _job = new HistoricalStatsSyncJob(
             _mockImportService.Object,
             _mockDownloadService.Object,
             _mockResolutionService.Object,
+            _mockNflContext.Object,                                      // ← add
             _mockLogger.Object);
     }
 

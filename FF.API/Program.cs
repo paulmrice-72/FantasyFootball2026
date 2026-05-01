@@ -252,13 +252,13 @@ try
 
     RecurringJob.AddOrUpdate<HistoricalStatsSyncJob>(
         recurringJobId: "weekly-stats-sync",
-        methodCall: x => x.SyncCurrentSeasonAsync(2024),
+        methodCall: x => x.RunAsync(),
         cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 8),
         options: utcOptions);
 
     RecurringJob.AddOrUpdate<UsageMetricsAggregationJob>(
         recurringJobId: "usage-metrics-aggregation",
-        methodCall: job => job.ExecuteAsync(2024),
+        methodCall: job => job.ExecuteAsync(),
         cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 6),
         options: utcOptions);
 

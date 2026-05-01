@@ -716,7 +716,10 @@
         double? YearsOfPrimeRemaining = null,
         // ── PLAYER-CARD-003 additions ──
         string? RosteredByTeamName = null,
-        bool LeagueContextAvailable = false);
+        bool LeagueContextAvailable = false,
+        // ── MATCHUP-001 additions ──
+        Guid? MatchupLeagueId = null,
+        string? MatchupScoringFormat = null);
 
     private record NarrativeResponse(string Narrative);
 }
