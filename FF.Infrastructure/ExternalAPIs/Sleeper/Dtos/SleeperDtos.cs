@@ -9,8 +9,7 @@ using System.Text.Json.Serialization;
 
 namespace FF.Infrastructure.ExternalApis.Sleeper.Dtos;
 
-// ── Player ────────────────────────────────────────────────────────────────────
-
+// ── Player ──────────────────────────────────────────────────────────────────── 
 /// <summary>
 /// Represents a single player entry from GET /v1/players/nfl
 /// Note: Sleeper returns ALL players as a dictionary keyed by player_id
@@ -62,14 +61,12 @@ public class SleeperPlayerDto
 
     [JsonPropertyName("gsis_id")]
     public string? GsisId { get; set; }
+
     [JsonPropertyName("college")]
     public string? College { get; set; }
-
-
 }
 
-// ── User ─────────────────────────────────────────────────────────────────────
-
+// ── User ───────────────────────────────────────────────────────────────────── 
 /// <summary>
 /// Represents a Sleeper user from GET /v1/user/{username}
 /// </summary>
@@ -88,8 +85,7 @@ public class SleeperUserDto
     public string? Avatar { get; set; }
 }
 
-// ── League ───────────────────────────────────────────────────────────────────
-
+// ── League ─────────────────────────────────────────────────────────────────── 
 /// <summary>
 /// Represents a Sleeper league from GET /v1/league/{league_id}
 /// or from GET /v1/user/{user_id}/leagues/nfl/{season}
@@ -106,10 +102,10 @@ public class SleeperLeagueDto
     public string? Season { get; set; }
 
     [JsonPropertyName("season_type")]
-    public string? SeasonType { get; set; }  // "regular", "pre", "post"
+    public string? SeasonType { get; set; } // "regular", "pre", "post"
 
     [JsonPropertyName("status")]
-    public string? Status { get; set; }  // "pre_draft", "drafting", "in_season", "complete"
+    public string? Status { get; set; } // "pre_draft", "drafting", "in_season", "complete"
 
     [JsonPropertyName("sport")]
     public string? Sport { get; set; }
@@ -127,13 +123,10 @@ public class SleeperLeagueDto
     public List<string>? RosterPositions { get; set; }
 
     [JsonPropertyName("previous_league_id")]
-    public string? PreviousLeagueId { get; set; }  // useful for dynasty leagues
+    public string? PreviousLeagueId { get; set; } // useful for dynasty leagues
 
     [JsonPropertyName("avatar")]
     public string? Avatar { get; set; }
-
-    //[JsonPropertyName("league_type")]
-    //public int LeagueType { get; set; }  // 0=Redraft, 1=Keeper, 2=Dynasty
 }
 
 public class SleeperLeagueSettingsDto
@@ -154,18 +147,19 @@ public class SleeperLeagueSettingsDto
     public int TradeDeadline { get; set; }
 
     [JsonPropertyName("waiver_type")]
-    public int WaiverType { get; set; }  // 0=FAAB, 1=standard, 2=rolling
+    public int WaiverType { get; set; } // 0=FAAB, 1=standard, 2=rolling
 
     [JsonPropertyName("waiver_budget")]
     public int WaiverBudget { get; set; }
+
     [JsonPropertyName("type")]
-    public int Type { get; set; }  // 0=Redraft, 1=Keeper, 2=Dynasty
+    public int Type { get; set; } // 0=Redraft, 1=Keeper, 2=Dynasty
+
     [JsonPropertyName("trade_pick_limit")]
-    public int TradePickLimit { get; set; }  // number of years out picks can be traded; 0 = not allowed
+    public int TradePickLimit { get; set; } // number of years out picks can be traded; 0 = not allowed
 }
 
-// ── Roster ───────────────────────────────────────────────────────────────────
-
+// ── Roster ─────────────────────────────────────────────────────────────────── 
 /// <summary>
 /// Represents a team roster from GET /v1/league/{league_id}/rosters
 /// </summary>
@@ -181,19 +175,20 @@ public class SleeperRosterDto
     public string? LeagueId { get; set; }
 
     [JsonPropertyName("players")]
-    public List<string>? Players { get; set; }  // list of player_ids
+    public List<string>? Players { get; set; } // list of player_ids
 
     [JsonPropertyName("starters")]
-    public List<string>? Starters { get; set; }  // player_ids currently starting
+    public List<string>? Starters { get; set; } // player_ids currently starting
 
     [JsonPropertyName("reserve")]
-    public List<string>? Reserve { get; set; }  // IR slots
+    public List<string>? Reserve { get; set; } // IR slots
 
     [JsonPropertyName("taxi")]
-    public List<string>? Taxi { get; set; }  // dynasty taxi squad
+    public List<string>? Taxi { get; set; } // dynasty taxi squad
 
     [JsonPropertyName("settings")]
     public SleeperRosterSettingsDto? Settings { get; set; }
+
 }
 
 public class SleeperRosterSettingsDto
@@ -208,10 +203,10 @@ public class SleeperRosterSettingsDto
     public int Ties { get; set; }
 
     [JsonPropertyName("fpts")]
-    public int Fpts { get; set; }  // fantasy points (integer part)
+    public int Fpts { get; set; } // fantasy points (integer part)
 
     [JsonPropertyName("fpts_decimal")]
-    public int FptsDecimal { get; set; }  // decimal part (e.g. 45 = .45)
+    public int FptsDecimal { get; set; } // decimal part (e.g. 45 = .45)
 
     [JsonPropertyName("fpts_against")]
     public int FptsAgainst { get; set; }
@@ -223,8 +218,7 @@ public class SleeperRosterSettingsDto
     public int WaiverBudgetUsed { get; set; }
 }
 
-// ── League User ───────────────────────────────────────────────────────────────
-
+// ── League User ─────────────────────────────────────────────────────────────── 
 /// <summary>
 /// Represents a user within a league from GET /v1/league/{league_id}/users
 /// </summary>
@@ -252,11 +246,10 @@ public class SleeperLeagueUserMetadataDto
     public string? TeamName { get; set; }
 
     [JsonPropertyName("avatar")]
-    public string? Avatar { get; set; }    // ← ADD
+    public string? Avatar { get; set; }
 }
 
-// ── Transaction ───────────────────────────────────────────────────────────────
-
+// ── Transaction ─────────────────────────────────────────────────────────────── 
 /// <summary>
 /// Represents a transaction from GET /v1/league/{league_id}/transactions/{round}
 /// Covers trades, waiver claims, free agent adds/drops
@@ -267,19 +260,19 @@ public class SleeperTransactionDto
     public string? TransactionId { get; set; }
 
     [JsonPropertyName("type")]
-    public string? Type { get; set; }  // "trade", "waiver", "free_agent"
+    public string? Type { get; set; } // "trade", "waiver", "free_agent"
 
     [JsonPropertyName("status")]
-    public string? Status { get; set; }  // "complete", "failed"
+    public string? Status { get; set; } // "complete", "failed"
 
     [JsonPropertyName("roster_ids")]
     public List<int>? RosterIds { get; set; }
 
     [JsonPropertyName("adds")]
-    public Dictionary<string, int>? Adds { get; set; }  // player_id -> roster_id
+    public Dictionary<string, int>? Adds { get; set; } // player_id -> roster_id
 
     [JsonPropertyName("drops")]
-    public Dictionary<string, int>? Drops { get; set; }  // player_id -> roster_id
+    public Dictionary<string, int>? Drops { get; set; } // player_id -> roster_id
 
     [JsonPropertyName("draft_picks")]
     public List<SleeperDraftPickDto>? DraftPicks { get; set; }
@@ -288,7 +281,7 @@ public class SleeperTransactionDto
     public List<SleeperWaiverBudgetDto>? WaiverBudget { get; set; }
 
     [JsonPropertyName("created")]
-    public long Created { get; set; }  // Unix timestamp in milliseconds
+    public long Created { get; set; } // Unix timestamp in milliseconds
 }
 
 public class SleeperDraftPickDto
@@ -300,10 +293,10 @@ public class SleeperDraftPickDto
     public int Round { get; set; }
 
     [JsonPropertyName("roster_id")]
-    public int RosterId { get; set; }  // owner of pick
+    public int RosterId { get; set; } // current owner of pick
 
     [JsonPropertyName("previous_owner_id")]
-    public int PreviousOwnerId { get; set; }  // original owner
+    public int PreviousOwnerId { get; set; } // original owner
 
     [JsonPropertyName("owner_id")]
     public int OwnerId { get; set; }
@@ -321,8 +314,7 @@ public class SleeperWaiverBudgetDto
     public int Amount { get; set; }
 }
 
-// ── Matchup ───────────────────────────────────────────────────────────────────
-
+// ── Matchup ─────────────────────────────────────────────────────────────────── 
 /// <summary>
 /// Represents a matchup entry from GET /v1/league/{league_id}/matchups/{week}
 /// Each roster has one entry; match them by matchup_id to find opponents
@@ -351,8 +343,7 @@ public class SleeperMatchupDto
     public Dictionary<string, decimal>? PlayersPoints { get; set; }
 }
 
-// ── NFL State ─────────────────────────────────────────────────────────────────
-
+// ── NFL State ───────────────────────────────────────────────────────────────── 
 /// <summary>
 /// Represents the current NFL state from GET /v1/state/nfl
 /// Useful for knowing current week, season, and season type
@@ -363,7 +354,7 @@ public class SleeperNflStateDto
     public int Week { get; set; }
 
     [JsonPropertyName("season_type")]
-    public string? SeasonType { get; set; }  // "regular", "pre", "post"
+    public string? SeasonType { get; set; } // "regular", "pre", "post"
 
     [JsonPropertyName("season")]
     public string? Season { get; set; }
@@ -373,5 +364,111 @@ public class SleeperNflStateDto
 
     [JsonPropertyName("league_season")]
     public string? LeagueSeason { get; set; }
+}
 
+// ── Draft summary ────────────────────────────────────────────────────────────
+/// <summary>
+/// Summary of a draft from GET /v1/league/{league_id}/drafts
+/// Use draft_id to fetch picks and traded picks for that specific draft.
+/// </summary>
+public class SleeperLeagueDraftDto
+{
+    [JsonPropertyName("draft_id")]
+    public string? DraftId { get; set; }
+
+    [JsonPropertyName("league_id")]
+    public string? LeagueId { get; set; }
+
+    [JsonPropertyName("season")]
+    public string? Season { get; set; }
+
+    [JsonPropertyName("season_type")]
+    public string? SeasonType { get; set; } // "regular"
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; } // "pre_draft", "drafting", "complete"
+
+    [JsonPropertyName("type")]
+    public string? Type { get; set; } // "snake", "linear"
+
+    [JsonPropertyName("settings")]
+    public SleeperDraftSettingsDto? Settings { get; set; }
+
+    // draft_order maps user_id → draft slot (1-based)
+    [JsonPropertyName("draft_order")]
+    public Dictionary<string, int>? DraftOrder { get; set; }
+
+    // slot_to_roster_id maps draft slot (string) → roster_id
+    [JsonPropertyName("slot_to_roster_id")]
+    public Dictionary<string, int>? SlotToRosterId { get; set; }
+}
+
+public class SleeperDraftSettingsDto
+{
+    [JsonPropertyName("rounds")]
+    public int Rounds { get; set; }
+
+    [JsonPropertyName("teams")]
+    public int Teams { get; set; }
+}
+
+// ── Draft pick detail ────────────────────────────────────────────────────────
+/// <summary>
+/// A single pick from GET /v1/draft/{draft_id}/picks
+/// Contains the actual pick_no (e.g. 7 for 1.07) and draft_slot (column).
+/// roster_id here is who RECEIVES the pick (current owner after trades).
+/// Only available once the commissioner has set the draft order.
+/// </summary>
+public class SleeperDraftPickDetailDto
+{
+    [JsonPropertyName("draft_id")]
+    public string? DraftId { get; set; }
+
+    [JsonPropertyName("pick_no")]
+    public int PickNo { get; set; } // overall pick number (1, 2, 3...)
+
+    [JsonPropertyName("round")]
+    public int Round { get; set; }
+
+    [JsonPropertyName("draft_slot")]
+    public int DraftSlot { get; set; } // column in the draft board (1-based)
+
+    // roster_id of who will make/receive this pick (current owner)
+    [JsonPropertyName("roster_id")]
+    public string? RosterId { get; set; }
+
+    // picked_by = user_id (empty string if slot has no user)
+    [JsonPropertyName("picked_by")]
+    public string? PickedBy { get; set; }
+
+    // player_id if the pick has been made; null for future picks
+    [JsonPropertyName("player_id")]
+    public string? PlayerId { get; set; }
+
+    [JsonPropertyName("metadata")]
+    public SleeperDraftPickMetadataDto? Metadata { get; set; }
+
+    [JsonPropertyName("is_keeper")]
+    public bool? IsKeeper { get; set; }
+}
+
+public class SleeperDraftPickMetadataDto
+{
+    [JsonPropertyName("position")]
+    public string? Position { get; set; }
+
+    [JsonPropertyName("team")]
+    public string? Team { get; set; }
+
+    [JsonPropertyName("player_id")]
+    public string? PlayerId { get; set; }
+
+    [JsonPropertyName("first_name")]
+    public string? FirstName { get; set; }
+
+    [JsonPropertyName("last_name")]
+    public string? LastName { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
 }

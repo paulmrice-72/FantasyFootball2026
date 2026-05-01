@@ -312,8 +312,8 @@ try
 
     RecurringJob.AddOrUpdate<ArticleGenerationJob>(
         "article-generation-weekly",
-        job => job.RunAsync(CancellationToken.None, true),
-        "0 10 * * 2",   // Tuesdays 10am UTC
+        job => job.RunAsync(CancellationToken.None, false),  // ← respects AiJobsEnabled
+        "0 10 * * 2",
         utcOptions);
 
     RecurringJob.AddOrUpdate<EmergenceDetectionJob>(
