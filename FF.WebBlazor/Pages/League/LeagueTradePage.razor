@@ -673,7 +673,7 @@ else
             _mySelectedPick.EstimatedValue,
             IsPick: true,
             Round: _mySelectedPick.Round,
-            Tier:  "Mid",
+            Tier:  PickTier(_mySelectedPick),
             Year:  _mySelectedPick.Season));
         _mySelectedPick = null;
         _result = null;
@@ -716,7 +716,7 @@ else
             _theirSelectedPick.EstimatedValue,
             IsPick: true,
             Round: _theirSelectedPick.Round,
-            Tier:  "Mid",
+            Tier:  PickTier(_theirSelectedPick),
             Year:  _theirSelectedPick.Season));
         _theirSelectedPick = null;
         _result = null;
@@ -794,6 +794,36 @@ else
     private double MaxValue => Math.Max(_result?.MySideValue ?? 0, _result?.TheirSideValue ?? 0);
     private double ValueBarPct(double v) => MaxValue > 0 ? v / MaxValue * 100.0 : 0;
 
+    /// <summary>
+    /// Derives tier string for pick value lookup.
+    /// When Slot is known (draft order set), uses precise slot bucket.
+    /// Falls back to parsing Description text, then defaults to "Mid".
+    /// Tier strings must match what IPickValueRepository expects:
+    /// "Early", "Mid", "Late" per round.
+    /// </summary>
+    private static string PickTier(LeaguePickDto pick)
+    {
+        // Slot-aware: use actual draft position when known
+        if (pick.Slot.HasValue)
+        {
+            return pick.Slot.Value switch
+            {
+                <= 4  => "Early",
+                <= 8  => "Mid",
+                _     => "Late"
+            };
+        }
+
+        // Parse from Description: "2026 Early 1st (from Team)" / "2026 Mid 2nd" etc.
+        var desc = pick.Description ?? string.Empty;
+        if (desc.Contains("Early", StringComparison.OrdinalIgnoreCase)) return "Early";
+        if (desc.Contains("Late",  StringComparison.OrdinalIgnoreCase)) return "Late";
+        if (desc.Contains("Mid",   StringComparison.OrdinalIgnoreCase)) return "Mid";
+
+        // Default fallback
+        return "Mid";
+    }
+
     private static string GradeColor(string grade) => grade switch
     {
         "A" => "#00C8F0",
@@ -845,7 +875,8 @@ else
         string OriginalTeamName,
         string CurrentTeamName,
         string Description,
-        double EstimatedValue);
+        double EstimatedValue,
+        int?   Slot = null); // pick slot within round (e.g. 6 for 1.06); null when draft order not yet set
 
     private record LeagueRankingDto(
         int    Rank,

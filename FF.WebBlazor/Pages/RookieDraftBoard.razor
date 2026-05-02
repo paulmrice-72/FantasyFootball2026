@@ -26,21 +26,6 @@
 @* ── SESSION BAR ─────────────────────────────────────────────────────── *@
 <MudPaper Class="fc-card pa-3 mb-4" Elevation="0">
     <div class="d-flex align-center gap-3 flex-wrap">
-        <MudSelect T="string" Label="League"
-                   Value="_selectedLeagueId"
-                   ValueChanged="OnLeagueChanged"
-                   Variant="Variant.Outlined"
-                   Margin="Margin.Dense"
-                   Style="min-width:260px;"
-                   Disabled="@(_leagues.Count == 0)">
-            @foreach (var league in _leagues)
-            {
-                <MudSelectItem Value="@league.LeagueId">
-                    @league.LeagueName
-                </MudSelectItem>
-            }
-        </MudSelect>
-
         @* Mode badge — shows current mode, not a toggle (auto-set by league type) *@
         <MudChip T="string"
                  Color="@(_isRedraftMode ? Color.Warning : Color.Primary)"
@@ -520,22 +505,6 @@
             if (_isRedraftMode) ApplyRedraftFilter();
             else ApplyRookieFilter();
         }
-    }
-
-    // In-page league selector changed
-    private async Task OnLeagueChanged(string leagueId)
-    {
-        _selectedLeagueId   = leagueId;
-        _selectedLeagueName = _leagues.FirstOrDefault(l => l.LeagueId == leagueId)?.LeagueName;
-        var league          = _leagues.FirstOrDefault(l => l.LeagueId == leagueId);
-        _isRedraftMode      = league?.LeagueType != "Dynasty";
-        _sessionId          = null;
-        _picks              = [];
-        _allRookies         = [];
-        _filtered           = [];
-        _redraftPlayers     = [];
-        _filteredRedraft    = [];
-        await LoadCurrentMode();
     }
 
     // ── Session management ──────────────────────────────────────────────
