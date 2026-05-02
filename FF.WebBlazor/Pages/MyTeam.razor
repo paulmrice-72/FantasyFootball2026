@@ -6,6 +6,7 @@
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 @inject LeagueStateService LeagueState
+@inject NflContextClientService NflContext
 @implements IDisposable
 @inject IDialogService DialogService
 
@@ -92,15 +93,15 @@
                     @group.Key
                 </MudText>
                 <MudPaper Elevation="0" Class="fc-table-paper mb-2">
-                    <MudTable Items="@group.ToList()" Dense="true" Hover="true" Class="fc-table">
+                    <MudTable Items="@group.ToList()" Dense="true" Hover="true" Class="fc-table" Style="table-layout:fixed; width:100%">
                         <HeaderContent>
-                            <MudTh>Player</MudTh>
-                            <MudTh>Team</MudTh>
-                            <MudTh>Age</MudTh>
-                            <MudTh>Status</MudTh>
-                            <MudTh>Proj Pts</MudTh>
-                            <MudTh>Bye</MudTh>
-                            <MudTh>Role</MudTh>
+                            <MudTh Style="width:22%">Player</MudTh>
+                            <MudTh Style="width:8%">Team</MudTh>
+                            <MudTh Style="width:7%">Age</MudTh>
+                            <MudTh Style="width:13%">Status</MudTh>
+                            <MudTh Style="width:13%">Proj Pts</MudTh>
+                            <MudTh Style="width:10%">Bye</MudTh>
+                            <MudTh Style="width:10%">Role</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>
@@ -596,14 +597,15 @@
             else
             {
                 <MudTable Items="@FilteredRookieTargets" Dense="true" Hover="true" Striped="true"
-                          Style="background: var(--fc-navy-card);">
+                          Style="background: var(--fc-navy-card); table-layout:fixed; width:100%">
                     <HeaderContent>
-                        <MudTh>Rank</MudTh>
-                        <MudTh>Player</MudTh>
-                        <MudTh>Pos</MudTh>
-                        <MudTh>Team</MudTh>
-                        <MudTh>Tier</MudTh>
-                        <MudTh>Fit</MudTh>
+                        <MudTh Style="width:22%">Player</MudTh>
+                        <MudTh Style="width:8%">Team</MudTh>
+                        <MudTh Style="width:7%">Age</MudTh>
+                        <MudTh Style="width:13%">Status</MudTh>
+                        <MudTh Style="width:13%">Proj Pts</MudTh>
+                        <MudTh Style="width:10%">Bye</MudTh>
+                        <MudTh Style="width:10%">Role</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         @{
@@ -720,9 +722,10 @@ else if (_roster is null)
 
         try
         {
+
             var leagueId = LeagueState.ActiveLeagueId;
-            var week = GetCurrentNflWeek();
-            var season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
+            var (season, week) = await NflContext.GetContextAsync();
+
             var riskParam = string.IsNullOrEmpty(_optimizerRisk) ? "" : $"&riskProfile={_optimizerRisk}";
             var url = $"api/v1/team/optimize-lineup?sleeperLeagueId={leagueId}&season={season}&week={week}&mode={_optimizerMode}{riskParam}";
 
@@ -750,17 +753,17 @@ else if (_roster is null)
         }
     }
 
-    private static int GetCurrentNflWeek()
-    {
-        var now = DateTime.UtcNow;
-        var season = now.Month >= 3 ? now.Year : now.Year - 1;
-        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
-        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
-        var seasonStart = sept1.AddDays(daysUntilThursday);
-        if (now < seasonStart) return 18;
-        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
-        return Math.Clamp(week, 1, 18);
-    }
+    // private static int GetCurrentNflWeek()
+    // {
+    //     var now = DateTime.UtcNow;
+    //     var season = now.Month >= 3 ? now.Year : now.Year - 1;
+    //     var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+    //     var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+    //     var seasonStart = sept1.AddDays(daysUntilThursday);
+    //     if (now < seasonStart) return 18;
+    //     var week = (int)((now - seasonStart).TotalDays / 7) + 1;
+    //     return Math.Clamp(week, 1, 18);
+    // }
 
     // ── DTOs ────────────────────────────────────────────────
     private record OptimizerResult(
@@ -931,9 +934,7 @@ else if (_roster is null)
             var leagueId = LeagueState.ActiveLeagueId;
             if (string.IsNullOrEmpty(leagueId)) return;
 
-            var week = GetCurrentNflWeek();
-            var season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
-
+            var (season, week) = await NflContext.GetContextAsync();
             var response = await Http.GetAsync(
                 $"api/v1/team/start-sit?sleeperLeagueId={leagueId}&season={season}&week={week}");
 
