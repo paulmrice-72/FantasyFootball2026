@@ -24,9 +24,11 @@ public class SleeperMatchupService(
                 MatchupId: m.MatchupId,
                 RosterId: m.RosterId,
                 Starters: m.Starters ?? [],
-                Players: m.Players ?? []))
-            .ToList()
-            .AsReadOnly();
+                Players: m.Players ?? [],
+                ActualPoints: m.Points > 0 ? m.Points : null,
+                PlayersPoints: m.PlayersPoints))   // NEW
+                .ToList()
+                .AsReadOnly();
         }
         catch (Exception ex)
         {

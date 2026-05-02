@@ -16,7 +16,9 @@ public record MyMatchupDto(
     MyMatchupSideDto MyTeam,
     MyMatchupSideDto Opponent,
     double MyWinProbability,
-    double OpponentWinProbability);
+    double OpponentWinProbability,
+    double? MyActualPoints,         // NEW — non-null for completed past weeks
+    double? OpponentActualPoints);  // NEW
 
 public record MyMatchupSideDto(
     string TeamName,
@@ -41,6 +43,7 @@ public record MyMatchupPlayerDto(
     double? BustProbability,      // NEW — MATCHUP-003
     string? GameScript,           // NEW — MATCHUP-003
     string? OpponentTeam,         // NEW — MATCHUP-003
+    double? ActualPoints,   // NEW — non-null for past weeks
     string? InjuryDesignation,
     Guid? LeagueId,
     string? ScoringFormat,

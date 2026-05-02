@@ -4,6 +4,7 @@
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@inject NflContextClientService NflContext
 
 <PageTitle>Projections — FantasyCombine.AI</PageTitle>
 
@@ -216,7 +217,8 @@ else if (_filtered.Count > 0)
     protected override async Task OnInitializedAsync()
     {
         _season = QSeason ?? (DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1);
-        _week = QWeek ?? GetCurrentNflWeek();
+        var (nflSeason, nflWeek) = await NflContext.GetContextAsync();
+        _week = QWeek ?? nflWeek;
         _scoringFormat = QScoring ?? "HalfPpr";
         await LoadProjections();
     }
@@ -280,17 +282,17 @@ else if (_filtered.Count > 0)
     }
 
     // ── Helpers ──────────────────────────────────────────────
-    private static int GetCurrentNflWeek()
-    {
-        var now = DateTime.UtcNow;
-        var season = now.Month >= 3 ? now.Year : now.Year - 1;
-        var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
-        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
-        var seasonStart = sept1.AddDays(daysUntilThursday);
-        if (now < seasonStart) return 18;
-        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
-        return Math.Clamp(week, 1, 18);
-    }
+    // private static int GetCurrentNflWeek()
+    // {
+    //     var now = DateTime.UtcNow;
+    //     var season = now.Month >= 3 ? now.Year : now.Year - 1;
+    //     var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+    //     var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
+    //     var seasonStart = sept1.AddDays(daysUntilThursday);
+    //     if (now < seasonStart) return 18;
+    //     var week = (int)((now - seasonStart).TotalDays / 7) + 1;
+    //     return Math.Clamp(week, 1, 18);
+    // }
 
     private static string PositionClass(string pos) => pos switch
     {
