@@ -30,10 +30,11 @@ public record LeaguePlayerDto(
 public record LeaguePickDto(
     int Season,
     int Round,
-    string OriginalTeamName,   // team who originally owned the pick
-    string CurrentTeamName,    // team who currently owns it
-    string Description,        // e.g. "2026 Mid 1st (from Cowboys)"
-    double EstimatedValue);
+    string OriginalTeamName,
+    string CurrentTeamName,
+    string Description,
+    double EstimatedValue,
+    int? Slot = null);  // ← add this
 
 public record LeagueRankingDto(
     int Rank,
