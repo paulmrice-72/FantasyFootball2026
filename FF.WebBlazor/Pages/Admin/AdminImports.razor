@@ -257,6 +257,30 @@
         <MudAlert Severity="_briefsSeverity" Dense="true" Class="mt-3">@_briefsStatus</MudAlert>
     }
 </MudPaper>
+@* ── FFC Consensus ADP Sync ──────────────────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color:var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.BarChart" Class="mr-2" Style="vertical-align:middle;" />
+        FFC Consensus ADP
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Pull consensus ADP from Fantasy Football Calculator (free API). Runs weekly automatically.
+        Trigger manually after NFL Draft or if ADP shifts significantly.
+        <em>Attribution: ADP data provided by FantasyFootballCalculator.com</em>
+    </MudText>
+    <MudItem xs="12" sm="6" md="4">
+        <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
+                   StartIcon="@Icons.Material.Filled.Sync"
+                   OnClick="RunFfcAdpSync" Disabled="_ffcAdpBusy">
+            @if (_ffcAdpBusy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Sync FFC ADP
+        </MudButton>
+        <MudText Typo="Typo.caption" Style="@FfcAdpStatusStyle">@_ffcAdpStatus</MudText>
+    </MudItem>
+</MudPaper>
 @* ── Post-Draft Trigger Buttons ───────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -426,6 +450,40 @@
     private string _adpStatus = string.Empty;
     private Severity _adpSeverity = Severity.Info;
     private string _adpSource = "FantasyPros";
+
+    // ── FFC ADP Sync ──────────────────────────────────────────────────────────
+    private bool _ffcAdpBusy;
+    private string _ffcAdpStatus = string.Empty;
+    private bool _ffcAdpOk;
+
+    private string FfcAdpStatusStyle => string.IsNullOrEmpty(_ffcAdpStatus) ? "display:none" :
+        _ffcAdpOk ? "color:var(--mud-palette-success)" : "color:var(--mud-palette-error)";
+
+    private async Task RunFfcAdpSync()
+    {
+        _ffcAdpBusy = true; _ffcAdpStatus = string.Empty;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsync("api/v1/admin/sync-ffc-adp", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                _ffcAdpStatus = "FFC ADP sync triggered successfully.";
+                _ffcAdpOk = true;
+            }
+            else
+            {
+                _ffcAdpStatus = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                _ffcAdpOk = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _ffcAdpStatus = $"Error: {ex.Message}";
+            _ffcAdpOk = false;
+        }
+        finally { _ffcAdpBusy = false; }
+    }
 
     // ── Job triggers ─────────────────────────────────────────────────────────
     private bool _combineBusy; private string _combineStatus = string.Empty; private bool _combineOk;

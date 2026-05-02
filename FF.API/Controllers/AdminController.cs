@@ -277,6 +277,12 @@ public class AdminController(
         await articleJob.RunAsync(ct);
         return Ok(new { Message = "Article generation complete." });
     }
+    [HttpPost("sync-ffc-adp")]
+    public IActionResult TriggerFfcAdpSync()
+    {
+        BackgroundJob.Enqueue<SyncRedraftAdpJob>(job => job.RunAsync(CancellationToken.None));
+        return Ok(new { message = "FFC ADP sync job enqueued." });
+    }
     public record RunJobRequest(int Season);
     public record NflContextOverrideRequest(int? Season, int? Week);
 }

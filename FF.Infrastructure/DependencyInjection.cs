@@ -17,6 +17,7 @@ using FF.Infrastructure.ExternalApis.CsvImport.Parsers;
 using FF.Infrastructure.ExternalApis.Nflverse;
 using FF.Infrastructure.ExternalApis.Sleeper;
 using FF.Infrastructure.ExternalAPIs;
+using FF.Infrastructure.ExternalServices.FantasyFootballCalculator;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.Mongo;
@@ -226,7 +227,13 @@ public static class DependencyInjection
         // After: services.AddScoped<NflverseDraftPickSyncJob>();
         services.AddScoped<RecalculateDynastyValuationsJob>();
         services.AddScoped<SyncDepthChartsJob>();
-
+        services.AddScoped<SyncRedraftAdpJob>();
+        services.AddHttpClient<IFantasyFootballCalculatorService, FantasyFootballCalculatorService>(client =>
+        {
+            client.BaseAddress = new Uri("https://fantasyfootballcalculator.com/");
+            client.DefaultRequestHeaders.Add("User-Agent", "FantasyCombine.AI 1.0");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
         // Sleeper Identity
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddHttpClient<ISleeperIdentityService, SleeperIdentityService>(client =>
