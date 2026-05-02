@@ -164,8 +164,8 @@ public class GetMyMatchupQueryHandlerTests
         matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<SleeperMatchupEntry>
             {
-                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds, MyPlayerIds.Take(5).ToList()),
-                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds, OppPlayerIds.Take(5).ToList())
+                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds, MyPlayerIds.Take(5).ToList(), null, null),
+                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds, OppPlayerIds.Take(5).ToList(), null, null)
             }.AsReadOnly());
 
         var rosterRepo = Substitute.For<IRosterPlayerRepository>();
@@ -187,8 +187,8 @@ public class GetMyMatchupQueryHandlerTests
         matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<SleeperMatchupEntry>
             {
-                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds.Take(5).ToList(), MyPlayerIds),
-                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds)
+                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds.Take(5).ToList(), MyPlayerIds, null, null),
+                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds, null, null)
             }.AsReadOnly());
 
         var myRosterDoc = MakeRosterDoc(SleeperUserId, MyRosterId, MyPlayerIds, "Great Jeans", "Paul");
@@ -237,8 +237,8 @@ public class GetMyMatchupQueryHandlerTests
         matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<SleeperMatchupEntry>
             {
-                new(MatchupId, int.Parse(MyRosterId), myStarters, MyPlayerIds),
-                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds)
+                new(MatchupId, int.Parse(MyRosterId), myStarters, MyPlayerIds, null, null),
+                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds, null, null)
             }.AsReadOnly());
 
         var myRosterDoc = MakeRosterDoc(SleeperUserId, MyRosterId, MyPlayerIds, "Great Jeans", "Paul");
@@ -280,8 +280,8 @@ public class GetMyMatchupQueryHandlerTests
         matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<SleeperMatchupEntry>
             {
-                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds, MyPlayerIds.Take(5).ToList()),
-                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds, OppPlayerIds.Take(5).ToList())
+                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds, MyPlayerIds.Take(5).ToList(), null, null),
+                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds, OppPlayerIds.Take(5).ToList(), null, null)
             }.AsReadOnly());
 
         var myRosterDoc = MakeRosterDoc(SleeperUserId, MyRosterId, MyPlayerIds, "Team A", "Paul");
@@ -322,8 +322,8 @@ public class GetMyMatchupQueryHandlerTests
         matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<SleeperMatchupEntry>
             {
-                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds, MyPlayerIds.Take(5).ToList()),
-                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds, OppPlayerIds.Take(5).ToList())
+                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds, MyPlayerIds.Take(5).ToList(), null, null),
+                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds, OppPlayerIds.Take(5).ToList(), null, null)
             }.AsReadOnly());
 
         var myRosterDoc = MakeRosterDoc(SleeperUserId, MyRosterId, MyPlayerIds, "Strong Team", "Paul");
@@ -366,8 +366,8 @@ public class GetMyMatchupQueryHandlerTests
         matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<SleeperMatchupEntry>
             {
-                new(MatchupId, int.Parse(MyRosterId), startersWithPlaceholder, MyPlayerIds),
-                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds)
+                new(MatchupId, int.Parse(MyRosterId), startersWithPlaceholder, MyPlayerIds, null, null),
+                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds, null, null)
             }.AsReadOnly());
 
         var myRosterDoc = MakeRosterDoc(SleeperUserId, MyRosterId, MyPlayerIds, "Team A", "Paul");
@@ -410,8 +410,8 @@ public class GetMyMatchupQueryHandlerTests
         matchupSvc.GetMatchupsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<SleeperMatchupEntry>
             {
-                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds.Take(5).ToList(), MyPlayerIds),
-                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds)
+                new(MatchupId, int.Parse(MyRosterId), MyPlayerIds.Take(5).ToList(), MyPlayerIds, null, null),
+                new(MatchupId, int.Parse(OppRosterId), OppPlayerIds.Take(5).ToList(), OppPlayerIds, null, null)
             }.AsReadOnly());
 
         var myRosterDoc = MakeRosterDoc(SleeperUserId, MyRosterId, MyPlayerIds, "Great Jeans", "Paul");

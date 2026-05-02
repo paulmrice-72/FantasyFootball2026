@@ -5,7 +5,9 @@ public record SleeperMatchupEntry(
     int MatchupId,
     int RosterId,
     List<string> Starters,
-    List<string> Players);
+    List<string> Players,
+    decimal? ActualPoints,
+    Dictionary<string, decimal>? PlayersPoints);  // NEW — per-player actuals
 
 public interface ISleeperMatchupService
 {
