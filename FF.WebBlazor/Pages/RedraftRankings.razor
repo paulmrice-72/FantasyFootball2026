@@ -5,6 +5,7 @@
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject NflContextClientService NflContext
 
 <PageTitle>Redraft Rankings — FantasyCombine.AI</PageTitle>
 
@@ -23,50 +24,32 @@
 <MudPaper Class="fc-controls-bar mb-4 pa-3" Elevation="0">
     <MudGrid Spacing="2" AlignItems="AlignItems.End">
         <MudItem xs="6" sm="3" md="2">
-            <MudNumericField @bind-Value="_season"
-                             Label="Season"
-                             Variant="Variant.Outlined"
-                             Margin="Margin.Dense"
-                             Min="2022" Max="2030" />
+            <MudNumericField @bind-Value="_season" Label="Season" Variant="Variant.Outlined"
+                             Margin="Margin.Dense" Min="2022" Max="2030" />
         </MudItem>
         <MudItem xs="6" sm="3" md="2">
-            <MudNumericField @bind-Value="_week"
-                             Label="Week"
-                             Variant="Variant.Outlined"
-                             Margin="Margin.Dense"
-                             Min="1" Max="18" />
+            <MudNumericField @bind-Value="_week" Label="Week" Variant="Variant.Outlined"
+                             Margin="Margin.Dense" Min="1" Max="18" />
         </MudItem>
         <MudItem xs="6" sm="3" md="2" Class="d-flex align-end">
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
                        StartIcon="@Icons.Material.Filled.Refresh"
-                       FullWidth="true"
-                       Disabled="_loading"
-                       OnClick="LoadRankings"
+                       FullWidth="true" Disabled="_loading" OnClick="LoadRankings"
                        Style="height:40px;">
                 Load
             </MudButton>
         </MudItem>
         <MudItem xs="12" sm="3" md="6" Class="d-flex align-end">
-            <MudTextField @bind-Value="_search"
-                          Placeholder="Search player or team..."
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense"
-                          Immediate="true"
-                          DebounceInterval="200"
-                          FullWidth="true" />
+            <MudTextField @bind-Value="_search" Placeholder="Search player or team..."
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Immediate="true" DebounceInterval="200" FullWidth="true" />
         </MudItem>
     </MudGrid>
 </MudPaper>
 
 @* ── POSITION TABS ───────────────────────────────────────────────────── *@
-<MudTabs @bind-ActivePanelIndex="_activeTab"
-         Rounded="true"
-         Border="true"
-         Class="mb-4 fc-tabs"
-         PanelClass="pa-0">
+<MudTabs @bind-ActivePanelIndex="_activeTab" Rounded="true" Border="true" Class="mb-4 fc-tabs" PanelClass="pa-0">
     <MudTabPanel Text="All" />
     <MudTabPanel Text="QB" />
     <MudTabPanel Text="RB" />
@@ -79,12 +62,10 @@
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
 }
-
 @if (_error is not null)
 {
     <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
 }
-
 @if (!_loading && !_queried)
 {
     <MudAlert Severity="Severity.Info">
@@ -103,13 +84,8 @@ else if (_filtered.Count > 0)
 {
     @* ── RANKINGS TABLE ──────────────────────────────────────────── *@
     <MudPaper Elevation="0" Class="fc-table-paper">
-        <MudTable Items="@_filtered"
-                  Dense="true"
-                  Hover="true"
-                  Striped="false"
-                  FixedHeader="true"
-                  Height="calc(100vh - 380px)"
-                  SortLabel="Sort"
+        <MudTable Items="@_filtered" Dense="true" Hover="true" Striped="false"
+                  FixedHeader="true" Height="calc(100vh - 380px)" SortLabel="Sort"
                   Class="fc-table"
                   OnRowClick="@((TableRowClickEventArgs<SimRow> args) => { if (args.Item is not null) _ = OpenPlayerCard(args.Item); })">
             <HeaderContent>
@@ -124,8 +100,7 @@ else if (_filtered.Count > 0)
                     <MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.Floor)">Floor</MudTableSortLabel>
                 </MudTh>
                 <MudTh Style="text-align:right;">
-                    <MudTableSortLabel InitialDirection="SortDirection.Descending"
-                                       SortBy="new Func<SimRow, object>(x => x.Median)">Median</MudTableSortLabel>
+                    <MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<SimRow, object>(x => x.Median)">Median</MudTableSortLabel>
                 </MudTh>
                 <MudTh Style="text-align:right;">
                     <MudTableSortLabel SortBy="new Func<SimRow, object>(x => x.Ceiling)">Ceiling</MudTableSortLabel>
@@ -201,47 +176,42 @@ else if (_filtered.Count > 0)
 }
 
 @code {
-    // ── State ─────────────────────────────────────────────────────────
-    private int     _season;
-    private int     _week;
-    private string  _search    = string.Empty;
-    private int     _activeTab = 0;
-    private bool    _loading   = false;
-    private bool    _queried   = false;
+    // ── State ───────────────────────────────────────────────────────────
+    private int _season;
+    private int _week;
+    private string _search = string.Empty;
+    private int _activeTab = 0;
+    private bool _loading = false;
+    private bool _queried = false;
     private string? _error;
-
-    private List<SimRow> _all      = [];
+    private List<SimRow> _all = [];
     private List<SimRow> _filtered = [];
-
     private static readonly string[] Positions = ["", "QB", "RB", "WR", "TE"];
 
-    // ── Lifecycle ──────────────────────────────────────────────────────
-    protected override void OnInitialized()
+    // ── Lifecycle ────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
     {
-        var now = DateTime.UtcNow;
-        _season = now.Month >= 3 ? now.Year : now.Year - 1;
-        _week   = GetCurrentNflWeek();
+        var (season, week) = await NflContext.GetContextAsync();
+        _season = season;
+        _week = week;
     }
 
-    // ── Data loading ───────────────────────────────────────────────────
+    // ── Data loading ─────────────────────────────────────────────────────
     private async Task LoadRankings()
     {
         _loading = true;
         _queried = true;
-        _error   = null;
-        _all     = [];
+        _error = null;
+        _all = [];
         StateHasChanged();
 
         try
         {
             var position = Positions[_activeTab];
             var posParam = string.IsNullOrEmpty(position) ? "" : $"&position={position}";
-
             var rows = await Http.GetFromJsonAsync<List<SimRow>>(
                 $"api/v1/projections/simulations?season={_season}&week={_week}{posParam}");
-
             _all = rows ?? [];
-
             if (_all.Count == 0)
                 Snackbar.Add($"No simulation data for {_season} Week {_week}. Run simulate first.", Severity.Warning);
         }
@@ -256,36 +226,34 @@ else if (_filtered.Count > 0)
         }
     }
 
-    // ── Filtering ──────────────────────────────────────────────────────
+    // ── Filtering ────────────────────────────────────────────────────────
     private void ApplyFilters()
     {
         var position = Positions[_activeTab];
-
         _filtered = _all
             .Where(p => string.IsNullOrEmpty(position) || p.Position == position)
-            .Where(p => string.IsNullOrEmpty(_search)  ||
+            .Where(p => string.IsNullOrEmpty(_search) ||
                         p.PlayerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
                         p.NflTeam.Contains(_search, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(p => p.Median)
             .ToList();
-
         StateHasChanged();
     }
 
-    private int    _prevTab    = 0;
+    private int _prevTab = 0;
     private string _prevSearch = string.Empty;
 
     protected override void OnAfterRender(bool firstRender)
     {
         if (_activeTab != _prevTab || _search != _prevSearch)
         {
-            _prevTab    = _activeTab;
+            _prevTab = _activeTab;
             _prevSearch = _search;
             ApplyFilters();
         }
     }
 
-    // ── Player card ────────────────────────────────────────────────────
+    // ── Player card ──────────────────────────────────────────────────────
     private async Task OpenPlayerCard(SimRow row)
     {
         var data = new PlayerCardDialog.PlayerCardData(
@@ -310,61 +278,45 @@ else if (_filtered.Count > 0)
             FantasyProsScore: 0,
             PffGradeScore: 0,
             ConsensusAdpScore: 0,
-            AgeMultiplier: 0, 
+            AgeMultiplier: 0,
             AthleticismSignalScore: 0,
             AthleticismScore: null,
             SpeedScore: null,
             FortyYard: null);
 
         var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, data }
-    };
-        var options = new DialogOptions
         {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true,
-            CloseButton = true
+            { x => x.Player, data }
         };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         await DialogService.ShowAsync<PlayerCardDialog>(row.PlayerName, parameters, options);
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────
-    private static int GetCurrentNflWeek()
-    {
-        var now    = DateTime.UtcNow;
-        var season = now.Month >= 3 ? now.Year : now.Year - 1;
-        var sept1  = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
-        var offset = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
-        var start  = sept1.AddDays(offset);
-        if (now < start) return 1;
-        return Math.Clamp((int)((now - start).TotalDays / 7) + 1, 1, 18);
-    }
-
+    // ── Helpers ──────────────────────────────────────────────────────────
     private static string PositionClass(string pos) => pos switch
     {
         "QB" => "fc-chip-qb",
         "RB" => "fc-chip-rb",
         "WR" => "fc-chip-wr",
         "TE" => "fc-chip-te",
-        _    => ""
+        _ => ""
     };
 
-    // ── DTO — mirrors SimRow from Projections.razor exactly ────────────
+    // ── DTO — mirrors SimRow from Projections.razor exactly ──────────────
     private record SimRow(
-        string  PlayerId,
-        string  SleeperPlayerId,
-        string  PlayerName,
-        string  Position,
-        string  NflTeam,
-        string  OpponentTeam,
+        string PlayerId,
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        string NflTeam,
+        string OpponentTeam,
         decimal Floor,
         decimal Median,
         decimal Ceiling,
         decimal BoomProbability,
         decimal BustProbability,
-        string  PlayerRole,
-        string  ScoringFormat,
+        string PlayerRole,
+        string ScoringFormat,
         decimal Spread,
-        string  GameScript);
+        string GameScript);
 }

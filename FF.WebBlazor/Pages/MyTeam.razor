@@ -1193,7 +1193,8 @@ else if (_roster is null)
             SpeedScore: null,
             FortyYard: null,
             LeagueContextAvailable: true,
-            RosteredByTeamName: _roster?.TeamName);
+            RosteredByTeamName: _roster?.TeamName,
+            LeagueId: LeagueState.ActiveLeagueId);  
 
         var parameters = new DialogParameters<PlayerCardDialog>
     {
