@@ -1,16 +1,16 @@
-﻿@page "/players/{PlayerId}"
+@page "/players/{PlayerId}"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
 @inject IHttpClientFactory HttpFactory
 @inject NavigationManager Nav
+@inject NflContextClientService NflContext
 
 <PageTitle>@(_sim?.PlayerName ?? "Player") — FantasyCombine.AI</PageTitle>
 
 @* ── BACK BUTTON ─────────────────────────────────────────── *@
 <MudButton StartIcon="@Icons.Material.Filled.ArrowBack"
-           Variant="Variant.Text"
-           Color="Color.Default"
+           Variant="Variant.Text" Color="Color.Default"
            OnClick='@(() => Nav.NavigateTo("/" + (ReturnUrl ?? "projections")))'
            Class="mb-3">
     Back
@@ -36,9 +36,7 @@ else
             </MudChip>
             @if (_sim.Spread != 0)
             {
-                <MudChip T="string"
-                         Class="@(_sim.Spread > 0 ? "fc-chip-favoured-lg" : "fc-chip-dog-lg")"
-                         Size="Size.Medium">
+                <MudChip T="string" Class="@(_sim.Spread > 0 ? "fc-chip-favoured-lg" : "fc-chip-dog-lg")" Size="Size.Medium">
                     @(_sim.Spread > 0 ? $"+{_sim.Spread:F1}" : $"{_sim.Spread:F1}")
                 </MudChip>
             }
@@ -49,25 +47,16 @@ else
     <MudPaper Class="fc-controls-bar mb-4 pa-3" Elevation="0">
         <MudGrid Spacing="2">
             <MudItem xs="6" sm="3" md="2">
-                <MudNumericField @bind-Value="_season"
-                                 Label="Season"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense"
-                                 Min="2022" Max="2030" />
+                <MudNumericField @bind-Value="_season" Label="Season" Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" Min="2022" Max="2030" />
             </MudItem>
             <MudItem xs="6" sm="3" md="2">
-                <MudNumericField @bind-Value="_week"
-                                 Label="Week"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense"
-                                 Min="1" Max="18" />
+                <MudNumericField @bind-Value="_week" Label="Week" Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" Min="1" Max="18" />
             </MudItem>
             <MudItem xs="12" sm="3" md="2" Class="d-flex align-end">
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           FullWidth="true"
-                           Style="height:56px;"
-                           OnClick="LoadData">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           FullWidth="true" Style="height:56px;" OnClick="LoadData">
                     Load
                 </MudButton>
             </MudItem>
@@ -158,7 +147,6 @@ else
                 <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">
                     PROJECTION MODEL
                 </MudText>
-
                 @if (_proj is not null)
                 {
                     <MudGrid Spacing="2">
@@ -192,9 +180,7 @@ else
                         <MudItem xs="6">
                             <div class="fc-stat-mini">
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Matchup Factor</MudText>
-                                @{
-                                    var matchupClass = MatchupClass(_proj.MatchupAdjustmentFactor) + " fc-stat";
-                                }
+                                @{ var matchupClass = MatchupClass(_proj.MatchupAdjustmentFactor) + " fc-stat"; }
                                 <MudText Typo="Typo.body1" Class="@matchupClass">
                                     @_proj.MatchupAdjustmentFactor.ToString("F3")
                                 </MudText>
@@ -249,13 +235,13 @@ else
                     <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-3">
                         USAGE METRICS — @_usage.Season SEASON
                     </MudText>
-
                     <MudGrid Spacing="3">
+
                         @* Snap % *@
                         <MudItem xs="12" sm="6" md="4">
                             <MudText Typo="Typo.caption" Class="fc-metric-label">SNAP %</MudText>
-                            @UsageRow("3wk",    (_usage.SnapPct3Wk * 100).ToString("F0") + "%")
-                            @UsageRow("5wk",    (_usage.SnapPct5Wk * 100).ToString("F0") + "%")
+                            @UsageRow("3wk", (_usage.SnapPct3Wk * 100).ToString("F0") + "%")
+                            @UsageRow("5wk", (_usage.SnapPct5Wk * 100).ToString("F0") + "%")
                             @UsageRow("Season", (_usage.SnapPctSeason * 100).ToString("F0") + "%")
                         </MudItem>
 
@@ -264,36 +250,32 @@ else
                         {
                             <MudItem xs="12" sm="6" md="4">
                                 <MudText Typo="Typo.caption" Class="fc-metric-label">TARGET SHARE</MudText>
-                                @UsageRow("3wk",    (_usage.TargetShare3Wk * 100).ToString("F0") + "%")
-                                @UsageRow("5wk",    (_usage.TargetShare5Wk * 100).ToString("F0") + "%")
+                                @UsageRow("3wk", (_usage.TargetShare3Wk * 100).ToString("F0") + "%")
+                                @UsageRow("5wk", (_usage.TargetShare5Wk * 100).ToString("F0") + "%")
                                 @UsageRow("Season", (_usage.TargetShareSeason * 100).ToString("F0") + "%")
                             </MudItem>
-
                             <MudItem xs="12" sm="6" md="4">
                                 <MudText Typo="Typo.caption" Class="fc-metric-label">aDOT</MudText>
-                                @UsageRow("3wk",    _usage.ADot3Wk.ToString("F1") + " yds")
-                                @UsageRow("5wk",    _usage.ADot5Wk.ToString("F1") + " yds")
+                                @UsageRow("3wk", _usage.ADot3Wk.ToString("F1") + " yds")
+                                @UsageRow("5wk", _usage.ADot5Wk.ToString("F1") + " yds")
                                 @UsageRow("Season", _usage.ADotSeason.ToString("F1") + " yds")
                             </MudItem>
-
                             <MudItem xs="12" sm="6" md="4">
                                 <MudText Typo="Typo.caption" Class="fc-metric-label">TPRR</MudText>
-                                @UsageRow("3wk",    _usage.Tprr3Wk.ToString("F3"))
-                                @UsageRow("5wk",    _usage.Tprr5Wk.ToString("F3"))
+                                @UsageRow("3wk", _usage.Tprr3Wk.ToString("F3"))
+                                @UsageRow("5wk", _usage.Tprr5Wk.ToString("F3"))
                                 @UsageRow("Season", _usage.TprrSeason.ToString("F3"))
                             </MudItem>
-
                             <MudItem xs="12" sm="6" md="4">
                                 <MudText Typo="Typo.caption" Class="fc-metric-label">WOPR</MudText>
-                                @UsageRow("3wk",    _usage.Wopr3Wk.ToString("F3"))
-                                @UsageRow("5wk",    _usage.Wopr5Wk.ToString("F3"))
+                                @UsageRow("3wk", _usage.Wopr3Wk.ToString("F3"))
+                                @UsageRow("5wk", _usage.Wopr5Wk.ToString("F3"))
                                 @UsageRow("Season", _usage.WoprSeason.ToString("F3"))
                             </MudItem>
-
                             <MudItem xs="12" sm="6" md="4">
                                 <MudText Typo="Typo.caption" Class="fc-metric-label">AIR YARDS SHARE</MudText>
-                                @UsageRow("3wk",    (_usage.AirYardsShare3Wk * 100).ToString("F0") + "%")
-                                @UsageRow("5wk",    (_usage.AirYardsShare5Wk * 100).ToString("F0") + "%")
+                                @UsageRow("3wk", (_usage.AirYardsShare3Wk * 100).ToString("F0") + "%")
+                                @UsageRow("5wk", (_usage.AirYardsShare5Wk * 100).ToString("F0") + "%")
                                 @UsageRow("Season", (_usage.AirYardsShareSeason * 100).ToString("F0") + "%")
                             </MudItem>
                         }
@@ -303,11 +285,12 @@ else
                         {
                             <MudItem xs="12" sm="6" md="4">
                                 <MudText Typo="Typo.caption" Class="fc-metric-label">CARRY SHARE</MudText>
-                                @UsageRow("3wk",    (_usage.CarryShare3Wk * 100).ToString("F0") + "%")
-                                @UsageRow("5wk",    (_usage.CarryShare5Wk * 100).ToString("F0") + "%")
+                                @UsageRow("3wk", (_usage.CarryShare3Wk * 100).ToString("F0") + "%")
+                                @UsageRow("5wk", (_usage.CarryShare5Wk * 100).ToString("F0") + "%")
                                 @UsageRow("Season", (_usage.CarryShareSeason * 100).ToString("F0") + "%")
                             </MudItem>
                         }
+
                     </MudGrid>
                 </MudPaper>
             </MudItem>
@@ -324,30 +307,38 @@ else
     [Parameter][SupplyParameterFromQuery] public string? FromScoring { get; set; }
     [Parameter][SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
 
-    //private int _season = DateTime.UtcNow.Month >= 3 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 1;
-        //    private int _week;
-    private int _season = 2024;
-    private int _week = 18;
-
-
+    private int _season;
+    private int _week;
     private bool _loading;
-
     private SimDetail? _sim;
     private ProjDetail? _proj;
     private UsageDetail? _usage;
 
     // Distribution bar percentages
-    private double FloorPct   => _sim is null ? 0 : Math.Min(100, (double)(_sim.Floor   / (_sim.Ceiling == 0 ? 1 : _sim.Ceiling)) * 100);
-    private double MedianPct  => _sim is null ? 50 : Math.Min(95, (double)(_sim.Median  / (_sim.Ceiling == 0 ? 1 : _sim.Ceiling)) * 100);
+    private double FloorPct   => _sim is null ? 0  : Math.Min(100, (double)(_sim.Floor   / (_sim.Ceiling == 0 ? 1 : _sim.Ceiling)) * 100);
+    private double MedianPct  => _sim is null ? 50 : Math.Min(95,  (double)(_sim.Median  / (_sim.Ceiling == 0 ? 1 : _sim.Ceiling)) * 100);
 
     protected override async Task OnInitializedAsync()
     {
-        _season = FromSeason ?? 2024;
-        _week = FromWeek ?? GetCurrentNflWeek();
+        // Query params take priority (navigation from Projections page);
+        // fall back to the admin-configured season/week.
+        if (FromSeason.HasValue && FromWeek.HasValue)
+        {
+            _season = FromSeason.Value;
+            _week   = FromWeek.Value;
+        }
+        else
+        {
+            var (season, week) = await NflContext.GetContextAsync();
+            _season = FromSeason ?? season;
+            _week   = FromWeek   ?? week;
+        }
+
         await LoadData();
     }
 
     private string ApiPlayerId => GsisId ?? PlayerId;
+
     private async Task LoadData()
     {
         _loading = true;
@@ -382,23 +373,14 @@ else
         _loading = false;
     }
 
-    // ── Helpers ──────────────────────────────────────────────
-    private static int GetCurrentNflWeek()
-    {
-        var now    = DateTime.UtcNow;
-        var season = now.Month >= 3 ? now.Year : now.Year - 1;
-        var sept1  = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
-        var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
-        var seasonStart = sept1.AddDays(daysUntilThursday);
-        if (now < seasonStart) return 18;
-        var week = (int)((now - seasonStart).TotalDays / 7) + 1;
-        return Math.Clamp(week, 1, 18);
-    }
-
+    // ── Helpers ────────────────────────────────────────────────
     private static string PositionClass(string pos) => pos switch
     {
-        "QB" => "fc-chip-qb", "RB" => "fc-chip-rb",
-        "WR" => "fc-chip-wr", "TE" => "fc-chip-te", _ => ""
+        "QB" => "fc-chip-qb",
+        "RB" => "fc-chip-rb",
+        "WR" => "fc-chip-wr",
+        "TE" => "fc-chip-te",
+        _ => ""
     };
 
     private static string ScriptClass(string script) => script switch
@@ -406,7 +388,7 @@ else
         "BlowoutWin"  => "fc-chip-blowout",
         "Trailing"    => "fc-chip-trailing",
         "Competitive" => "fc-chip-competitive",
-        _             => "fc-chip-neutral"
+        _ => "fc-chip-neutral"
     };
 
     private static string ScriptLabel(string script) => script switch
@@ -414,7 +396,7 @@ else
         "BlowoutWin"  => "Blowout",
         "Trailing"    => "Chase",
         "Competitive" => "Even",
-        _             => "—"
+        _ => "—"
     };
 
     private static string MatchupClass(decimal factor) =>
@@ -422,17 +404,17 @@ else
 
     private static string FormatRole(string role) => role switch
     {
-        "WR1Alpha"       => "WR1 Alpha",
+        "WR1Alpha"     => "WR1 Alpha",
         "SlotPossession" => "Slot",
-        "DeepThreat"     => "Deep Threat",
-        "BellCow"        => "Bell Cow",
-        "PassCatcher"    => "Pass Catcher",
-        "Handcuff"       => "Handcuff",
-        "SeamReceiver"   => "Seam",
-        "BlockerSpot"    => "Blocker",
-        "StartingQB"     => "Starter",
-        "BackupQB"       => "Backup",
-        _                => role
+        "DeepThreat"   => "Deep Threat",
+        "BellCow"      => "Bell Cow",
+        "PassCatcher"  => "Pass Catcher",
+        "Handcuff"     => "Handcuff",
+        "SeamReceiver" => "Seam",
+        "BlockerSpot"  => "Blocker",
+        "StartingQB"   => "Starter",
+        "BackupQB"     => "Backup",
+        _ => role
     };
 
     private static RenderFragment UsageRow(string label, string value) => __builder =>
@@ -443,34 +425,73 @@ else
         </div>
     };
 
-    // ── DTOs ─────────────────────────────────────────────────
+    // ── DTOs ───────────────────────────────────────────────────
     private record SimDetail(
-        string PlayerId, string PlayerName, string Position,
-        string NflTeam, string OpponentTeam,
-        int Iterations, decimal BaseProjection, decimal StandardDeviation,
-        decimal Floor, decimal Median, decimal Ceiling, decimal Mean,
-        decimal BoomProbability, decimal BustProbability,
-        string PlayerRole, string ScoringFormat,
-        decimal Spread, string GameScript);
+        string PlayerId,
+        string PlayerName,
+        string Position,
+        string NflTeam,
+        string OpponentTeam,
+        int Iterations,
+        decimal BaseProjection,
+        decimal StandardDeviation,
+        decimal Floor,
+        decimal Median,
+        decimal Ceiling,
+        decimal Mean,
+        decimal BoomProbability,
+        decimal BustProbability,
+        string PlayerRole,
+        string ScoringFormat,
+        decimal Spread,
+        string GameScript);
 
     private record ProjDetail(
-        string PlayerId, string PlayerName, string Position,
-        string NflTeam, string OpponentTeam,
-        decimal ProjectedPoints, decimal ProjectedPointsPpr, decimal ProjectedPointsHalfPpr,
-        decimal WeightedAvgPoints, decimal MatchupAdjustmentFactor,
-        decimal SnapPctInput, decimal TargetShareInput,
-        int GameSampleSize, decimal RSquared,
-        string GameScript, decimal SpreadInput,
-        decimal RbVolumeMultiplier, decimal WrTeVolumeMultiplier);
+        string PlayerId,
+        string PlayerName,
+        string Position,
+        string NflTeam,
+        string OpponentTeam,
+        decimal ProjectedPoints,
+        decimal ProjectedPointsPpr,
+        decimal ProjectedPointsHalfPpr,
+        decimal WeightedAvgPoints,
+        decimal MatchupAdjustmentFactor,
+        decimal SnapPctInput,
+        decimal TargetShareInput,
+        int GameSampleSize,
+        decimal RSquared,
+        string GameScript,
+        decimal SpreadInput,
+        decimal RbVolumeMultiplier,
+        decimal WrTeVolumeMultiplier);
 
     private record UsageDetail(
-        string PlayerId, string PlayerName, string Position, string NflTeam, int Season,
-        decimal SnapPct3Wk, decimal SnapPct5Wk, decimal SnapPctSeason,
-        decimal TargetShare3Wk, decimal TargetShare5Wk, decimal TargetShareSeason,
-        decimal AirYardsShare3Wk, decimal AirYardsShare5Wk, decimal AirYardsShareSeason,
-        decimal Wopr3Wk, decimal Wopr5Wk, decimal WoprSeason,
-        decimal CarryShare3Wk, decimal CarryShare5Wk, decimal CarryShareSeason,
-        decimal ADot3Wk, decimal ADot5Wk, decimal ADotSeason,
-        decimal Tprr3Wk, decimal Tprr5Wk, decimal TprrSeason,
+        string PlayerId,
+        string PlayerName,
+        string Position,
+        string NflTeam,
+        int Season,
+        decimal SnapPct3Wk,
+        decimal SnapPct5Wk,
+        decimal SnapPctSeason,
+        decimal TargetShare3Wk,
+        decimal TargetShare5Wk,
+        decimal TargetShareSeason,
+        decimal AirYardsShare3Wk,
+        decimal AirYardsShare5Wk,
+        decimal AirYardsShareSeason,
+        decimal Wopr3Wk,
+        decimal Wopr5Wk,
+        decimal WoprSeason,
+        decimal CarryShare3Wk,
+        decimal CarryShare5Wk,
+        decimal CarryShareSeason,
+        decimal ADot3Wk,
+        decimal ADot5Wk,
+        decimal ADotSeason,
+        decimal Tprr3Wk,
+        decimal Tprr5Wk,
+        decimal TprrSeason,
         string Role);
 }

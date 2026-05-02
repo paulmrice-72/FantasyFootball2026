@@ -57,7 +57,7 @@
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">
                             Age @Player.Age
                         </MudText>
-                        @if (Player.Age >= 23)
+                        @if (!Player.IsRedraftContext && Player.Age >= 23)
                         {
                             <MudTooltip Text="Age 23+ prospects carry additional dynasty risk">
                                 <MudIcon Icon="@Icons.Material.Filled.Warning"
@@ -366,8 +366,7 @@
     else if (_depthData is null)
     {
         <MudAlert Severity="Severity.Info">
-            Depth chart data is populated weekly on Wednesdays. Check back after the first sync runs,
-            or trigger it manually from the admin panel.
+            No depth chart data is available for this player yet.
         </MudAlert>
         @if (!string.IsNullOrEmpty(Player.NflTeam))
         {
@@ -377,7 +376,7 @@
                 <div>
                     <MudText Typo="Typo.subtitle1" Style="font-weight:700;">@Player.NflTeam</MudText>
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                        @Player.Position depth chart — pending sync
+                        @Player.Position depth chart — not yet available
                     </MudText>
                 </div>
             </div>
@@ -489,7 +488,7 @@
                 <MudAlert Severity="Severity.Info">
                     Navigate to the <strong>Trade Analyzer</strong> for full side-by-side trade evaluation,
                     draft pick values, and fairness scoring.
-                    <MudLink Href="/trade" Style="color:var(--fc-cyan); margin-left:6px;">Open Trade Analyzer →</MudLink>
+                    <MudLink Href="@(Player.LeagueId != null ? $"/league/{Player.LeagueId}/trade" : "/trade")" Style="color:var(--fc-cyan); margin-left:6px;">Open Trade Analyzer →</MudLink>
                 </MudAlert>
             </MudTabPanel>
 
@@ -719,7 +718,9 @@
         bool LeagueContextAvailable = false,
         // ── MATCHUP-001 additions ──
         Guid? MatchupLeagueId = null,
-        string? MatchupScoringFormat = null);
+        string? MatchupScoringFormat = null,
+        string? LeagueId = null,
+        bool IsRedraftContext = false);
 
     private record NarrativeResponse(string Narrative);
 }
