@@ -21,10 +21,19 @@ public class RosterPlayerDocument
     public List<string> StarterIds { get; set; } = [];
 
     /// <summary>Player IDs on IR/Reserve slots.</summary>
-    public List<string> IrIds { get; set; } = [];          // ← add
+    public List<string> IrIds { get; set; } = [];
 
     /// <summary>Player IDs on the dynasty taxi squad.</summary>
-    public List<string> TaxiIds { get; set; } = [];        // ← add
+    public List<string> TaxiIds { get; set; } = [];
+
+    /// <summary>
+    /// Future draft picks currently owned by this roster.
+    /// Populated by calling Sleeper /league/{id}/traded_picks during sync.
+    /// Includes own picks that were never traded (derived from league size) 
+    /// plus any picks acquired via trade, minus any traded away.
+    /// </summary>
+    public List<RosterPickDto> OwnedPicks { get; set; } = [];
+
     public int Season { get; set; }
     public int Wins { get; set; }
     public int Losses { get; set; }
@@ -32,5 +41,11 @@ public class RosterPlayerDocument
     public int WaiverPosition { get; set; }
     public DateTime SyncedAt { get; set; } = DateTime.UtcNow;
     public string? OwnerAvatar { get; set; }
-
 }
+
+/// <summary>
+/// A single future draft pick owned by a roster.
+/// Season = the year of the draft (e.g. 2026, 2027).
+/// Round = 1–5.
+/// </summary>
+public record RosterPickDto(int Season, int Round);

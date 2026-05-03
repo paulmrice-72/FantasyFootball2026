@@ -1,4 +1,5 @@
-﻿using MediatR;
+﻿using FF.Domain.Documents;
+using MediatR;
 
 namespace FF.Application.Features.Team.Queries;
 
@@ -8,12 +9,13 @@ public record GetMyRosterQuery(string SleeperUserId, string SleeperLeagueId)
 public record MyRosterDto(
     string TeamName,
     string OwnerName,
-    string? OwnerAvatar,    // ← NEW
+    string? OwnerAvatar,
     string LeagueId,
     int Wins,
     int Losses,
     int WaiverPosition,
-    List<MyRosterPlayerDto> Players);
+    List<MyRosterPlayerDto> Players,
+    List<RosterPickDto> OwnedPicks);   // ← NEW
 
 public record MyRosterPlayerDto(
     string SleeperPlayerId,
@@ -24,6 +26,6 @@ public record MyRosterPlayerDto(
     string? InjuryDesignation,
     bool IsStarter,
     bool IsOnIr,
-    bool IsOnTaxi,          // ← add
+    bool IsOnTaxi,
     double? MedianProjectedPoints,
     string? ByeWeek);
