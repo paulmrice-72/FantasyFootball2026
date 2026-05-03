@@ -258,7 +258,7 @@ else if (_filtered.Count > 0)
             DraftCapitalScore: 0,
             PositionalScore: 0,
             ValuationBlendScore: player.CareerValue,
-            FantasyProsScore: player.BreakoutScore,
+            FantasyProsScore: player.BreakoutScore,   // reused slot: BreakoutScore for veterans
             PffGradeScore: 0,
             ConsensusAdpScore: 0,
             AgeMultiplier: 0,
@@ -269,14 +269,14 @@ else if (_filtered.Count > 0)
             DynastyTradeValue: player.TradeValue,
             CareerValueScore: player.CareerValueScore,
             CareerPhase: player.CareerPhase,
-            YearsOfPrimeRemaining: player.YearsOfPrimeRemaining);
+            YearsOfPrimeRemaining: player.YearsOfPrimeRemaining,
+            YearsExperience: player.YearsExperience);   // ← NEW
 
         var parameters = new DialogParameters<PlayerCardDialog>
-        {
-            { x => x.Player, data },
-            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Dynasty }
-        };
-
+    {
+        { x => x.Player, data },
+        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Dynasty }
+    };
         var options = new DialogOptions
         {
             MaxWidth = MaxWidth.Small,
@@ -284,7 +284,6 @@ else if (_filtered.Count > 0)
             CloseButton = true
         };
         await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
-
     }
 
     // ── Filtering ─────────────────────────────────────────────
