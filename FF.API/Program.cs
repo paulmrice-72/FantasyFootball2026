@@ -353,6 +353,12 @@ try
         "0 8 * * 3",  // Wednesday 8:00 UTC — after dynasty pipeline
         utcOptions);
 
+    RecurringJob.AddOrUpdate<SyncRedraftAdpJob>(
+        "redraft adp sync",
+        job => job.RunAsync(CancellationToken.None),
+        Cron.Weekly(DayOfWeek.Tuesday, 9),
+        utcOptions);
+
     BackgroundJob.Enqueue<SeedPickValuesJob>(job => job.SeedAsync());
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",

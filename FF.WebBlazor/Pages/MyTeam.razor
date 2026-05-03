@@ -1,4 +1,4 @@
-﻿@page "/my-team"
+@page "/my-team"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
@@ -104,10 +104,10 @@
                             <MudTh Style="width:10%">Role</MudTh>
                         </HeaderContent>
                         <RowTemplate>
+                            @{
+                                var rp = context;
+                            }
                             <MudTd>
-                                @{
-                                    var rp = context;
-                                }
                                 <MudButton Variant="Variant.Text"
                                            Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
                                            OnClick="@(() => _ = OpenPlayerCardAsync(rp))">
@@ -165,7 +165,7 @@
                 </MudPaper>
             }
 
-            @* Optimize My Lineup panel — unchanged from TEAM-002 *@
+            @* Optimize My Lineup panel *@
             <MudPaper Class="fc-card pa-4 mt-4" Elevation="0">
                 <div class="d-flex align-center mb-3">
                     <MudText Typo="Typo.subtitle2" Class="fc-section-label">OPTIMIZE MY LINEUP</MudText>
@@ -208,7 +208,6 @@
                             }
                             else
                             {
-
                                 <span>Optimize My Lineup</span>
                             }
                         </MudButton>
@@ -291,8 +290,6 @@
                     {
                         <div class="d-flex align-center pa-2 mb-1"
                              style="border-radius:6px; background: var(--mud-palette-surface);">
-
-                            @* Verdict badge *@
                             <div style="min-width:90px;">
                                 <MudChip T="string"
                                          Color="@VerdictColor(opt.Verdict)"
@@ -301,8 +298,6 @@
                                     @VerdictLabel(opt.Verdict)
                                 </MudChip>
                             </div>
-
-                            @* Player info *@
                             <div class="flex-grow-1 mx-3">
                                 <div class="d-flex align-center gap-2">
                                     <MudText Typo="Typo.body1" Style="font-weight:700;">
@@ -326,8 +321,6 @@
                                     @opt.Rationale
                                 </MudText>
                             </div>
-
-                            @* Stats *@
                             <div class="text-right" style="min-width:140px;">
                                 <div class="d-flex gap-3 justify-end">
                                     <div class="text-center">
@@ -364,6 +357,7 @@
             }
         }
     </MudTabPanel>
+
     <MudTabPanel Text="Depth Grades">
         @if (_depthLoading)
         {
@@ -382,25 +376,20 @@
                 {
                     <MudItem xs="12" sm="6" md="3">
                         <MudPaper Elevation="0" Class="fc-card pa-4 text-center">
-                            @* Grade letter *@
                             <MudText Typo="Typo.h2" Style="@(GradeColor(g.Grade) + "font-weight:800; line-height:1;")">
                                 @g.Grade
                             </MudText>
-                            @* Position label *@
                             <MudText Typo="Typo.subtitle1" Style="color:var(--fc-cyan); font-weight:600;" Class="mt-1">
                                 @g.Position
                             </MudText>
-                            @* Descriptor *@
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                 @g.Label
                             </MudText>
-                            @* Score bar *@
                             <MudProgressLinear Value="@g.GradeScore"
                                               Color="@GradeBarColor(g.Grade)"
                                               Rounded="true"
                                               Size="Size.Small"
                                               Class="my-2" />
-                            @* Stats row *@
                             <div class="d-flex justify-space-around mt-2">
                                 <div>
                                     <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
@@ -415,7 +404,6 @@
                                     <MudText Typo="Typo.caption" Class="mud-text-secondary">healthy</MudText>
                                 </div>
                             </div>
-                            @* Summary *@
                             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block" Style="font-style:italic;">
                                 @g.Summary
                             </MudText>
@@ -425,104 +413,96 @@
             </MudGrid>
         }
     </MudTabPanel>
-    <MudTabPanel Text="Dynasty Grade">
-        @if (_dynastyLoading)
-        {
-            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4 mt-2" />
-        }
-        else if (_dynastyGrade is null)
-        {
-            <MudAlert Severity="Severity.Info" Class="mt-2">
-                Dynasty valuation data unavailable — dynasty valuations may need to be computed.
-            </MudAlert>
-        }
-        else
-        {
-            @* Profile banner *@
-            <div class="d-flex align-center justify-center mb-4 mt-2">
-                <MudChip T="string" Color="Color.Primary" Size="Size.Large" Variant="Variant.Filled"
-                         Style="font-size:1rem; font-weight:700; letter-spacing:0.05em;">
-                    @_dynastyGrade.OverallProfile
-                </MudChip>
-            </div>
 
-            @* Dual gauge cards *@
-            <MudGrid Spacing="3">
-                @* Contention card *@
-                <MudItem xs="12" sm="6">
-                    <MudPaper Elevation="0" Class="fc-card pa-4 text-center">
-                        <MudText Typo="Typo.overline" Class="fc-section-label mb-2 d-block">
-                            CONTENTION — WIN NOW
-                        </MudText>
-                        <MudText Typo="Typo.h1" Style="@(DynastyGradeColor(_dynastyGrade.ContentionGrade) + "font-weight:800; line-height:1;")">
-                            @_dynastyGrade.ContentionGrade
-                        </MudText>
-                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mt-1">
-                            @_dynastyGrade.ContentionLabel
-                        </MudText>
-                        <MudProgressLinear Value="@_dynastyGrade.ContentionScore"
-                                           Color="@DynastyBarColor(_dynastyGrade.ContentionGrade)"
-                                           Rounded="true" Size="Size.Medium" Class="my-3" />
-                        <MudText Typo="Typo.body2" Class="fc-stat fc-cyan mb-1">
-                            @_dynastyGrade.PrimePlayerCount prime-age player(s)
-                        </MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-style:italic;">
-                            @_dynastyGrade.ContentionSummary
-                        </MudText>
-                    </MudPaper>
-                </MudItem>
-
-                @* Longevity card *@
-                <MudItem xs="12" sm="6">
-                    <MudPaper Elevation="0" Class="fc-card pa-4 text-center">
-                        <MudText Typo="Typo.overline" Class="fc-section-label mb-2 d-block">
-                            LONGEVITY — FUTURE VALUE
-                        </MudText>
-                        <MudText Typo="Typo.h1" Style="@(DynastyGradeColor(_dynastyGrade.LongevityGrade) + "font-weight:800; line-height:1;")">
-                            @_dynastyGrade.LongevityGrade
-                        </MudText>
-                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mt-1">
-                            @_dynastyGrade.LongevityLabel
-                        </MudText>
-                        <MudProgressLinear Value="@_dynastyGrade.LongevityScore"
-                                           Color="@DynastyBarColor(_dynastyGrade.LongevityGrade)"
-                                           Rounded="true" Size="Size.Medium" Class="my-3" />
-                        <MudText Typo="Typo.body2" Class="fc-stat fc-cyan mb-1">
-                            @_dynastyGrade.YoungPlayerCount ascending player(s)
-                        </MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-style:italic;">
-                            @_dynastyGrade.LongevitySummary
-                        </MudText>
-                    </MudPaper>
-                </MudItem>
-            </MudGrid>
-
-            @* Footer stats row *@
-            <MudPaper Elevation="0" Class="fc-card pa-3 mt-3">
-                <div class="d-flex justify-space-around">
-                    <div class="text-center">
-                        <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
-                            @_dynastyGrade.RosteredCount
-                        </MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">rostered</MudText>
-                    </div>
-                    <div class="text-center">
-                        <MudText Typo="Typo.body2" Class="fc-stat">
-                            @_dynastyGrade.AvgAge.ToString("F1")
-                        </MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">avg age</MudText>
-                    </div>
-                    <div class="text-center">
-                        <MudText Typo="Typo.body2" Class="fc-stat">
-                            @_dynastyGrade.AvgTradeValue.ToString("F1")
-                        </MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">avg trade value</MudText>
-                    </div>
+    @* Dynasty Grade — only shown for Dynasty leagues *@
+    @if (_isDynastyLeague)
+    {
+        <MudTabPanel Text="Dynasty Grade">
+            @if (_dynastyLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4 mt-2" />
+            }
+            else if (_dynastyGrade is null)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-2">
+                    Dynasty valuation data unavailable — dynasty valuations may need to be computed.
+                </MudAlert>
+            }
+            else
+            {
+                <div class="d-flex align-center justify-center mb-4 mt-2">
+                    <MudChip T="string" Color="Color.Primary" Size="Size.Large" Variant="Variant.Filled"
+                             Style="font-size:1rem; font-weight:700; letter-spacing:0.05em;">
+                        @_dynastyGrade.OverallProfile
+                    </MudChip>
                 </div>
-            </MudPaper>
-        }
-    </MudTabPanel>
-    <!-- ── Tab 4: Draft Prep ── -->
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Elevation="0" Class="fc-card pa-4 text-center">
+                            <MudText Typo="Typo.overline" Class="fc-section-label mb-2 d-block">
+                                CONTENTION — WIN NOW
+                            </MudText>
+                            <MudText Typo="Typo.h1" Style="@(DynastyGradeColor(_dynastyGrade.ContentionGrade) + "font-weight:800; line-height:1;")">
+                                @_dynastyGrade.ContentionGrade
+                            </MudText>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mt-1">
+                                @_dynastyGrade.ContentionLabel
+                            </MudText>
+                            <MudProgressLinear Value="@_dynastyGrade.ContentionScore"
+                                               Color="@DynastyBarColor(_dynastyGrade.ContentionGrade)"
+                                               Rounded="true" Size="Size.Medium" Class="my-3" />
+                            <MudText Typo="Typo.body2" Class="fc-stat fc-cyan mb-1">
+                                @_dynastyGrade.PrimePlayerCount prime-age player(s)
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-style:italic;">
+                                @_dynastyGrade.ContentionSummary
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Elevation="0" Class="fc-card pa-4 text-center">
+                            <MudText Typo="Typo.overline" Class="fc-section-label mb-2 d-block">
+                                LONGEVITY — FUTURE VALUE
+                            </MudText>
+                            <MudText Typo="Typo.h1" Style="@(DynastyGradeColor(_dynastyGrade.LongevityGrade) + "font-weight:800; line-height:1;")">
+                                @_dynastyGrade.LongevityGrade
+                            </MudText>
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mt-1">
+                                @_dynastyGrade.LongevityLabel
+                            </MudText>
+                            <MudProgressLinear Value="@_dynastyGrade.LongevityScore"
+                                               Color="@DynastyBarColor(_dynastyGrade.LongevityGrade)"
+                                               Rounded="true" Size="Size.Medium" Class="my-3" />
+                            <MudText Typo="Typo.body2" Class="fc-stat fc-cyan mb-1">
+                                @_dynastyGrade.YoungPlayerCount ascending player(s)
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-style:italic;">
+                                @_dynastyGrade.LongevitySummary
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+                <MudPaper Elevation="0" Class="fc-card pa-3 mt-3">
+                    <div class="d-flex justify-space-around">
+                        <div class="text-center">
+                            <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">@_dynastyGrade.RosteredCount</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">rostered</MudText>
+                        </div>
+                        <div class="text-center">
+                            <MudText Typo="Typo.body2" Class="fc-stat">@_dynastyGrade.AvgAge.ToString("F1")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">avg age</MudText>
+                        </div>
+                        <div class="text-center">
+                            <MudText Typo="Typo.body2" Class="fc-stat">@_dynastyGrade.AvgTradeValue.ToString("F1")</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">avg trade value</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            }
+        </MudTabPanel>
+    }
+
+    <!-- ── Draft Prep tab ── -->
     <MudTabPanel Text="Draft Prep">
         @if (_draftPrepLoading)
         {
@@ -542,7 +522,6 @@
         }
         else
         {
-            <!-- Position Needs Summary Row -->
             <MudText Typo="Typo.subtitle2" Class="mb-2" Style="color: var(--mud-palette-text-secondary);">
                 POSITIONAL NEEDS
             </MudText>
@@ -572,7 +551,6 @@
                 }
             </MudGrid>
 
-            <!-- Rookie Targets Table -->
             <div class="d-flex justify-space-between align-center mb-2">
                 <MudText Typo="Typo.subtitle2" Style="color: var(--mud-palette-text-secondary);">
                     ROOKIE TARGETS
@@ -599,13 +577,12 @@
                 <MudTable Items="@FilteredRookieTargets" Dense="true" Hover="true" Striped="true"
                           Style="background: var(--fc-navy-card); table-layout:fixed; width:100%">
                     <HeaderContent>
-                        <MudTh Style="width:22%">Player</MudTh>
-                        <MudTh Style="width:8%">Team</MudTh>
-                        <MudTh Style="width:7%">Age</MudTh>
-                        <MudTh Style="width:13%">Status</MudTh>
-                        <MudTh Style="width:13%">Proj Pts</MudTh>
-                        <MudTh Style="width:10%">Bye</MudTh>
-                        <MudTh Style="width:10%">Role</MudTh>
+                        <MudTh Style="width:7%">Rank</MudTh>
+                        <MudTh Style="width:28%">Player</MudTh>
+                        <MudTh Style="width:8%">Pos</MudTh>
+                        <MudTh Style="width:12%">Team</MudTh>
+                        <MudTh Style="width:10%">Tier</MudTh>
+                        <MudTh Style="width:12%">Fit</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         @{
@@ -642,6 +619,7 @@
         }
     </MudTabPanel>
 </MudTabs>
+
 @if (_loading)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
@@ -672,12 +650,17 @@ else if (_roster is null)
     private bool _noSleeper;
     private bool _noLeague;
     private MyRosterDto? _roster;
+    private bool _isDynastyLeague = true;
 
     private HttpClient Http => HttpClientFactory.CreateClient("AuthAPI");
 
     private string? _teamName;
     private string? _ownerAvatar;
-    private string? _ownerName;   // ← add this
+    private string? _ownerName;
+
+    // Season/week from NflContext — shared across all lazy-load methods
+    private int _season;
+    private int _week;
 
     // ── TEAM-002: Lineup Optimizer ─────────────────────────
     private bool _optimizing;
@@ -685,12 +668,13 @@ else if (_roster is null)
     private OptimizerResult? _lineupResult;
     private string _optimizerMode = "Median";
     private string _optimizerRisk = "";
+
     // ── TEAM-004: Start/Sit ────────────────────────────────
     private int _activeTab;
-
     private bool _startSitLoading;
     private StartSitRecommendationsDto? _startSitData;
-    // ── TEAM-005: Depth Grades ────────────────────────────────────────────────
+
+    // ── TEAM-005: Depth Grades ────────────────────────────
     private bool _depthLoading;
     private PositionalDepthGradesDto? _depthGrades;
     private static readonly System.Text.Json.JsonSerializerOptions _enumJsonOptions = new()
@@ -698,14 +682,19 @@ else if (_roster is null)
         PropertyNameCaseInsensitive = true,
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
-    // ── TEAM-006: Dynasty Grade ───────────────────────────────────────────────
+
+    // ── TEAM-006: Dynasty Grade ───────────────────────────
     private bool _dynastyLoading;
     private DynastyTeamGradeDto? _dynastyGrade;
-    // ── TEAM-007: Draft Prep ─────────────────────────────────────────────────
+
+    // ── TEAM-007: Draft Prep ─────────────────────────────
     private bool _draftPrepLoading;
     private bool _draftPrepQueried;
     private DraftPrepDto? _draftPrep;
     private string _draftPrepPosition = string.Empty;
+
+    private int DraftPrepTabIndex => _isDynastyLeague ? 4 : 3;
+    private int DynastyGradeTabIndex => 3;
 
     private static string OwnerAvatarUrl(string? avatar) =>
         string.IsNullOrEmpty(avatar) ? string.Empty :
@@ -719,16 +708,12 @@ else if (_roster is null)
         _optimizerError = null;
         _lineupResult = null;
         StateHasChanged();
-
         try
         {
-
             var leagueId = LeagueState.ActiveLeagueId;
             var (season, week) = await NflContext.GetContextAsync();
-
             var riskParam = string.IsNullOrEmpty(_optimizerRisk) ? "" : $"&riskProfile={_optimizerRisk}";
             var url = $"api/v1/team/optimize-lineup?sleeperLeagueId={leagueId}&season={season}&week={week}&mode={_optimizerMode}{riskParam}";
-
             var response = await Http.PostAsync(url, null);
             if (response.IsSuccessStatusCode)
             {
@@ -753,19 +738,6 @@ else if (_roster is null)
         }
     }
 
-    // private static int GetCurrentNflWeek()
-    // {
-    //     var now = DateTime.UtcNow;
-    //     var season = now.Month >= 3 ? now.Year : now.Year - 1;
-    //     var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
-    //     var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
-    //     var seasonStart = sept1.AddDays(daysUntilThursday);
-    //     if (now < seasonStart) return 18;
-    //     var week = (int)((now - seasonStart).TotalDays / 7) + 1;
-    //     return Math.Clamp(week, 1, 18);
-    // }
-
-    // ── DTOs ────────────────────────────────────────────────
     private record OptimizerResult(
         bool Success,
         List<OptimizedSlot> Lineup,
@@ -787,28 +759,31 @@ else if (_roster is null)
         _noSleeper = false;
         _noLeague = false;
         _roster = null;
-
         try
         {
             var leagueId = LeagueState.ActiveLeagueId;
-
             if (string.IsNullOrEmpty(leagueId))
             {
-                // Fall back to context fetch on first load
-                var context = await Http.GetFromJsonAsync<UserContextResponse>(
-                    "api/v1/identity/context");
-
+                var context = await Http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
                 if (context?.IsSleeperLinked != true) { _noSleeper = true; return; }
-
                 leagueId = context.ActiveLeagueId;
                 if (string.IsNullOrEmpty(leagueId)) { _noLeague = true; return; }
-
                 LeagueState.ActiveLeagueId = leagueId;
+                var activeLeague = context.Leagues?.FirstOrDefault(l => l.LeagueId == leagueId);
+                _isDynastyLeague = activeLeague?.LeagueType != "Redraft";
+            }
+            else
+            {
+                try
+                {
+                    var context = await Http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
+                    var activeLeague = context?.Leagues?.FirstOrDefault(l => l.LeagueId == leagueId);
+                    _isDynastyLeague = activeLeague?.LeagueType != "Redraft";
+                }
+                catch { }
             }
 
-            var response = await Http.GetAsync(
-                $"api/v1/team/roster?sleeperLeagueId={leagueId}");
-
+            var response = await Http.GetAsync($"api/v1/team/roster?sleeperLeagueId={leagueId}");
             if (response.IsSuccessStatusCode)
                 _roster = await response.Content.ReadFromJsonAsync<MyRosterDto>();
             else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
@@ -841,6 +816,8 @@ else if (_roster is null)
         _dynastyGrade = null;
         _draftPrep = null;
         _draftPrepQueried = false;
+        _season = 0;
+        _week = 0;
         _ = InvokeAsync(async () =>
         {
             await LoadRosterAsync();
@@ -852,38 +829,36 @@ else if (_roster is null)
     {
         LeagueState.OnLeagueChanged -= OnLeagueChangedHandler;
     }
+
     private static int PositionOrder(string pos) => pos switch
     {
-        "QB" => 0,
-        "RB" => 1,
-        "WR" => 2,
-        "TE" => 3,
-        "K" => 4,
-        _ => 5
+        "QB" => 0, "RB" => 1, "WR" => 2, "TE" => 3, "K" => 4, _ => 5
     };
 
     private static Color InjuryColor(string designation) => designation switch
     {
-        "Out" => Color.Error,
-        "D" => Color.Error,
-        "IR" => Color.Error,
-        "Q" => Color.Warning,
-        "Doubtful" => Color.Warning,
-        _ => Color.Default
+        "Out" or "D" or "IR" => Color.Error,
+        "Q" or "Doubtful"    => Color.Warning,
+        _                    => Color.Default
     };
 
-    // ── DTOs ──────────────────────────────────────────────────
     private record UserContextResponse(
         bool IsSleeperLinked,
         string? ActiveLeagueId,
         List<LeagueItem>? Leagues);
 
-    private record LeagueItem(string LeagueId, string LeagueName, int Season, string Role);
+    private record LeagueItem(
+        string LeagueId,
+        string LeagueName,
+        int Season,
+        string Role,
+        bool IsActive = false,
+        string LeagueType = "Redraft");
 
     private record MyRosterDto(
         string TeamName,
         string OwnerName,
-        string? OwnerAvatar,    // ← add
+        string? OwnerAvatar,
         string LeagueId,
         int Wins,
         int Losses,
@@ -899,16 +874,14 @@ else if (_roster is null)
         string? InjuryDesignation,
         bool IsStarter,
         bool IsOnIr,
-        bool IsOnTaxi,          // ← add
+        bool IsOnTaxi,
         double? MedianProjectedPoints,
         string? ByeWeek);
 
     private static string PositionClass(string pos) => pos switch
     {
-        "QB" => "fc-chip-qb",
-        "RB" => "fc-chip-rb",
-        "WR" => "fc-chip-wr",
-        "TE" => "fc-chip-te",
+        "QB" => "fc-chip-qb", "RB" => "fc-chip-rb",
+        "WR" => "fc-chip-wr", "TE" => "fc-chip-te",
         _ => ""
     };
 
@@ -919,10 +892,17 @@ else if (_roster is null)
             await LoadStartSitAsync();
         if (index == 2 && _depthGrades is null)
             await LoadDepthGradesAsync();
-        if (index == 3 && _dynastyGrade is null)
+        if (_isDynastyLeague && index == DynastyGradeTabIndex && _dynastyGrade is null)
             await LoadDynastyGradeAsync();
-        if (index == 4 && !_draftPrepQueried)
+        if (index == DraftPrepTabIndex && !_draftPrepQueried)
             await LoadDraftPrepAsync();
+    }
+
+    // ── Shared NflContext resolver ────────────────────────────────────────────
+    private async Task EnsureSeasonAsync()
+    {
+        if (_season == 0)
+            (_season, _week) = await NflContext.GetContextAsync();
     }
 
     private async Task LoadStartSitAsync()
@@ -933,11 +913,9 @@ else if (_roster is null)
         {
             var leagueId = LeagueState.ActiveLeagueId;
             if (string.IsNullOrEmpty(leagueId)) return;
-
-            var (season, week) = await NflContext.GetContextAsync();
+            await EnsureSeasonAsync();
             var response = await Http.GetAsync(
-                $"api/v1/team/start-sit?sleeperLeagueId={leagueId}&season={season}&week={week}");
-
+                $"api/v1/team/start-sit?sleeperLeagueId={leagueId}&season={_season}&week={_week}");
             if (response.IsSuccessStatusCode)
                 _startSitData = await response.Content.ReadFromJsonAsync<StartSitRecommendationsDto>(_enumJsonOptions);
         }
@@ -951,44 +929,6 @@ else if (_roster is null)
         }
     }
 
-    private record StartSitRecommendationsDto(
-    int Week, int Season, List<StartSitDecisionDto> Decisions);
-
-    private record StartSitDecisionDto(
-        string Position, string SlotLabel, List<StartSitOptionDto> Options);
-
-    private record StartSitOptionDto(
-        string SleeperPlayerId, string PlayerName, string Position, string NflTeam,
-        StartSitVerdict Verdict, int ConfidenceScore, string ConfidenceLabel,
-        double Median, double Floor, double Ceiling,
-        double BoomProbability, double BustProbability,
-        string? InjuryDesignation, string Rationale);
-
-    private enum StartSitVerdict { Start, LeanStart, LeanSit, Sit }
-
-    private static Color VerdictColor(StartSitVerdict v) => v switch
-    {
-        StartSitVerdict.Start => Color.Success,
-        StartSitVerdict.LeanStart => Color.Info,
-        StartSitVerdict.LeanSit => Color.Warning,
-        StartSitVerdict.Sit => Color.Error,
-        _ => Color.Default
-    };
-
-    private static string VerdictLabel(StartSitVerdict v) => v switch
-    {
-        StartSitVerdict.Start => "START",
-        StartSitVerdict.LeanStart => "LEAN START",
-        StartSitVerdict.LeanSit => "LEAN SIT",
-        StartSitVerdict.Sit => "SIT",
-        _ => "—"
-    };
-    private record PositionalDepthGradesDto(List<PositionDepthGradeDto> Grades);
-    private record PositionDepthGradeDto(
-        string Position, string Grade, int GradeScore, string Label,
-        string Summary, int RosteredCount, int HealthyCount,
-        double StarterScore, double DepthScore);
-
     private async Task LoadDepthGradesAsync()
     {
         _depthLoading = true;
@@ -997,9 +937,9 @@ else if (_roster is null)
         {
             var leagueId = LeagueState.ActiveLeagueId;
             if (string.IsNullOrEmpty(leagueId)) return;
-            var season = DateTime.UtcNow.Month >= 9 ? DateTime.UtcNow.Year : DateTime.UtcNow.Year - 2;
+            await EnsureSeasonAsync();
             var response = await Http.GetAsync(
-                $"api/v1/team/depth-grades?sleeperLeagueId={leagueId}&season={season}");
+                $"api/v1/team/depth-grades?sleeperLeagueId={leagueId}&season={_season}");
             if (response.IsSuccessStatusCode)
                 _depthGrades = await response.Content.ReadFromJsonAsync<PositionalDepthGradesDto>();
         }
@@ -1013,29 +953,6 @@ else if (_roster is null)
         }
     }
 
-    private static string GradeColor(string grade) => grade switch
-    {
-        "A+" or "A" => "color:#00e5c8;",          // fc-cyan — elite
-        "B+" or "B" => "color:#4fc3f7;",           // light blue — solid
-        "C+" or "C" => "color:#ffd54f;",           // amber — average
-        "D" => "color:#ff8a65;",           // orange — weak
-        _ => "color:#ef5350;"            // red — dire
-    };
-
-    private static Color GradeBarColor(string grade) => grade switch
-    {
-        "A+" or "A" => Color.Success,
-        "B+" or "B" => Color.Info,
-        "C+" or "C" => Color.Warning,
-        _ => Color.Error
-    };
-
-    private record DynastyTeamGradeDto(
-        string ContentionGrade, int ContentionScore, string ContentionLabel, string ContentionSummary,
-        string LongevityGrade, int LongevityScore, string LongevityLabel, string LongevitySummary,
-        string OverallProfile, int RosteredCount, int PrimePlayerCount, int YoungPlayerCount,
-        double AvgTradeValue, double AvgAge);
-
     private async Task LoadDynastyGradeAsync()
     {
         _dynastyLoading = true;
@@ -1044,8 +961,7 @@ else if (_roster is null)
         {
             var leagueId = LeagueState.ActiveLeagueId;
             if (string.IsNullOrEmpty(leagueId)) return;
-            var response = await Http.GetAsync(
-                $"api/v1/team/dynasty-grade?sleeperLeagueId={leagueId}");
+            var response = await Http.GetAsync($"api/v1/team/dynasty-grade?sleeperLeagueId={leagueId}");
             if (response.IsSuccessStatusCode)
                 _dynastyGrade = await response.Content.ReadFromJsonAsync<DynastyTeamGradeDto>();
         }
@@ -1063,19 +979,16 @@ else if (_roster is null)
     {
         var leagueId = LeagueState.ActiveLeagueId;
         if (string.IsNullOrEmpty(leagueId)) return;
-
         _draftPrepLoading = true;
         _draftPrepQueried = true;
         StateHasChanged();
         try
         {
-            var simSeason = DateTime.UtcNow.Month >= 9
-                ? DateTime.UtcNow.Year
-                : DateTime.UtcNow.Year - 2;
+            await EnsureSeasonAsync();
             var rookieSeason = DateTime.UtcNow.Year;
             var url = $"api/v1/team/draft-prep" +
                       $"?sleeperLeagueId={leagueId}" +
-                      $"&simSeason={simSeason}" +
+                      $"&simSeason={_season}" +
                       $"&rookieSeason={rookieSeason}";
             _draftPrep = await Http.GetFromJsonAsync<DraftPrepDto>(url);
         }
@@ -1090,30 +1003,34 @@ else if (_roster is null)
     }
 
     private IEnumerable<RookieTargetDto> FilteredRookieTargets =>
-    string.IsNullOrEmpty(_draftPrepPosition)
-        ? (_draftPrep?.RookieTargets ?? [])
-        : (_draftPrep?.RookieTargets ?? []).Where(r => r.Position == _draftPrepPosition);
+        string.IsNullOrEmpty(_draftPrepPosition)
+            ? (_draftPrep?.RookieTargets ?? [])
+            : (_draftPrep?.RookieTargets ?? []).Where(r => r.Position == _draftPrepPosition);
 
-    private static string GetFitStyle(string needLevel) => needLevel switch
+    private static string GradeColor(string grade) => grade switch
     {
-        "Need" => "background:#1a3a2a; color:#4ade80;",
-        "Strength" => "background:#2a1a1a; color:#f87171;",
-        _ => "background:#1a2a3a; color:#60a5fa;"
+        "A+" or "A" => "color:#00e5c8;",
+        "B+" or "B" => "color:#4fc3f7;",
+        "C+" or "C" => "color:#ffd54f;",
+        "D"         => "color:#ff8a65;",
+        _           => "color:#ef5350;"
     };
 
-    private static Color GetGradeProgressColor(int score) => score switch
+    private static Color GradeBarColor(string grade) => grade switch
     {
-        >= 65 => Color.Success,
-        >= 40 => Color.Warning,
-        _ => Color.Error
+        "A+" or "A" => Color.Success,
+        "B+" or "B" => Color.Info,
+        "C+" or "C" => Color.Warning,
+        _           => Color.Error
     };
+
     private static string DynastyGradeColor(string grade) => grade switch
     {
         "A+" or "A" => "color:#00e5c8;",
         "B+" or "B" => "color:#4fc3f7;",
         "C+" or "C" => "color:#ffd54f;",
-        "D" => "color:#ff8a65;",
-        _ => "color:#ef5350;"
+        "D"         => "color:#ff8a65;",
+        _           => "color:#ef5350;"
     };
 
     private static Color DynastyBarColor(string grade) => grade switch
@@ -1121,31 +1038,29 @@ else if (_roster is null)
         "A+" or "A" => Color.Success,
         "B+" or "B" => Color.Info,
         "C+" or "C" => Color.Warning,
-        _ => Color.Error
+        _           => Color.Error
     };
 
-    private record DraftPrepDto(
-        List<PositionNeedDto> PositionNeeds,
-        List<RookieTargetDto> RookieTargets);
+    private static string GetFitStyle(string needLevel) => needLevel switch
+    {
+        "Need"     => "background:#1a3a2a; color:#4ade80;",
+        "Strength" => "background:#2a1a1a; color:#f87171;",
+        _          => "background:#1a2a3a; color:#60a5fa;"
+    };
 
-    private record PositionNeedDto(
-        string Position,
-        string Grade,
-        int GradeScore,
-        string NeedLevel,
-        string Summary);
+    private static Color GetGradeProgressColor(int score) => score switch
+    {
+        >= 65 => Color.Success,
+        >= 40 => Color.Warning,
+        _     => Color.Error
+    };
 
-    private record RookieTargetDto(
-        string SleeperPlayerId,
-        string PlayerName,
-        string Position,
-        string? NflTeam,
-        int FantasyProsRank,
-        int PositionRank,
-        string? Tier,
-        string NeedLevel,
-        string FitLabel);
-
+    private static string GetNeedChipStyle(string needLevel) => needLevel switch
+    {
+        "Need"     => "background:#1a3a2a; color:#4ade80;",
+        "Strength" => "background:#2a1a1a; color:#f87171;",
+        _          => "background:#1a1a2a; color:#94a3b8;"
+    };
 
     private static string GetDraftPositionStyle(string position) => position switch
     {
@@ -1153,15 +1068,52 @@ else if (_roster is null)
         "RB" => "background:#2a1a1a; color:#f87171;",
         "WR" => "background:#1a3a2a; color:#4ade80;",
         "TE" => "background:#2a1a2a; color:#c084fc;",
-        _ => string.Empty
+        _    => string.Empty
     };
 
-    private static string GetNeedChipStyle(string needLevel) => needLevel switch
+    private record StartSitRecommendationsDto(int Week, int Season, List<StartSitDecisionDto> Decisions);
+    private record StartSitDecisionDto(string Position, string SlotLabel, List<StartSitOptionDto> Options);
+    private record StartSitOptionDto(
+        string SleeperPlayerId, string PlayerName, string Position, string NflTeam,
+        StartSitVerdict Verdict, int ConfidenceScore, string ConfidenceLabel,
+        double Median, double Floor, double Ceiling,
+        double BoomProbability, double BustProbability,
+        string? InjuryDesignation, string Rationale);
+    private enum StartSitVerdict { Start, LeanStart, LeanSit, Sit }
+    private static Color VerdictColor(StartSitVerdict v) => v switch
     {
-        "Need" => "background:#1a3a2a; color:#4ade80;",
-        "Strength" => "background:#2a1a1a; color:#f87171;",
-        _ => "background:#1a1a2a; color:#94a3b8;"
+        StartSitVerdict.Start      => Color.Success,
+        StartSitVerdict.LeanStart  => Color.Info,
+        StartSitVerdict.LeanSit    => Color.Warning,
+        StartSitVerdict.Sit        => Color.Error,
+        _                          => Color.Default
     };
+    private static string VerdictLabel(StartSitVerdict v) => v switch
+    {
+        StartSitVerdict.Start      => "START",
+        StartSitVerdict.LeanStart  => "LEAN START",
+        StartSitVerdict.LeanSit    => "LEAN SIT",
+        StartSitVerdict.Sit        => "SIT",
+        _                          => "—"
+    };
+
+    private record PositionalDepthGradesDto(List<PositionDepthGradeDto> Grades);
+    private record PositionDepthGradeDto(
+        string Position, string Grade, int GradeScore, string Label,
+        string Summary, int RosteredCount, int HealthyCount,
+        double StarterScore, double DepthScore);
+
+    private record DynastyTeamGradeDto(
+        string ContentionGrade, int ContentionScore, string ContentionLabel, string ContentionSummary,
+        string LongevityGrade, int LongevityScore, string LongevityLabel, string LongevitySummary,
+        string OverallProfile, int RosteredCount, int PrimePlayerCount, int YoungPlayerCount,
+        double AvgTradeValue, double AvgAge);
+
+    private record DraftPrepDto(List<PositionNeedDto> PositionNeeds, List<RookieTargetDto> RookieTargets);
+    private record PositionNeedDto(string Position, string Grade, int GradeScore, string NeedLevel, string Summary);
+    private record RookieTargetDto(
+        string SleeperPlayerId, string PlayerName, string Position, string? NflTeam,
+        int FantasyProsRank, int PositionRank, string? Tier, string NeedLevel, string FitLabel);
 
     private async Task OpenPlayerCardAsync(MyRosterPlayerDto player)
     {
@@ -1171,42 +1123,24 @@ else if (_roster is null)
             Position: player.Position,
             NflTeam: player.NflTeam,
             Age: player.Age,
-            DraftRound: null,
-            DraftPick: null,
-            CollegeTeam: null,
+            DraftRound: null, DraftPick: null, CollegeTeam: null,
             HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg",
-            FantasyProsRank: null,
-            FantasyProsTier: null,
-            PffGrade: null,
-            PffRank: null,
-            ConsensusAdp: null,
-            DynastyScore: 0,
-            DraftCapitalScore: 0,
-            PositionalScore: 0,
-            ValuationBlendScore: 0,
-            FantasyProsScore: 0,
-            PffGradeScore: 0,
-            ConsensusAdpScore: 0,
-            AgeMultiplier: 0,
-            AthleticismSignalScore: 0,
-            AthleticismScore: null,
-            SpeedScore: null,
-            FortyYard: null,
+            FantasyProsRank: null, FantasyProsTier: null,
+            PffGrade: null, PffRank: null, ConsensusAdp: null,
+            DynastyScore: 0, DraftCapitalScore: 0, PositionalScore: 0,
+            ValuationBlendScore: 0, FantasyProsScore: 0, PffGradeScore: 0,
+            ConsensusAdpScore: 0, AgeMultiplier: 0, AthleticismSignalScore: 0,
+            AthleticismScore: null, SpeedScore: null, FortyYard: null,
             LeagueContextAvailable: true,
             RosteredByTeamName: _roster?.TeamName,
-            LeagueId: LeagueState.ActiveLeagueId);  
+            LeagueId: LeagueState.ActiveLeagueId);
 
         var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, data },
-        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
-    };
-        var options = new DialogOptions
         {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true,
-            CloseButton = true
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
         };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
     }
 }

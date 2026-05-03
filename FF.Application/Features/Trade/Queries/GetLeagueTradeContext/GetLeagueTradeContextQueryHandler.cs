@@ -178,7 +178,9 @@ public class GetLeagueTradeContextQueryHandler(
             var currentTeam = teamNameLookup.TryGetValue(pick.CurrentOwnerId, out var ctn)
                 ? ctn : "Unknown";
 
-            var pickDoc = await pickValueRepository.GetAsync(pick.Round, "Mid", pick.Season, ct);
+            pickSlots.TryGetValue((pick.Round, pick.CurrentOwnerId), out var s1);
+            var tier1 = pick.Season == currentSeason ? TierFromSlot(s1 > 0 ? s1 : (int?)null) : "Mid";
+            var pickDoc = await pickValueRepository.GetAsync(pick.Round, tier1, pick.Season, ct);
             var estimatedValue = pickDoc?.Value ?? 0;
 
             // For current season picks, include slot number if known (e.g. "1.07")
@@ -212,7 +214,9 @@ public class GetLeagueTradeContextQueryHandler(
                     var teamName = teamNameLookup.TryGetValue(rosterId, out var tn)
                         ? tn : "Unknown";
 
-                    var pickDoc = await pickValueRepository.GetAsync(round, "Mid", season, ct);
+                    pickSlots.TryGetValue((round, rosterId), out var s2);
+                    var tier2 = season == currentSeason ? TierFromSlot(s2 > 0 ? s2 : (int?)null) : "Mid";
+                    var pickDoc = await pickValueRepository.GetAsync(round, tier2, season, ct);
                     var estimatedValue = pickDoc?.Value ?? 0;
 
                     var slotLabel = BuildSlotLabel(season, round, rosterId,
@@ -246,6 +250,18 @@ public class GetLeagueTradeContextQueryHandler(
     /// Returns a slot label like "1.07" if the pick slot is known for this season,
     /// or null if the draft order hasn't been set or it's a future season pick.
     /// </summary>
+    /// <summary>
+    /// Converts a pick slot number (1–12+) to Early/Mid/Late tier.
+    /// Matches the bucket thresholds used in PickTier() in LeagueTradePage.razor.
+    /// </summary>
+    private static string TierFromSlot(int? slot) => slot switch
+    {
+        <= 4 => "Early",
+        <= 8 => "Mid",
+        not null => "Late",
+        null => "Mid"   // draft order not set — safe default
+    };
+
     private static string? BuildSlotLabel(
         int season, int round, string rosterId,
         int currentSeason,

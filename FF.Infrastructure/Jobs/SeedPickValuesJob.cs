@@ -17,6 +17,7 @@ public class SeedPickValuesJob(
         var collection = db.GetCollection<PickValueDocument>("pick_values");
         var count = await collection.CountDocumentsAsync(FilterDefinition<PickValueDocument>.Empty);
 
+        // Skip if already seeded — inverted bug fixed (was: if (count == 0))
         if (count > 0)
         {
             logger.LogInformation("Pick values already seeded ({Count} documents) — skipping", count);
@@ -34,6 +35,12 @@ public class SeedPickValuesJob(
             { (3, "Early"), 10.0 },
             { (3, "Mid"),    7.0 },
             { (3, "Late"),   5.0 },
+            { (4, "Early"),  3.5 },
+            { (4, "Mid"),    2.5 },
+            { (4, "Late"),   1.5 },
+            { (5, "Early"),  2.0 },
+            { (5, "Mid"),    1.5 },
+            { (5, "Late"),   1.0 },
         };
 
         var decayByYear = new Dictionary<int, double>
@@ -60,6 +67,6 @@ public class SeedPickValuesJob(
             }
 
         await collection.InsertManyAsync(docs);
-        logger.LogInformation("Pick values seeded — {Count} documents inserted", docs.Count);
+        logger.LogInformation("Pick values seeded: {Count} documents inserted", docs.Count);
     }
 }
