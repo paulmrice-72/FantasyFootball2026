@@ -4,6 +4,7 @@
 @using FF.WebBlazor.Services
 @inject LeagueStateService LeagueState
 @inject NavigationManager Nav
+@inject NflContextClientService NflContext
 
 <PageTitle>League Teams — FantasyCombine.AI</PageTitle>
 
@@ -264,6 +265,7 @@ else
     private MyRosterDto? _roster;
     private PositionalDepthGradesDto? _depthGrades;
     private DynastyTeamGradeDto? _dynastyGrade;
+    private int _season;
 
     private readonly TableGroupDefinition<MyRosterPlayerDto> _groupDefinition = new()
     {
@@ -327,7 +329,9 @@ else
             var http = HttpFactory.CreateClient("AuthAPI");
             var leagueId = LeagueState.ActiveLeagueId;
             var rosterId = _selectedTeam.SleeperRosterId;
-            var season = DateTime.UtcNow.Year;
+            if (_season == 0)
+                (_season, _) = await NflContext.GetContextAsync();
+            var season = _season;
 
             var rosterTask = http.GetFromJsonAsync<MyRosterDto>(
                 $"api/v1/league/teams/{rosterId}/roster?sleeperLeagueId={leagueId}");
