@@ -163,6 +163,49 @@
                         </RowTemplate>
                     </MudTable>
                 </MudPaper>
+                @* ── Draft Picks ─────────────────────────────────────────────────────── *@
+                @if (_roster.OwnedPicks.Count > 0)
+                {
+                    <MudPaper Class="pa-4 mt-4" Elevation="1">
+                        <MudText Typo="Typo.subtitle1" Class="mb-3" Style="color: var(--fc-amber);">
+                            <MudIcon Icon="@Icons.Material.Filled.ConfirmationNumber" Class="mr-1" Style="vertical-align:middle;" />
+                            Draft Picks (@_roster.OwnedPicks.Count total)
+                        </MudText>
+                        @foreach (var yearGroup in _roster.OwnedPicks
+                            .GroupBy(p => p.Season)
+                            .OrderBy(g => g.Key))
+                        {
+                            <div class="mb-3">
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-1" Style="font-weight:600; letter-spacing:.04em; text-transform:uppercase; font-size:.7rem;">
+                                    @yearGroup.Key Draft
+                                </MudText>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach (var pick in yearGroup.OrderBy(p => p.Round))
+                                    {
+                                        <MudChip T="string"
+                                                 Size="Size.Small"
+                                                 Variant="Variant.Outlined"
+                                                 Style="@PickChipStyle(pick.Round)">
+                                            @yearGroup.Key R@(pick.Round)
+                                        </MudChip>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </MudPaper>
+                }
+                else
+                {
+                    <MudPaper Class="pa-4 mt-4" Elevation="1">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2" Style="color: var(--fc-amber);">
+                            <MudIcon Icon="@Icons.Material.Filled.ConfirmationNumber" Class="mr-1" Style="vertical-align:middle;" />
+                            Draft Picks
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            No future picks — all picks traded away or data not yet synced.
+                        </MudText>
+                    </MudPaper>
+                }
             }
 
             @* Optimize My Lineup panel *@
@@ -863,7 +906,10 @@ else if (_roster is null)
         int Wins,
         int Losses,
         int WaiverPosition,
-        List<MyRosterPlayerDto> Players);
+        List<MyRosterPlayerDto> Players,
+        List<RosterPickDto> OwnedPicks);    // ← NEW
+
+    private record RosterPickDto(int Season, int Round);  // ← NEW local mirror
 
     private record MyRosterPlayerDto(
         string SleeperPlayerId,
@@ -1143,4 +1189,12 @@ else if (_roster is null)
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
     }
+
+    private static string PickChipStyle(int round) => round switch
+    {
+        1 => "border-color:#22C55E; color:#22C55E;",   // green — 1st rounders
+        2 => "border-color:#00C8F0; color:#00C8F0;",   // cyan — 2nd rounders
+        3 => "border-color:#F59E0B; color:#F59E0B;",   // amber — 3rd rounders
+        _ => "border-color:#6B7280; color:#6B7280;"    // gray — 4th+
+    };
 }

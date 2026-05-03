@@ -107,7 +107,7 @@ else
                                 </MudText>
                             </MudTd>
                             <MudTd>
-                                <MudLink Href="@($"league/teams?rosterId={context.SleeperRosterId}")"
+                                <MudLink Href="@($"/league/teams?rosterId={context.SleeperRosterId}")"
                                          Style="text-decoration:none; color:inherit;">
                                     <MudText Typo="Typo.body2" Style="font-weight:600; cursor:pointer;"
                                              Class="fc-link-hover">@context.TeamName</MudText>
@@ -191,12 +191,18 @@ else
                             <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.DynastyScore)">Dynasty</MudTableSortLabel></MudTh>
                             <MudTh Style="text-align:center; width:70px;">Score</MudTh>
                             <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.TeamProfile)">Profile</MudTableSortLabel></MudTh>
+                            <MudTh Style="text-align:center;">
+                                <MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.DraftCapitalScore)">
+                                    Draft Capital
+                                </MudTableSortLabel>
+                            </MudTh>
                             <MudTh>Top Assets</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>
-                                <div>
-                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.TeamName</MudText>
+                                <div @onclick="@(() => Nav.NavigateTo($"/league/teams?rosterId={context.SleeperRosterId}"))"
+                                        style="cursor:pointer;">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;" Class="fc-link-hover">@context.TeamName</MudText>
                                     <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerName</MudText>
                                 </div>
                             </MudTd>
@@ -227,6 +233,13 @@ else
                                     @context.TeamProfile
                                 </MudChip>
                             </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudTooltip Text="@($"{context.OwnedPickCount} future picks owned — normalized 0–100 across league")">
+                                    <MudText Typo="Typo.body2" Class="font-mono" Style="@DraftCapitalStyle(context.DraftCapitalScore)">
+                                        @context.DraftCapitalScore.ToString("F0")
+                                    </MudText>
+                                </MudTooltip>
+                            </MudTd>
                             <MudTd>
                                 <div class="d-flex flex-wrap gap-1">
                                     @foreach (var asset in context.TopAssets.Take(3))
@@ -248,9 +261,10 @@ else
                 </MudPaper>
 
                 <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
-                    Roster Strength based on 2025 sim-median production vs. positional baselines.
-                    Dynasty blends trade value (50%), breakout score (30%), and years of prime (20%).
-                    Profile: Contender (strong now + strong future) · Win-Now · Transitioning · Rebuilding.
+                    Roster Strength: sim-median production vs. positional baselines.
+                    Dynasty: trade value (42.5%) · breakout score (25.5%) · years of prime (17%) · draft capital (15%).
+                    Draft Capital: future picks normalized 0–100 across league (R1=16pts, R2=8pts, 15% yearly discount).
+                    Profile: Contender · Win-Now · Transitioning · Rebuilding.
                 </MudText>
             }
         </MudTabPanel>
@@ -388,6 +402,13 @@ else
         _ => Color.Default
     };
 
+    private static string DraftCapitalStyle(double score) => score switch
+    {
+        >= 70 => "color:#22C55E; font-weight:700;",
+        >= 40 => "color:#00C8F0;",
+        >= 20 => "color:#F59E0B;",
+        _ => "color:#6B7280;"
+    };
     // ── DTOs ──────────────────────────────────────────────────────────
     private record LeagueStandingsDto(
         string SleeperLeagueId,
@@ -423,6 +444,8 @@ else
         string DynastyGrade,
         double DynastyScore,
         string TeamProfile,
+        double DraftCapitalScore,
+        int OwnedPickCount,
         List<TeamAssetDto> TopAssets);
 
     private record TeamAssetDto(

@@ -7,7 +7,8 @@ namespace FF.Infrastructure.Persistence.Mongo.Repositories;
 
 public class RosterPlayerRepository(
     MongoDbContext database,
-    ILogger<RosterPlayerRepository> logger) : IRosterPlayerRepository
+    ILogger<RosterPlayerRepository> logger)
+    : IRosterPlayerRepository
 {
     private readonly IMongoCollection<RosterPlayerDocument> _collection =
         database.GetCollection<RosterPlayerDocument>("roster_players");
@@ -33,12 +34,12 @@ public class RosterPlayerRepository(
                 .Set(x => x.OwnerName, document.OwnerName)
                 .Set(x => x.TeamName, document.TeamName)
                 .Set(x => x.SleeperUserId, document.SleeperUserId)
-                .Set(x => x.SleeperUserId, document.SleeperUserId)
-                .Set(x => x.OwnerAvatar, document.OwnerAvatar)   // ← ADD
+                .Set(x => x.OwnerAvatar, document.OwnerAvatar)
                 .Set(x => x.PlayerIds, document.PlayerIds)
                 .Set(x => x.StarterIds, document.StarterIds)
-                .Set(x => x.IrIds, document.IrIds)       // ← add
-                .Set(x => x.TaxiIds, document.TaxiIds)   // ← add
+                .Set(x => x.IrIds, document.IrIds)
+                .Set(x => x.TaxiIds, document.TaxiIds)
+                .Set(x => x.OwnedPicks, document.OwnedPicks)   // ← ADDED
                 .Set(x => x.Season, document.Season)
                 .Set(x => x.Wins, document.Wins)
                 .Set(x => x.Losses, document.Losses)
@@ -48,7 +49,8 @@ public class RosterPlayerRepository(
 
             await _collection.UpdateOneAsync(
                 Builders<RosterPlayerDocument>.Filter.Eq(x => x.Id, existing.Id),
-                update, cancellationToken: CancellationToken.None);
+                update,
+                cancellationToken: CancellationToken.None);
         }
     }
 
@@ -59,12 +61,15 @@ public class RosterPlayerRepository(
         var docs = documents.ToList();
         foreach (var doc in docs)
             await UpsertAsync(doc, ct);
+
         logger.LogInformation(
             "RosterPlayerRepository upserted {Count} documents", docs.Count);
     }
 
     public async Task<RosterPlayerDocument?> GetByRosterIdAsync(
-        string sleeperRosterId, string sleeperLeagueId, CancellationToken ct = default)
+        string sleeperRosterId,
+        string sleeperLeagueId,
+        CancellationToken ct = default)
     {
         return await _collection
             .Find(x => x.SleeperRosterId == sleeperRosterId &&
@@ -73,7 +78,8 @@ public class RosterPlayerRepository(
     }
 
     public async Task<IReadOnlyList<RosterPlayerDocument>> GetByLeagueAsync(
-        string sleeperLeagueId, CancellationToken ct = default)
+        string sleeperLeagueId,
+        CancellationToken ct = default)
     {
         return await _collection
             .Find(x => x.SleeperLeagueId == sleeperLeagueId)
@@ -81,7 +87,9 @@ public class RosterPlayerRepository(
     }
 
     public async Task<RosterPlayerDocument?> GetByPlayerIdAsync(
-        string sleeperPlayerId, string sleeperLeagueId, CancellationToken ct = default)
+        string sleeperPlayerId,
+        string sleeperLeagueId,
+        CancellationToken ct = default)
     {
         var filter = Builders<RosterPlayerDocument>.Filter.And(
             Builders<RosterPlayerDocument>.Filter.Eq(x => x.SleeperLeagueId, sleeperLeagueId),
@@ -91,8 +99,11 @@ public class RosterPlayerRepository(
     }
 
     public async Task<RosterPlayerDocument?> GetBySleeperUserIdAsync(
-    string sleeperUserId, string sleeperLeagueId, CancellationToken ct = default)
-    => await _collection
-        .Find(x => x.SleeperUserId == sleeperUserId && x.SleeperLeagueId == sleeperLeagueId)
-        .FirstOrDefaultAsync(ct);
+        string sleeperUserId,
+        string sleeperLeagueId,
+        CancellationToken ct = default) =>
+        await _collection
+            .Find(x => x.SleeperUserId == sleeperUserId &&
+                       x.SleeperLeagueId == sleeperLeagueId)
+            .FirstOrDefaultAsync(ct);
 }

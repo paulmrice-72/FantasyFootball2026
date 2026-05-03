@@ -12,7 +12,8 @@ public class GetOpponentRosterQueryHandler(
     : IRequestHandler<GetOpponentRosterQuery, MyRosterDto?>
 {
     public async Task<MyRosterDto?> Handle(
-        GetOpponentRosterQuery request, CancellationToken cancellationToken)
+        GetOpponentRosterQuery request,
+        CancellationToken cancellationToken)
     {
         var rosterDoc = await rosterPlayerRepository.GetByRosterIdAsync(
             request.SleeperRosterId, request.SleeperLeagueId, cancellationToken);
@@ -21,7 +22,10 @@ public class GetOpponentRosterQueryHandler(
 
         var playerIds = rosterDoc.PlayerIds;
         if (playerIds.Count == 0)
-            return new MyRosterDto(rosterDoc.TeamName, rosterDoc.OwnerName, null, request.SleeperLeagueId, 0, 0, 0, []);
+            return new MyRosterDto(
+                rosterDoc.TeamName, rosterDoc.OwnerName, null,
+                request.SleeperLeagueId, 0, 0, 0, [],
+                rosterDoc.OwnedPicks);              // ← NEW
 
         var players = await playerRepository.GetBySleeperIdsAsync(playerIds, cancellationToken);
         var simDocs = await simulationRepository.GetLatestBySleeperIdsAsync(
@@ -45,6 +49,7 @@ public class GetOpponentRosterQueryHandler(
                 playerLookup.TryGetValue(id, out var player);
                 simLookup.TryGetValue(id, out var sim);
                 injuryLookup.TryGetValue(id, out var injury);
+
                 return new MyRosterPlayerDto(
                     SleeperPlayerId: id,
                     PlayerName: player?.FullName ?? "Unknown Player",
@@ -71,7 +76,8 @@ public class GetOpponentRosterQueryHandler(
             Wins: rosterDoc.Wins,
             Losses: rosterDoc.Losses,
             WaiverPosition: rosterDoc.WaiverPosition,
-            Players: rosterPlayers);
+            Players: rosterPlayers,
+            OwnedPicks: rosterDoc.OwnedPicks);  // ← NEW
     }
 
     private static int PositionOrder(string position) => position switch
