@@ -1,8 +1,8 @@
-﻿using FF.Application.Features.League.Queries.GetLeagueTeams;
+﻿// FF.API/Controllers/LeagueController.cs
+using FF.Application.Features.League.Queries.GetLeagueTeams;
 using FF.Application.Features.League.Queries.GetOpponentRoster;
 using FF.Application.Features.Team.Queries;
 using FF.Application.Interfaces.Persistence;
-using FF.Application.Interfaces.Repositories;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -49,19 +49,19 @@ public class LeagueController(IMediator mediator) : ControllerBase
         string rosterId,
         [FromQuery] string sleeperLeagueId,
         [FromQuery] int season,
-        [FromServices] IRosterPlayerRepository rosterRepo,
-        [FromServices] IPlayerRepository playerRepo,
-        [FromServices] ISimulationResultRepository simRepo,
-        [FromServices] IInjuryAlertRepository injuryRepo,
         CancellationToken ct)
     {
-        var rosterDoc = await rosterRepo.GetByRosterIdAsync(rosterId, sleeperLeagueId, ct);
-        if (rosterDoc is null) return NotFound();
+        if (string.IsNullOrEmpty(sleeperLeagueId))
+            return BadRequest("sleeperLeagueId is required.");
 
-        // Re-use depth grade logic via the existing query — swap userId for the roster owner
+        // Pass SleeperRosterId directly — handler uses GetByRosterIdAsync,
+        // avoiding null-userId failure for unmanaged/unclaimed Sleeper teams.
         var result = await mediator.Send(
-            new FF.Application.Features.Team.Queries.GetPositionalDepthGradesQuery(
-                rosterDoc.SleeperUserId ?? string.Empty, sleeperLeagueId, season), ct);
+            new GetPositionalDepthGradesQuery(
+                SleeperUserId: string.Empty,
+                SleeperLeagueId: sleeperLeagueId,
+                Season: season,
+                SleeperRosterId: rosterId), ct);
 
         return result is null ? NotFound() : Ok(result);
     }
@@ -78,7 +78,7 @@ public class LeagueController(IMediator mediator) : ControllerBase
         if (rosterDoc is null) return NotFound();
 
         var result = await mediator.Send(
-            new FF.Application.Features.Team.Queries.GetDynastyTeamGradeQuery(
+            new GetDynastyTeamGradeQuery(
                 rosterDoc.SleeperUserId ?? string.Empty, sleeperLeagueId), ct);
 
         return result is null ? NotFound() : Ok(result);

@@ -6,19 +6,20 @@ namespace FF.Application.Features.Team.Queries;
 public record GetPositionalDepthGradesQuery(
     string SleeperUserId,
     string SleeperLeagueId,
-    int Season)
+    int Season,
+    string? SleeperRosterId = null)   // ← NEW: roster-id path for opponent lookups
     : IRequest<PositionalDepthGradesDto?>;
 
 public record PositionalDepthGradesDto(
     List<PositionDepthGradeDto> Grades);
 
 public record PositionDepthGradeDto(
-    string Position,          // QB, RB, WR, TE
-    string Grade,             // A+, A, B, C, D, F
-    int GradeScore,           // 0-100 for progress bar
-    string Label,             // "Elite", "Strong", etc.
-    string Summary,           // one-liner rationale
-    int RosteredCount,        // how many at this pos
-    int HealthyCount,         // excluding IR/Out
-    double StarterScore,      // projected pts for starter(s)
-    double DepthScore);       // weighted depth value
+    string Position,
+    string Grade,
+    int GradeScore,
+    string Label,
+    string Summary,
+    int RosteredCount,
+    int HealthyCount,
+    double StarterScore,
+    double DepthScore);
