@@ -1,6 +1,7 @@
 ﻿// FF.Application/Features/Leagues/Queries/GetLeagueRosterGrades/GetLeagueRosterGradesQueryHandler.cs
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
+using FF.Domain.Documents;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -31,11 +32,23 @@ public class GetLeagueRosterGradesQueryHandler(
         ["TE"] = 1
     };
 
-    // Profile thresholds — tuned to our 2025 score distribution
-    // Depth ≥ 49 = strong current roster (B or better)
-    // Dynasty ≥ 21 = strong future value (B or better)
+    // Profile thresholds
     private const double DepthThreshold = 49.0;
     private const double DynastyThreshold = 21.0;
+
+    // Draft capital pick raw values — halving per round
+    // Applied to raw score before year decay
+    private static readonly Dictionary<int, double> RoundValue = new()
+    {
+        [1] = 16.0,
+        [2] = 8.0,
+        [3] = 4.0,
+        [4] = 2.0,
+        [5] = 1.0
+    };
+
+    // Year decay: current year = 1.0, each additional year = 15% discount
+    private const double YearDecayFactor = 0.85;
 
     public async Task<LeagueRosterGradesDto?> Handle(
         GetLeagueRosterGradesQuery request,
@@ -48,6 +61,7 @@ public class GetLeagueRosterGradesQueryHandler(
         // 1 — Load all rosters
         var rosters = await rosterPlayerRepository
             .GetByLeagueAsync(request.SleeperLeagueId, cancellationToken);
+
         if (rosters.Count == 0) return null;
 
         var allPlayerIds = rosters
@@ -65,18 +79,28 @@ public class GetLeagueRosterGradesQueryHandler(
 
         var valuations = await dynastyValuationRepository
             .GetBySleeperPlayerIdsAsync(allPlayerIds, cancellationToken);
+
         var valuationLookup = valuations.ToDictionary(v => v.SleeperPlayerId, v => v);
 
         var players = await playerRepository
             .GetBySleeperIdsAsync(allPlayerIds, cancellationToken);
+
         var playerLookup = players
             .Where(p => p.SleeperPlayerId != null)
             .ToDictionary(p => p.SleeperPlayerId!, p => p);
 
-        // 3 — Grade each team
+        // 3 — Compute raw draft capital scores per roster, then normalise across league
+        var rawCapitalScores = rosters.ToDictionary(
+            r => r.SleeperRosterId,
+            r => ComputeRawDraftCapital(r.OwnedPicks, request.Season));
+
+        var maxRaw = rawCapitalScores.Values.DefaultIfEmpty(1.0).Max();
+        if (maxRaw < 0.001) maxRaw = 1.0; // guard divide-by-zero for leagues with no traded picks
+
+        // 4 — Grade each team
         var teams = rosters.Select(roster =>
         {
-            // ── Depth Score — sim-median based ─────────────────────────────
+            // ── Depth Score — sim-median based ───────────────────────────────
             double totalDepthScore = 0;
             int positionsGraded = 0;
 
@@ -86,7 +110,11 @@ public class GetLeagueRosterGradesQueryHandler(
                 var slots = StarterSlots[pos];
 
                 var posPlayers = roster.PlayerIds
-                    .Where(id => { playerLookup.TryGetValue(id, out var p); return p?.Position.ToString() == pos; })
+                    .Where(id =>
+                    {
+                        playerLookup.TryGetValue(id, out var p);
+                        return p?.Position.ToString() == pos;
+                    })
                     .Select(id => simLookup.TryGetValue(id, out var m) ? m : 0.0)
                     .OrderByDescending(m => m)
                     .ToList();
@@ -102,20 +130,30 @@ public class GetLeagueRosterGradesQueryHandler(
 
             var depthScore = positionsGraded > 0 ? totalDepthScore / positionsGraded : 0.0;
 
-            // ── Dynasty Score — TradeValue blend ────────────────────────────
+            // ── Draft Capital Score — normalised 0–100 across the league ─────
+            var rawCapital = rawCapitalScores[roster.SleeperRosterId];
+            var draftCapitalScore = Math.Round((rawCapital / maxRaw) * 100.0, 1);
+            var ownedPickCount = roster.OwnedPicks.Count;
+
+            // ── Dynasty Score — TradeValue blend (85%) + DraftCapital (15%) ──
             var rosterValuations = roster.PlayerIds
                 .Where(id => valuationLookup.ContainsKey(id))
                 .Select(id => valuationLookup[id])
                 .ToList();
 
-            var dynastyScore = rosterValuations.Count > 0
+            var playerDynastyBlend = rosterValuations.Count > 0
                 ? rosterValuations.Average(v =>
                     (v.TradeValue * 0.50) +
                     (v.BreakoutScore * 0.30) +
                     (Math.Min(v.YearsOfPrimeRemaining, 10) * 10.0 * 0.20))
                 : 0.0;
 
-            // ── Top assets — by sim median ───────────────────────────────────
+            // Blend draft capital into dynasty score at 15%
+            // We normalise draft capital to the same ~0–35 range as playerDynastyBlend
+            // by mapping 0–100 → 0–35 (the rough max of the player blend)
+            var dynastyScore = (playerDynastyBlend * 0.85) + (draftCapitalScore * 0.35 * 0.15);
+
+            // ── Top assets — by sim median ────────────────────────────────────
             var topAssets = roster.PlayerIds
                 .Where(id => simLookup.ContainsKey(id) && playerLookup.ContainsKey(id))
                 .Select(id => (Id: id, Median: simLookup[id], Player: playerLookup[id]))
@@ -145,6 +183,8 @@ public class GetLeagueRosterGradesQueryHandler(
                 DynastyGrade: DynastyScoreToGrade(dynastyScore),
                 DynastyScore: Math.Round(dynastyScore, 1),
                 TeamProfile: profile,
+                DraftCapitalScore: draftCapitalScore,
+                OwnedPickCount: ownedPickCount,
                 TopAssets: topAssets);
         })
         .OrderByDescending(t => t.DepthScore)
@@ -157,11 +197,28 @@ public class GetLeagueRosterGradesQueryHandler(
     }
 
     /// <summary>
+    /// Compute raw draft capital score for a roster's owned picks.
+    /// R1=16, R2=8, R3=4, R4=2, R5=1 — each future year discounted by 15%.
+    /// </summary>
+    private static double ComputeRawDraftCapital(List<RosterPickDto> picks, int currentSeason)
+    {
+        var total = 0.0;
+        foreach (var pick in picks)
+        {
+            var roundVal = RoundValue.TryGetValue(pick.Round, out var rv) ? rv : 0.5;
+            var yearsOut = Math.Max(0, pick.Season - currentSeason);
+            var decay = Math.Pow(YearDecayFactor, yearsOut);
+            total += roundVal * decay;
+        }
+        return total;
+    }
+
+    /// <summary>
     /// Quadrant logic:
-    ///   High Depth + High Dynasty  = Contender
-    ///   High Depth + Low Dynasty   = Win-Now
-    ///   Low Depth  + High Dynasty  = Transitioning
-    ///   Low Depth  + Low Dynasty   = Rebuilding
+    /// High Depth + High Dynasty = Contender
+    /// High Depth + Low Dynasty  = Win-Now
+    /// Low Depth  + High Dynasty = Transitioning
+    /// Low Depth  + Low Dynasty  = Rebuilding
     /// </summary>
     private static string ComputeTeamProfile(double depthScore, double dynastyScore)
     {
@@ -192,7 +249,7 @@ public class GetLeagueRosterGradesQueryHandler(
         _ => "F"
     };
 
-    // Dynasty grade — TradeValue blend scale (roughly 15–35 for most rosters)
+    // Dynasty grade — TradeValue blend scale
     private static string DynastyScoreToGrade(double score) => score switch
     {
         >= 35 => "A+",

@@ -1,13 +1,4 @@
 // FF.Infrastructure/Services/SleeperLeagueImportService.cs
-//
-// The real implementation of ISleeperLeagueImportService.
-// This is where Sleeper API calls happen and data gets persisted to SQL Server.
-//
-// IDEMPOTENT UPSERT PATTERN used throughout:
-// "Insert if not exists, update if exists" — safe to call multiple times.
-// We check by SleeperLeagueId, SleeperRosterId, etc. before inserting.
-// This means if the job runs twice, you get the same result as running it once.
-
 using FF.Application.Features.Leagues.Commands.ImportLeague;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
@@ -25,31 +16,28 @@ public class SleeperLeagueImportService(
     ISleeperApiClient sleeperApi,
     FFDbContext dbContext,
     IRosterPlayerRepository rosterPlayerRepository,
-    ILogger<SleeperLeagueImportService> logger) : ISleeperLeagueImportService
+    ILogger<SleeperLeagueImportService> logger)
+    : ISleeperLeagueImportService
 {
     private readonly ISleeperApiClient _sleeperApi = sleeperApi;
     private readonly FFDbContext _dbContext = dbContext;
     private readonly IRosterPlayerRepository _rosterPlayerRepository = rosterPlayerRepository;
     private readonly ILogger<SleeperLeagueImportService> _logger = logger;
 
-
-    // Import transactions for the last 2 seasons (current + previous)
-    // Sleeper seasons are stored as strings e.g. "2024", "2025"
     private const int SeasonsToImport = 2;
-
-    // Sleeper has 18 regular season weeks + playoffs
     private const int MaxWeeksPerSeason = 22;
 
     public async Task<ImportLeagueResult> ImportLeagueAsync(
         string sleeperLeagueId,
         CancellationToken cancellationToken = default)
     {
-        // ── Step 1: Fetch league details from Sleeper ─────────────────────
         _logger.LogInformation("Fetching league {LeagueId} from Sleeper", sleeperLeagueId);
-        var sleeperLeague = await _sleeperApi.GetLeagueAsync(sleeperLeagueId, cancellationToken) ?? throw new InvalidOperationException($"League {sleeperLeagueId} not found on Sleeper");
+
+        var sleeperLeague = await _sleeperApi.GetLeagueAsync(sleeperLeagueId, cancellationToken)
+            ?? throw new InvalidOperationException($"League {sleeperLeagueId} not found on Sleeper");
+
         var season = int.TryParse(sleeperLeague.Season, out var s) ? s : DateTime.UtcNow.Year;
 
-        // ── Step 2: Upsert the League entity ──────────────────────────────
         var isNewLeague = false;
         var league = await _dbContext.Leagues
             .FirstOrDefaultAsync(l => l.SleeperLeagueId == sleeperLeagueId, cancellationToken);
@@ -69,10 +57,9 @@ public class SleeperLeagueImportService(
         {
             league.UpdateLeagueType(MapLeagueType(sleeperLeague.Settings?.Type ?? 0));
         }
-        // Sync avatar on every import/sync — idempotent, only marks dirty if changed
+
         league.UpdateAvatar(sleeperLeague.Avatar);
 
-        // Sync scoring settings from Sleeper on every import/sync
         if (sleeperLeague.ScoringSettings is not null)
         {
             var rec = sleeperLeague.ScoringSettings.GetValueOrDefault("rec", 1m);
@@ -80,12 +67,10 @@ public class SleeperLeagueImportService(
             var bonusRecTe = sleeperLeague.ScoringSettings.GetValueOrDefault("bonus_rec_te", 0m);
             league.UpdateScoringSettings(rec, passTd, bonusRecTe);
 
-            // Sync draft settings from Sleeper
             var draftRounds = sleeperLeague.Settings?.DraftRounds ?? 3;
             var tradePickLimit = sleeperLeague.Settings?.TradePickLimit ?? 0;
             league.UpdateDraftSettings(draftRounds, tradePickLimit);
 
-            // Sync roster slot configuration from Sleeper
             if (sleeperLeague.RosterPositions is { Count: > 0 })
                 league.UpdateRosterPositions(sleeperLeague.RosterPositions);
 
@@ -95,24 +80,17 @@ public class SleeperLeagueImportService(
         }
         else
         {
-            // Update mutable fields on existing league
             league.SetUpdated();
-            _logger.LogInformation("Updating existing league: {LeagueName}", league.Name);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        // ── Step 3: Import users (owners) and rosters ─────────────────────
         var (rostersImported, playersImported) = await ImportRostersAsync(
             league, sleeperLeagueId, cancellationToken);
 
-        // ── Step 4: Import players referenced by rosters ──────────────────
-        // (players are already in DB from the player sync job in PBI-016,
-        //  but we ensure any missing ones get created here too)
         var additionalPlayers = await EnsureRosterPlayersExistAsync(
             sleeperLeagueId, cancellationToken);
 
-        // ── Step 5: Import transaction history (last 2 seasons) ───────────
         var transactionsImported = await ImportTransactionHistoryAsync(
             league, sleeperLeague, cancellationToken);
 
@@ -143,7 +121,6 @@ public class SleeperLeagueImportService(
             return;
         }
 
-        // Fetch fresh league data to update LeagueType
         var sleeperLeague = await _sleeperApi.GetLeagueAsync(sleeperLeagueId, cancellationToken);
         if (sleeperLeague is not null)
         {
@@ -151,30 +128,23 @@ public class SleeperLeagueImportService(
             league.UpdateDraftSettings(
                 sleeperLeague.Settings?.DraftRounds ?? 3,
                 sleeperLeague.Settings?.TradePickLimit ?? 0);
-
             if (sleeperLeague.RosterPositions is { Count: > 0 })
                 league.UpdateRosterPositions(sleeperLeague.RosterPositions);
-
             league.UpdateAvatar(sleeperLeague.Avatar);
-
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        // Sync rosters (picks up ownership changes, adds/drops)
         await ImportRostersAsync(league, sleeperLeagueId, cancellationToken);
 
-        // Get current NFL state to know which week to sync transactions for
         var nflState = await _sleeperApi.GetNflStateAsync(cancellationToken);
         var currentWeek = nflState.Week;
 
-        // Only sync the current week's transactions
-        await ImportTransactionsForWeekAsync(
-            league, sleeperLeagueId, currentWeek, cancellationToken);
+        await ImportTransactionsForWeekAsync(league, sleeperLeagueId, currentWeek, cancellationToken);
 
         _logger.LogInformation("Sync complete for league {LeagueId}", sleeperLeagueId);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────
+    // ── Private helpers ──────────────────────────────────────────────────────
 
     private async Task<(int rostersImported, int playersImported)> ImportRostersAsync(
         League league,
@@ -184,7 +154,59 @@ public class SleeperLeagueImportService(
         var sleeperRosters = await _sleeperApi.GetRostersAsync(sleeperLeagueId, cancellationToken);
         var sleeperUsers = await _sleeperApi.GetUsersInLeagueAsync(sleeperLeagueId, cancellationToken);
 
-        // Build a lookup: owner_id → display info
+        // ── Compute owned picks per roster ───────────────────────────────────
+        // Strategy:
+        //   1. Seed: every roster owns all its own picks for current season + PickYearsOut years
+        //   2. Override with /traded_picks — each entry records the CURRENT owner of a pick
+        //      that has changed hands. Picks never traded remain with original roster.
+        var currentSeason = league.Season;
+        var yearsOut = league.PickYearsOut > 0 ? league.PickYearsOut : 2;
+        var draftRounds = league.DraftRounds > 0 ? league.DraftRounds : 3;
+
+        // pickOwnership[(season, round, originalRosterId)] = currentOwnerId
+        var pickOwnership = new Dictionary<(int Season, int Round, string Original), string>();
+        foreach (var roster in sleeperRosters)
+        {
+            var rid = roster.RosterId.ToString();
+            for (var yr = 0; yr <= yearsOut; yr++)
+                for (var rd = 1; rd <= draftRounds; rd++)
+                    pickOwnership[(currentSeason + yr, rd, rid)] = rid;
+        }
+
+        // Apply traded picks — override ownership for picks that have moved
+        List<FF.Infrastructure.ExternalApis.Sleeper.Dtos.SleeperDraftPickDto> tradedPicks;
+        try
+        {
+            tradedPicks = await _sleeperApi.GetTradedPicksAsync(sleeperLeagueId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not fetch traded picks for league {LeagueId} — pick ownership will reflect original ownership only",
+                sleeperLeagueId);
+            tradedPicks = [];
+        }
+
+        foreach (var pick in tradedPicks)
+        {
+            if (pick.Season is null) continue;
+            if (!int.TryParse(pick.Season, out var pickSeason)) continue;
+            if (pickSeason < currentSeason) continue; // skip past picks
+
+            // Sleeper traded_picks: roster_id = original owner, owner_id = current owner
+            var key = (pickSeason, pick.Round, pick.RosterId.ToString());
+            pickOwnership[key] = pick.OwnerId.ToString();
+        }
+
+        // Invert: build per-roster list of picks they currently own
+        var ownedPicksByRoster = sleeperRosters
+            .ToDictionary(r => r.RosterId.ToString(), _ => new List<RosterPickDto>());
+
+        foreach (var ((season, round, _), currentOwner) in pickOwnership)
+            if (ownedPicksByRoster.TryGetValue(currentOwner, out var list))
+                list.Add(new RosterPickDto(season, round));
+
+        // ── Upsert SQL roster records ────────────────────────────────────────
         var userLookup = sleeperUsers
             .Where(u => u.UserId is not null)
             .ToDictionary(u => u.UserId!, u => u);
@@ -195,8 +217,6 @@ public class SleeperLeagueImportService(
         foreach (var sleeperRoster in sleeperRosters)
         {
             var rosterId = sleeperRoster.RosterId.ToString();
-
-            // Look up the owner's display name and team name
             var ownerName = "Unknown Owner";
             var teamName = $"Team {sleeperRoster.RosterId}";
 
@@ -207,13 +227,9 @@ public class SleeperLeagueImportService(
                 teamName = owner.Metadata?.TeamName ?? ownerName;
             }
 
-            // Upsert the roster
             var roster = await _dbContext.Rosters
-                .FirstOrDefaultAsync(r =>
-                    r.LeagueId == league.Id &&
-                    r.SleeperRosterId == rosterId,
-                    cancellationToken);
-
+                .FirstOrDefaultAsync(r => r.LeagueId == league.Id &&
+                                          r.SleeperRosterId == rosterId, cancellationToken);
             if (roster is null)
             {
                 roster = Roster.Create(
@@ -221,7 +237,6 @@ public class SleeperLeagueImportService(
                     ownerName: ownerName,
                     teamName: teamName,
                     sleeperRosterId: rosterId);
-
                 _dbContext.Rosters.Add(roster);
                 rostersImported++;
             }
@@ -236,18 +251,16 @@ public class SleeperLeagueImportService(
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Imported {Count} rosters for league {LeagueId}",
-            rostersImported, sleeperLeagueId);
+            "Imported {Count} rosters for league {LeagueId}", rostersImported, sleeperLeagueId);
 
-        // Persist roster player assignments to MongoDB
-        var season = league.Season;
+        // ── Upsert MongoDB roster documents (players + picks) ────────────────
         var rosterDocs = sleeperRosters.Select(sleeperRoster =>
         {
             var rosterId = sleeperRoster.RosterId.ToString();
             var ownerName = "Unknown Owner";
             var teamName = $"Team {sleeperRoster.RosterId}";
             string? sleeperUserId = null;
-            string? ownerAvatar = null;      // ← ADD
+            string? ownerAvatar = null;
 
             if (sleeperRoster.OwnerId is not null &&
                 userLookup.TryGetValue(sleeperRoster.OwnerId, out var owner))
@@ -255,8 +268,10 @@ public class SleeperLeagueImportService(
                 ownerName = owner.DisplayName ?? ownerName;
                 teamName = owner.Metadata?.TeamName ?? ownerName;
                 sleeperUserId = sleeperRoster.OwnerId;
-                ownerAvatar = owner.Metadata?.Avatar ?? owner.Avatar;  // ← prefer team avatar
+                ownerAvatar = owner.Metadata?.Avatar ?? owner.Avatar;
             }
+
+            ownedPicksByRoster.TryGetValue(rosterId, out var picks);
 
             return new RosterPlayerDocument
             {
@@ -267,23 +282,23 @@ public class SleeperLeagueImportService(
                 SleeperUserId = sleeperUserId,
                 PlayerIds = sleeperRoster.Players ?? [],
                 StarterIds = sleeperRoster.Starters ?? [],
-                IrIds = sleeperRoster.Reserve ?? [],       // ← add (Reserve is the Sleeper DTO field)
-                TaxiIds = sleeperRoster.Taxi ?? [],        // ← already done
-                Season = season,
+                IrIds = sleeperRoster.Reserve ?? [],
+                TaxiIds = sleeperRoster.Taxi ?? [],
+                OwnedPicks = picks ?? [],
+                Season = currentSeason,
                 Wins = sleeperRoster.Settings?.Wins ?? 0,
                 Losses = sleeperRoster.Settings?.Losses ?? 0,
                 Ties = sleeperRoster.Settings?.Ties ?? 0,
                 WaiverPosition = sleeperRoster.Settings?.WaiverPosition ?? 0,
-                SyncedAt = DateTime.UtcNow, 
+                SyncedAt = DateTime.UtcNow,
                 OwnerAvatar = ownerAvatar
-
             };
         }).ToList();
 
         await _rosterPlayerRepository.UpsertBatchAsync(rosterDocs, cancellationToken);
 
         _logger.LogInformation(
-            "Persisted {Count} roster player documents for league {LeagueId}",
+            "Persisted {Count} roster documents with pick ownership for league {LeagueId}",
             rosterDocs.Count, sleeperLeagueId);
 
         return (rostersImported, playersTracked);
@@ -293,7 +308,6 @@ public class SleeperLeagueImportService(
         string sleeperLeagueId,
         CancellationToken cancellationToken)
     {
-        // Get all player IDs currently on rosters
         var sleeperRosters = await _sleeperApi.GetRostersAsync(sleeperLeagueId, cancellationToken);
         var rosterPlayerIds = sleeperRosters
             .Where(r => r.Players is not null)
@@ -301,44 +315,31 @@ public class SleeperLeagueImportService(
             .Distinct()
             .ToList();
 
-        if (rosterPlayerIds.Count == 0)
-            return 0;
+        if (rosterPlayerIds.Count == 0) return 0;
 
-        // Find which ones we don't have in our DB yet
         var existingIds = await _dbContext.Players
-            .Where(p => p.SleeperPlayerId != null &&
-                        rosterPlayerIds.Contains(p.SleeperPlayerId))
+            .Where(p => p.SleeperPlayerId != null && rosterPlayerIds.Contains(p.SleeperPlayerId))
             .Select(p => p.SleeperPlayerId!)
             .ToListAsync(cancellationToken);
 
         var missingIds = rosterPlayerIds.Except(existingIds).ToList();
+        if (missingIds.Count == 0) return 0;
 
-        if (missingIds.Count == 0)
-            return 0;
-
-        // Fetch full player data for missing players only
-        _logger.LogInformation(
-            "Fetching {Count} players not yet in local DB",
-            missingIds.Count);
+        _logger.LogInformation("Fetching {Count} players not yet in local DB", missingIds.Count);
 
         var allSleeperPlayers = await _sleeperApi.GetAllPlayersAsync(cancellationToken);
-
         var newPlayers = 0;
+
         foreach (var playerId in missingIds)
         {
-            if (!allSleeperPlayers.TryGetValue(playerId, out var sleeperPlayer))
-                continue;
-
+            if (!allSleeperPlayers.TryGetValue(playerId, out var sleeperPlayer)) continue;
             var player = SleeperPlayerMapper.ToDomainEntity(sleeperPlayer);
             if (player is null) continue;
-
             _dbContext.Players.Add(player);
             newPlayers++;
         }
 
-        if (newPlayers > 0)
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
+        if (newPlayers > 0) await _dbContext.SaveChangesAsync(cancellationToken);
         return newPlayers;
     }
 
@@ -350,32 +351,19 @@ public class SleeperLeagueImportService(
         var currentSeason = int.TryParse(sleeperLeague.Season, out var s) ? s : DateTime.UtcNow.Year;
         var totalImported = 0;
 
-        // Import last 2 seasons
         for (var seasonOffset = 0; seasonOffset < SeasonsToImport; seasonOffset++)
         {
-            var targetSeason = currentSeason - seasonOffset;
-
-            // For previous seasons we need the previous league ID chain
-            // Sleeper chains dynasty leagues via previous_league_id
             var leagueIdForSeason = seasonOffset == 0
                 ? sleeperLeague.LeagueId!
                 : sleeperLeague.PreviousLeagueId;
 
-            if (string.IsNullOrEmpty(leagueIdForSeason))
-            {
-                _logger.LogInformation(
-                    "No previous league found for season {Season}, stopping history import",
-                    targetSeason);
-                break;
-            }
+            if (string.IsNullOrEmpty(leagueIdForSeason)) break;
 
             for (var week = 1; week <= MaxWeeksPerSeason; week++)
             {
                 var count = await ImportTransactionsForWeekAsync(
                     league, leagueIdForSeason, week, cancellationToken);
                 totalImported += count;
-
-                // Small delay to be respectful to Sleeper's API
                 await Task.Delay(50, cancellationToken);
             }
         }
@@ -390,7 +378,6 @@ public class SleeperLeagueImportService(
         CancellationToken cancellationToken)
     {
         List<FF.Infrastructure.ExternalApis.Sleeper.Dtos.SleeperTransactionDto> transactions;
-
         try
         {
             transactions = await _sleeperApi.GetTransactionsAsync(
@@ -404,21 +391,15 @@ public class SleeperLeagueImportService(
             return 0;
         }
 
-        if (transactions.Count == 0)
-            return 0;
+        if (transactions.Count == 0) return 0;
 
         var imported = 0;
-
         foreach (var sleeperTx in transactions)
         {
-            if (string.IsNullOrEmpty(sleeperTx.TransactionId))
-                continue;
+            if (string.IsNullOrEmpty(sleeperTx.TransactionId)) continue;
 
-            // Idempotent check - skip if we already have this transaction
             var exists = await _dbContext.Transactions
-                .AnyAsync(t => t.SleeperTransactionId == sleeperTx.TransactionId,
-                    cancellationToken);
-
+                .AnyAsync(t => t.SleeperTransactionId == sleeperTx.TransactionId, cancellationToken);
             if (exists) continue;
 
             var transaction = Domain.Entities.Transaction.Create(
@@ -435,14 +416,11 @@ public class SleeperLeagueImportService(
             imported++;
         }
 
-        if (imported > 0)
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
+        if (imported > 0) await _dbContext.SaveChangesAsync(cancellationToken);
         return imported;
     }
 
-    private static string MapLeagueType(int sleeperLeagueType) =>
-    sleeperLeagueType switch
+    private static string MapLeagueType(int sleeperLeagueType) => sleeperLeagueType switch
     {
         2 => "Dynasty",
         1 => "Keeper",
