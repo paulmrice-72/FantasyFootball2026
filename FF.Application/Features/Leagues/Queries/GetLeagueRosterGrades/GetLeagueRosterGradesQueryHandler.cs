@@ -15,7 +15,6 @@ public class GetLeagueRosterGradesQueryHandler(
     : IRequestHandler<GetLeagueRosterGradesQuery, LeagueRosterGradesDto?>
 {
     // 2025 data-driven baselines — median league starter at each position
-    // Used to normalise sim median into a 0-100 depth score
     private static readonly Dictionary<string, double> PositionBaseline = new()
     {
         ["QB"] = 19.3,
@@ -31,6 +30,12 @@ public class GetLeagueRosterGradesQueryHandler(
         ["WR"] = 3,
         ["TE"] = 1
     };
+
+    // Profile thresholds — tuned to our 2025 score distribution
+    // Depth ≥ 49 = strong current roster (B or better)
+    // Dynasty ≥ 21 = strong future value (B or better)
+    private const double DepthThreshold = 49.0;
+    private const double DynastyThreshold = 21.0;
 
     public async Task<LeagueRosterGradesDto?> Handle(
         GetLeagueRosterGradesQuery request,
@@ -53,14 +58,14 @@ public class GetLeagueRosterGradesQueryHandler(
         // 2 — Bulk load sims, dynasty valuations, player records
         var simDocs = await simulationRepository
             .GetLatestBySleeperIdsAsync(allPlayerIds, request.Season, cancellationToken);
+
         var simLookup = simDocs
             .Where(s => s.SleeperPlayerId != null)
             .ToDictionary(s => s.SleeperPlayerId!, s => (double)s.Median);
 
         var valuations = await dynastyValuationRepository
             .GetBySleeperPlayerIdsAsync(allPlayerIds, cancellationToken);
-        var valuationLookup = valuations
-            .ToDictionary(v => v.SleeperPlayerId, v => v);
+        var valuationLookup = valuations.ToDictionary(v => v.SleeperPlayerId, v => v);
 
         var players = await playerRepository
             .GetBySleeperIdsAsync(allPlayerIds, cancellationToken);
@@ -71,7 +76,7 @@ public class GetLeagueRosterGradesQueryHandler(
         // 3 — Grade each team
         var teams = rosters.Select(roster =>
         {
-            // ── Depth Score — sim-median based, same logic as GetPositionalDepthGrades ──
+            // ── Depth Score — sim-median based ─────────────────────────────
             double totalDepthScore = 0;
             int positionsGraded = 0;
 
@@ -81,11 +86,7 @@ public class GetLeagueRosterGradesQueryHandler(
                 var slots = StarterSlots[pos];
 
                 var posPlayers = roster.PlayerIds
-                    .Where(id =>
-                    {
-                        playerLookup.TryGetValue(id, out var p);
-                        return p?.Position.ToString() == pos;
-                    })
+                    .Where(id => { playerLookup.TryGetValue(id, out var p); return p?.Position.ToString() == pos; })
                     .Select(id => simLookup.TryGetValue(id, out var m) ? m : 0.0)
                     .OrderByDescending(m => m)
                     .ToList();
@@ -99,11 +100,9 @@ public class GetLeagueRosterGradesQueryHandler(
                 positionsGraded++;
             }
 
-            var depthScore = positionsGraded > 0
-                ? totalDepthScore / positionsGraded
-                : 0.0;
+            var depthScore = positionsGraded > 0 ? totalDepthScore / positionsGraded : 0.0;
 
-            // ── Dynasty Score — TradeValue blend (unchanged) ──────────────────
+            // ── Dynasty Score — TradeValue blend ────────────────────────────
             var rosterValuations = roster.PlayerIds
                 .Where(id => valuationLookup.ContainsKey(id))
                 .Select(id => valuationLookup[id])
@@ -116,12 +115,11 @@ public class GetLeagueRosterGradesQueryHandler(
                     (Math.Min(v.YearsOfPrimeRemaining, 10) * 10.0 * 0.20))
                 : 0.0;
 
-            // ── Top assets — by sim median so it reflects current performance ─
+            // ── Top assets — by sim median ───────────────────────────────────
             var topAssets = roster.PlayerIds
                 .Where(id => simLookup.ContainsKey(id) && playerLookup.ContainsKey(id))
                 .Select(id => (Id: id, Median: simLookup[id], Player: playerLookup[id]))
-                .Where(x => new[] { "QB", "RB", "WR", "TE" }
-                    .Contains(x.Player.Position.ToString()))
+                .Where(x => new[] { "QB", "RB", "WR", "TE" }.Contains(x.Player.Position.ToString()))
                 .OrderByDescending(x => x.Median)
                 .Take(5)
                 .Select(x =>
@@ -136,6 +134,8 @@ public class GetLeagueRosterGradesQueryHandler(
                 })
                 .ToList();
 
+            var profile = ComputeTeamProfile(depthScore, dynastyScore);
+
             return new TeamRosterGradeDto(
                 SleeperRosterId: roster.SleeperRosterId,
                 TeamName: roster.TeamName,
@@ -144,6 +144,7 @@ public class GetLeagueRosterGradesQueryHandler(
                 DepthScore: Math.Round(depthScore, 1),
                 DynastyGrade: DynastyScoreToGrade(dynastyScore),
                 DynastyScore: Math.Round(dynastyScore, 1),
+                TeamProfile: profile,
                 TopAssets: topAssets);
         })
         .OrderByDescending(t => t.DepthScore)
@@ -155,8 +156,28 @@ public class GetLeagueRosterGradesQueryHandler(
             Teams: teams);
     }
 
-    // Depth grade — scored on normalised sim-median scale (0-100)
-    // 50 = league-average starter → C
+    /// <summary>
+    /// Quadrant logic:
+    ///   High Depth + High Dynasty  = Contender
+    ///   High Depth + Low Dynasty   = Win-Now
+    ///   Low Depth  + High Dynasty  = Transitioning
+    ///   Low Depth  + Low Dynasty   = Rebuilding
+    /// </summary>
+    private static string ComputeTeamProfile(double depthScore, double dynastyScore)
+    {
+        var strongDepth = depthScore >= DepthThreshold;
+        var strongDynasty = dynastyScore >= DynastyThreshold;
+
+        return (strongDepth, strongDynasty) switch
+        {
+            (true, true) => "Contender",
+            (true, false) => "Win-Now",
+            (false, true) => "Transitioning",
+            (false, false) => "Rebuilding"
+        };
+    }
+
+    // Depth grade — normalised sim-median scale (50 = league-average starter → C)
     private static string DepthScoreToGrade(double score) => score switch
     {
         >= 58 => "A",
@@ -171,7 +192,7 @@ public class GetLeagueRosterGradesQueryHandler(
         _ => "F"
     };
 
-    // Dynasty grade — TradeValue blend scale (roughly 15-35 for most rosters)
+    // Dynasty grade — TradeValue blend scale (roughly 15–35 for most rosters)
     private static string DynastyScoreToGrade(double score) => score switch
     {
         >= 35 => "A+",

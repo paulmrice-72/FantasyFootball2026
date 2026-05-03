@@ -12,8 +12,7 @@
 
 <div class="fc-page-header mb-4">
     <MudText Typo="Typo.h5" Class="fc-page-title">
-        <MudIcon Icon="@Icons.Material.Filled.EmojiEvents"
-                 Class="mr-2" Style="vertical-align:middle;" />
+        <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Class="mr-2" Style="vertical-align:middle;" />
         League Standings
     </MudText>
     <MudText Typo="Typo.body2" Class="mud-text-secondary">
@@ -27,8 +26,8 @@
 }
 else
 {
-    <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="false"
-             Class="mb-4" ActivePanelIndexChanged="OnTabChanged">
+    <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="false" Class="mb-4"
+             ActivePanelIndexChanged="OnTabChanged">
 
         @* ── TAB 0: STANDINGS ──────────────────────────────── *@
         <MudTabPanel Text="Standings" Icon="@Icons.Material.Filled.EmojiEvents">
@@ -89,22 +88,21 @@ else
 
                 @* Standings table *@
                 <MudPaper Class="fc-table-paper" Elevation="0">
-                    <MudTable Items="@_standings.Teams" Class="fc-table"
-                              Hover="true" Dense="true" Elevation="0">
+                    <MudTable Items="@_standings.Teams" Class="fc-table" Hover="true" Dense="true"
+                              Elevation="0" AllowUnsorted="false">
                         <HeaderContent>
                             <MudTh Style="width:40px;">#</MudTh>
-                            <MudTh>Team</MudTh>
-                            <MudTh Style="text-align:center;">W</MudTh>
-                            <MudTh Style="text-align:center;">L</MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<TeamStandingDto, object>(t => t.TeamName)">Team</MudTableSortLabel></MudTh>
+                            <MudTh Style="text-align:center;"><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<TeamStandingDto, object>(t => t.Wins)">W</MudTableSortLabel></MudTh>
+                            <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamStandingDto, object>(t => t.Losses)">L</MudTableSortLabel></MudTh>
                             <MudTh Style="text-align:center; width:40px;">T</MudTh>
-                            <MudTh Style="text-align:right;">Proj Pts</MudTh>
+                            <MudTh Style="text-align:right;"><MudTableSortLabel SortBy="new Func<TeamStandingDto, object>(t => t.ProjectedPointsThisWeek)">Proj Pts</MudTableSortLabel></MudTh>
                             <MudTh Style="text-align:center;">Waiver</MudTh>
                             <MudTh Style="text-align:center;">Playoff</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>
-                                <MudText Typo="Typo.body2" Class="font-mono"
-                                         Style="@RankStyle(context.Rank)">
+                                <MudText Typo="Typo.body2" Class="font-mono" Style="@RankStyle(context.Rank)">
                                     @context.Rank
                                 </MudText>
                             </MudTd>
@@ -183,19 +181,16 @@ else
             }
             else
             {
-                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3 mb-3" Icon="@Icons.Material.Filled.Info">
-                    Dynasty grades improve once 2025 season data is available. Check back mid-May.
-                </MudAlert>
                 <MudPaper Class="fc-table-paper mt-2" Elevation="0">
-                    <MudTable Items="@_grades.Teams" Class="fc-table"
-                              Hover="true" Dense="true" Elevation="0"
-                              T="TeamRosterGradeDto">
+                    <MudTable Items="@_grades.Teams" Class="fc-table" Hover="true" Dense="true"
+                              Elevation="0" T="TeamRosterGradeDto" AllowUnsorted="false">
                         <HeaderContent>
-                            <MudTh>Team</MudTh>
-                            <MudTh Style="text-align:center;">Depth</MudTh>
-                            <MudTh Style="text-align:center; width:80px;">Score</MudTh>
-                            <MudTh Style="text-align:center;">Dynasty</MudTh>
-                            <MudTh Style="text-align:center; width:80px;">Score</MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.TeamName)">Team</MudTableSortLabel></MudTh>
+                            <MudTh Style="text-align:center;"><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<TeamRosterGradeDto, object>(t => t.DepthScore)">Roster Strength</MudTableSortLabel></MudTh>
+                            <MudTh Style="text-align:center; width:70px;">Score</MudTh>
+                            <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.DynastyScore)">Dynasty</MudTableSortLabel></MudTh>
+                            <MudTh Style="text-align:center; width:70px;">Score</MudTh>
+                            <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.TeamProfile)">Profile</MudTableSortLabel></MudTh>
                             <MudTh>Top Assets</MudTh>
                         </HeaderContent>
                         <RowTemplate>
@@ -206,8 +201,7 @@ else
                                 </div>
                             </MudTd>
                             <MudTd Style="text-align:center;">
-                                <MudText Typo="Typo.h6"
-                                         Style="@(GradeStyle(context.DepthGrade) + "font-weight:800;")">
+                                <MudText Typo="Typo.h6" Style="@(GradeStyle(context.DepthGrade) + "font-weight:800;")">
                                     @context.DepthGrade
                                 </MudText>
                             </MudTd>
@@ -217,8 +211,7 @@ else
                                 </MudText>
                             </MudTd>
                             <MudTd Style="text-align:center;">
-                                <MudText Typo="Typo.h6"
-                                         Style="@(GradeStyle(context.DynastyGrade) + "font-weight:800;")">
+                                <MudText Typo="Typo.h6" Style="@(GradeStyle(context.DynastyGrade) + "font-weight:800;")">
                                     @context.DynastyGrade
                                 </MudText>
                             </MudTd>
@@ -226,6 +219,13 @@ else
                                 <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
                                     @context.DynastyScore.ToString("F1")
                                 </MudText>
+                            </MudTd>
+                            <MudTd Style="text-align:center;">
+                                <MudChip T="string" Size="Size.Small"
+                                         Style="@ProfileChipStyle(context.TeamProfile)"
+                                         Variant="Variant.Filled">
+                                    @context.TeamProfile
+                                </MudChip>
                             </MudTd>
                             <MudTd>
                                 <div class="d-flex flex-wrap gap-1">
@@ -248,7 +248,9 @@ else
                 </MudPaper>
 
                 <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
-                    Depth grade based on top-15 trade values. Dynasty grade blends trade value (50%), breakout score (30%), and years of prime (20%).
+                    Roster Strength based on 2025 sim-median production vs. positional baselines.
+                    Dynasty blends trade value (50%), breakout score (30%), and years of prime (20%).
+                    Profile: Contender (strong now + strong future) · Win-Now · Transitioning · Rebuilding.
                 </MudText>
             }
         </MudTabPanel>
@@ -271,11 +273,7 @@ else
 
     private void HandleLeagueChanged()
     {
-        _ = InvokeAsync(async () =>
-        {
-            await LoadAsync();
-            StateHasChanged();
-        });
+        _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
     }
 
     public void Dispose()
@@ -291,11 +289,7 @@ else
         _grades = null;
 
         var http = HttpClientFactory.CreateClient("AuthAPI");
-
-        // Get NFL context for season/week
         (_season, _week) = await NflContext.GetContextAsync();
-
-        // Week 15+ with no active games = season is finalized
         _seasonFinalized = _week >= 15 || _season < DateTime.UtcNow.Year;
 
         var leagueId = LeagueState.ActiveLeagueId;
@@ -308,8 +302,7 @@ else
 
                 if (_standings?.Teams is { Count: > 0 })
                 {
-                    var top = _standings.Teams
-                        .MaxBy(t => t.ProjectedPointsThisWeek);
+                    var top = _standings.Teams.MaxBy(t => t.ProjectedPointsThisWeek);
                     _topProjected = top?.TeamName ?? "—";
                 }
             }
@@ -319,7 +312,7 @@ else
         _loading = false;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────────────
     private static string RankStyle(int rank) => rank switch
     {
         1 => "color:#F59E0B; font-weight:700;",
@@ -335,13 +328,22 @@ else
         "Bubble" => "fc-chip-playoff-bubble",
         _ => "fc-chip-playoff-out"
     };
-    // ── Grades state ──────────────────────────────────────────────
+
+    private static string ProfileChipStyle(string profile) => profile switch
+    {
+        "Contender" => "background:#22C55E20; color:#22C55E; border:1px solid #22C55E40;",
+        "Win-Now" => "background:#00C8F020; color:#00C8F0; border:1px solid #00C8F040;",
+        "Transitioning" => "background:#F59E0B20; color:#F59E0B; border:1px solid #F59E0B40;",
+        "Rebuilding" => "background:#F8717120; color:#F87171; border:1px solid #F8717140;",
+        _ => ""
+    };
+
+    // ── Grades state ──────────────────────────────────────────────────
     private bool _gradesLoading = false;
     private LeagueRosterGradesDto? _grades;
 
     private async Task OnTabChanged(int index)
     {
-        // Lazy-load grades only when that tab is first opened
         if (index == 1 && _grades is null && !_gradesLoading)
             await LoadGradesAsync();
     }
@@ -353,7 +355,6 @@ else
 
         var http = HttpClientFactory.CreateClient("AuthAPI");
         var leagueId = LeagueState.ActiveLeagueId;
-
         if (!string.IsNullOrEmpty(leagueId))
         {
             try
@@ -368,12 +369,12 @@ else
         StateHasChanged();
     }
 
-    // ── Grade helpers ─────────────────────────────────────────────
+    // ── Grade helpers ─────────────────────────────────────────────────
     private static string GradeStyle(string grade) => grade switch
     {
-        "A" => "color:#22C55E;",
-        "B" => "color:#00C8F0;",
-        "C" => "color:#F59E0B;",
+        "A" or "A+" or "A-" => "color:#22C55E;",
+        "B" or "B+" or "B-" => "color:#00C8F0;",
+        "C" or "C+" or "C-" => "color:#F59E0B;",
         "D" => "color:#F87171;",
         _ => "color:#6B7280;"
     };
@@ -386,14 +387,8 @@ else
         "RB" => Color.Success,
         _ => Color.Default
     };
-    // ── DTOs ──────────────────────────────────────────────────────
-    private record NflContextResponse(
-        int CalendarSeason,
-        int CalendarWeek,
-        int ActiveSeason,
-        int ActiveWeek,
-        bool IsOverrideActive);
 
+    // ── DTOs ──────────────────────────────────────────────────────────
     private record LeagueStandingsDto(
         string SleeperLeagueId,
         int Season,
@@ -415,9 +410,9 @@ else
         string PlayoffProjection);
 
     private record LeagueRosterGradesDto(
-string SleeperLeagueId,
-int Season,
-List<TeamRosterGradeDto> Teams);
+        string SleeperLeagueId,
+        int Season,
+        List<TeamRosterGradeDto> Teams);
 
     private record TeamRosterGradeDto(
         string SleeperRosterId,
@@ -427,6 +422,7 @@ List<TeamRosterGradeDto> Teams);
         double DepthScore,
         string DynastyGrade,
         double DynastyScore,
+        string TeamProfile,
         List<TeamAssetDto> TopAssets);
 
     private record TeamAssetDto(

@@ -19,7 +19,8 @@ public class PlayersController(
     ISimulationResultRepository simulationRepo,
     IPlayerProjectionRepository projectionRepo,
     IPlayerUsageMetricsRepository usageMetricsRepo,
-    IDepthChartRepository _depthChartRepository) : ControllerBase
+    IDepthChartRepository depthChartRepository,
+    IDynastyValuationRepository dynastyValuationRepo) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
@@ -34,8 +35,7 @@ public class PlayersController(
     public async Task<IActionResult> SyncPlayers(CancellationToken ct)
     {
         var result = await mediator.Send(new SyncPlayersCommand(), ct);
-        if (!result.IsSuccess)
-            return StatusCode(500, result.Error?.Message);
+        if (!result.IsSuccess) return StatusCode(500, result.Error?.Message);
         return Ok(result.Value);
     }
 
@@ -49,8 +49,7 @@ public class PlayersController(
         CancellationToken ct)
     {
         var player = await playerRepository.GetBySleeperIdAsync(sleeperPlayerId, ct);
-        if (player is null)
-            return NotFound($"Player {sleeperPlayerId} not found.");
+        if (player is null) return NotFound($"Player {sleeperPlayerId} not found.");
 
         return Ok(new
         {
@@ -63,13 +62,38 @@ public class PlayersController(
             collegeTeam = player.CollegeTeam,
             yearsExperience = player.YearsExperience,
             headshotUrl = player.SleeperPlayerId is not null
-                               ? $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg"
-                               : null
+                ? $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg"
+                : null
         });
     }
 
     /// <summary>
-    /// Returns (or generates) an AI scouting narrative for a rookie player.
+    /// Returns dynasty valuation (TradeValue, BreakoutScore, CareerValue, phase)
+    /// for a single player. Used by PlayerCardDialog veteran breakdown.
+    /// </summary>
+    [HttpGet("{sleeperPlayerId}/dynasty-value")]
+    public async Task<IActionResult> GetDynastyValue(
+        string sleeperPlayerId,
+        CancellationToken ct)
+    {
+        var val = await dynastyValuationRepo.GetBySleeperIdAsync(sleeperPlayerId, ct);
+        if (val is null)
+            return Ok(new { found = false });
+
+        return Ok(new
+        {
+            found = true,
+            tradeValue = val.TradeValue,
+            breakoutScore = val.BreakoutScore,
+            careerValueScore = val.CareerValueScore,
+            yearsOfPrimeRemaining = val.YearsOfPrimeRemaining,
+            careerPhase = val.CareerPhase.ToString(),
+            yearsExperience = val.YearsExperience
+        });
+    }
+
+    /// <summary>
+    /// Returns (or generates) an AI scouting narrative for a player.
     /// Cached in MongoDB for 7 days.
     /// </summary>
     [HttpGet("{sleeperPlayerId}/narrative")]
@@ -79,10 +103,7 @@ public class PlayersController(
     {
         var result = await mediator.Send(
             new GetPlayerNarrativeQuery(sleeperPlayerId), ct);
-
-        if (!result.IsSuccess)
-            return NotFound(result.Error?.Message);
-
+        if (!result.IsSuccess) return NotFound(result.Error?.Message);
         return Ok(new { narrative = result.Value!.Narrative });
     }
 
@@ -96,13 +117,10 @@ public class PlayersController(
         [FromQuery] int week,
         CancellationToken ct)
     {
-        if (season == 0 || week == 0)
-            return BadRequest("season and week are required.");
-
+        if (season == 0 || week == 0) return BadRequest("season and week are required.");
         var result = await simulationRepo.GetByPlayerAsync(playerId, season, week, ct);
         if (result is null)
             return NotFound($"No simulation found for player {playerId} season {season} week {week}.");
-
         return Ok(result);
     }
 
@@ -116,13 +134,10 @@ public class PlayersController(
         [FromQuery] int week,
         CancellationToken ct)
     {
-        if (season == 0 || week == 0)
-            return BadRequest("season and week are required.");
-
+        if (season == 0 || week == 0) return BadRequest("season and week are required.");
         var result = await projectionRepo.GetByPlayerAsync(playerId, season, week, ct);
         if (result is null)
             return NotFound($"No projection found for player {playerId} season {season} week {week}.");
-
         return Ok(result);
     }
 
@@ -135,49 +150,37 @@ public class PlayersController(
         [FromQuery] int season,
         CancellationToken ct)
     {
-        if (season == 0)
-            return BadRequest("season is required.");
-
+        if (season == 0) return BadRequest("season is required.");
         var result = await usageMetricsRepo.GetByPlayerIdAsync(playerId, season, ct);
         if (result is null)
             return NotFound($"No usage metrics found for player {playerId} season {season}.");
-
         return Ok(result);
     }
 
-    // POST /api/v1/players/backfill-college
-    // One-shot admin endpoint — upload nflverse roster CSV to backfill CollegeTeam
     [HttpPost("backfill-college")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> BackfillCollegeTeam(
         IFormFile file,
         CancellationToken ct)
     {
-        if (file is null || file.Length == 0)
-            return BadRequest("No file uploaded.");
-
+        if (file is null || file.Length == 0) return BadRequest("No file uploaded.");
         using var reader = new StreamReader(file.OpenReadStream());
         var csv = await reader.ReadToEndAsync(ct);
-
-        var result = await mediator.Send(
-            new BackfillCollegeTeamCommand(csv), ct);
-
-        return result.IsSuccess
-            ? Ok(result.Value)
-            : BadRequest(result.Error.Message);
+        var result = await mediator.Send(new BackfillCollegeTeamCommand(csv), ct);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error.Message);
     }
 
     [HttpGet("{sleeperPlayerId}/depth-chart")]
     public async Task<IActionResult> GetDepthChart(
-    string sleeperPlayerId,
-    [FromQuery] int season = 2026,
-    CancellationToken ct = default)
+        string sleeperPlayerId,
+        [FromQuery] int season = 2026,
+        CancellationToken ct = default)
     {
-        var rows = await _depthChartRepository.GetByPlayerAsync(sleeperPlayerId, season, ct);
+        var rows = await depthChartRepository.GetByPlayerAsync(sleeperPlayerId, season, ct);
         if (rows.Count == 0)
             return Ok(new { available = false, message = "Depth chart sync has not run yet for this season." });
 
-        var latest = rows.First();  // already sorted by Week desc
+        var latest = rows.First();
         return Ok(new
         {
             available = true,
