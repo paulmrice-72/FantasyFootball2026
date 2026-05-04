@@ -15,7 +15,9 @@ public class DepthChartRepository(MongoDbContext db) : IDepthChartRepository
         IReadOnlyList<DepthChartDocument> rows,
         CancellationToken ct = default)
     {
-        foreach (var row in rows)
+        if (rows.Count == 0) return;
+
+        var writes = rows.Select(row =>
         {
             // Natural key: season + week + gsisId + depthPosition
             var filter = Builders<DepthChartDocument>.Filter.And(
@@ -33,11 +35,15 @@ public class DepthChartRepository(MongoDbContext db) : IDepthChartRepository
                 .Set(d => d.SleeperPlayerId, row.SleeperPlayerId)
                 .Set(d => d.SyncedAt, row.SyncedAt);
 
-            await _collection.UpdateOneAsync(
-                filter, update,
-                new UpdateOptions { IsUpsert = true },
-                ct);
-        }
+            return new UpdateOneModel<DepthChartDocument>(filter, update)
+            {
+                IsUpsert = true
+            };
+        }).ToList();
+
+        // Single round trip to MongoDB — replaces 111k sequential UpdateOneAsync calls
+        var options = new BulkWriteOptions { IsOrdered = false }; // unordered = maximum parallelism
+        await _collection.BulkWriteAsync(writes, options, ct);
     }
 
     public async Task<IReadOnlyList<DepthChartDocument>> GetByPlayerAsync(
@@ -47,12 +53,10 @@ public class DepthChartRepository(MongoDbContext db) : IDepthChartRepository
             Builders<DepthChartDocument>.Filter.Eq(d => d.SleeperPlayerId, sleeperPlayerId),
             Builders<DepthChartDocument>.Filter.Eq(d => d.Season, season));
 
-        var results = await _collection
+        return await _collection
             .Find(filter)
             .SortByDescending(d => d.Week)
             .ToListAsync(ct);
-
-        return results;
     }
 
     public async Task<IReadOnlyList<DepthChartDocument>> GetByTeamAsync(
@@ -63,12 +67,31 @@ public class DepthChartRepository(MongoDbContext db) : IDepthChartRepository
             Builders<DepthChartDocument>.Filter.Eq(d => d.Season, season),
             Builders<DepthChartDocument>.Filter.Eq(d => d.Week, week));
 
-        var results = await _collection
+        return await _collection
             .Find(filter)
             .SortBy(d => d.Position)
             .ThenBy(d => d.DepthTeam)
             .ToListAsync(ct);
+    }
 
-        return results;
+    public async Task<IReadOnlyList<DepthChartDocument>> GetLatestBySleeperIdsAsync(
+        IReadOnlyList<string> sleeperPlayerIds, int season, CancellationToken ct = default)
+    {
+        if (sleeperPlayerIds.Count == 0) return [];
+
+        var filter = Builders<DepthChartDocument>.Filter.And(
+            Builders<DepthChartDocument>.Filter.In(d => d.SleeperPlayerId, sleeperPlayerIds),
+            Builders<DepthChartDocument>.Filter.Eq(d => d.Season, season));
+
+        var all = await _collection
+            .Find(filter)
+            .SortByDescending(d => d.Week)
+            .ToListAsync(ct);
+
+        // One doc per player — highest week wins
+        return all
+            .GroupBy(d => d.SleeperPlayerId)
+            .Select(g => g.First())
+            .ToList();
     }
 }
