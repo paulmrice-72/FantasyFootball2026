@@ -62,7 +62,7 @@ public class GetLeagueRosterGradesQueryHandler(
 
         // Bulk load all data
         var simDocs = await simulationRepository
-            .GetLatestBySleeperIdsWithFallbackAsync(allPlayerIds, request.Season, cancellationToken);
+            .GetLatestBySleeperIdsAsync(allPlayerIds, request.Season, cancellationToken);
         var simLookup = simDocs
             .Where(s => s.SleeperPlayerId != null)
             .ToDictionary(s => s.SleeperPlayerId!, s => (double)s.Median);

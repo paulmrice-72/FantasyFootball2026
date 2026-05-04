@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using FF.Application.Features.Simulations.Commands.SeedSeasonAverageSims;
 
 namespace FF.API.Controllers;
 
@@ -157,8 +158,8 @@ public class AdminController(
     {
         if (request.Season.HasValue && (request.Season < 2020 || request.Season > 2030))
             return BadRequest("Season must be between 2020 and 2030.");
-        if (request.Week.HasValue && (request.Week < 1 || request.Week > 18))
-            return BadRequest("Week must be between 1 and 18.");
+        if (request.Week.HasValue && (request.Week < 0 || request.Week > 18))
+            return BadRequest("Week must be between 0 (preseason) and 18.");
 
         var settings = await appSettingsRepo.GetAsync();
         settings.SimulationSeasonOverride = request.Season;
@@ -282,6 +283,33 @@ public class AdminController(
     {
         BackgroundJob.Enqueue<SyncRedraftAdpJob>(job => job.RunAsync(CancellationToken.None));
         return Ok(new { message = "FFC ADP sync job enqueued." });
+    }
+
+    /// <summary>
+    /// Seeds season-average sim data from nflverse player_stats CSV.
+    /// Week=0 sentinel — represents season average, not a weekly projection.
+    /// Typically run once after the season ends (file published ~February).
+    /// </summary>
+    [HttpPost("jobs/seed-season-averages")]
+    public async Task<IActionResult> SeedSeasonAverages(
+        [FromQuery] int season,
+        [FromServices] IMediator mediator,
+        CancellationToken ct)
+    {
+        logger.LogInformation("Admin triggered season-average sim seed for season {Season}", season);
+
+        if (season < 2020 || season > DateTime.UtcNow.Year)
+            return BadRequest($"Season must be between 2020 and {DateTime.UtcNow.Year}.");
+
+        var result = await mediator.Send(new SeedSeasonAverageSimsCommand(season), ct);
+
+        return Ok(new
+        {
+            Message = $"Season-average sim seed complete for {season}.",
+            result.Seeded,
+            result.Skipped,
+            result.Unmatched
+        });
     }
     public record RunJobRequest(int Season);
     public record NflContextOverrideRequest(int? Season, int? Week);

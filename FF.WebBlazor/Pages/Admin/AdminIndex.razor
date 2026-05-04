@@ -90,8 +90,10 @@
                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" sm="4">
-                <MudNumericField T="int?" @bind-Value="_overrideWeek" Label="Override Week"
-                                 Min="1" Max="18" Placeholder="@_context.CalendarWeek.ToString()"
+                <MudNumericField T="int?" @bind-Value="_overrideWeek"
+                                 Label="Override Week (0 = Preseason)"
+                                 Min="0" Max="18"
+                                 Placeholder="@_context.CalendarWeek.ToString()"
                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
             </MudItem>
             <MudItem xs="12" sm="4" Class="d-flex gap-2 align-center">
