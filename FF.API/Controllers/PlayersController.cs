@@ -5,6 +5,8 @@ using FF.Application.Players.Commands.BackfillCollegeTeam;
 using FF.Application.Players.Commands.SyncPlayers;
 using FF.Application.Players.Queries.GetAllPlayers;
 using FF.Application.Players.Queries.GetPlayerNarrative;
+using FF.Application.Services;
+using FF.Domain.Documents;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,7 +17,7 @@ namespace FF.API.Controllers;
 [Route("api/v1/[controller]")]
 public class PlayersController(
     IMediator mediator,
-    IPlayerRepository playerRepository,
+    IPlayerRepository playerRepository,          // ← already used in /bio, just confirm it's there
     ISimulationResultRepository simulationRepo,
     IPlayerProjectionRepository projectionRepo,
     IPlayerUsageMetricsRepository usageMetricsRepo,
@@ -74,16 +76,54 @@ public class PlayersController(
     [HttpGet("{sleeperPlayerId}/dynasty-value")]
     public async Task<IActionResult> GetDynastyValue(
         string sleeperPlayerId,
-        CancellationToken ct)
+        [FromQuery] int season = 2026,
+        CancellationToken ct = default)
     {
         var val = await dynastyValuationRepo.GetBySleeperIdAsync(sleeperPlayerId, ct);
-        if (val is null)
-            return Ok(new { found = false });
+        if (val is null) return Ok(new { found = false });
+
+        // Load depth chart to compute penalty
+        var depthRows = await depthChartRepository.GetByPlayerAsync(sleeperPlayerId, season, ct);
+        var depthDoc = depthRows.FirstOrDefault();
+
+        double depthPenalty = 1.0;
+        int depthSlot = depthDoc?.DepthTeam ?? 1;
+
+        if (depthDoc is not null && (val.Position == "TE" || val.Position == "RB"))
+        {
+            // Build minimal lookups for the penalty helper
+            var singleDepthLookup = new Dictionary<string, DepthChartDocument>
+            { [sleeperPlayerId] = depthDoc };
+
+            // Age gate: look up the TE1 for this team
+            var te1AgeByTeam = new Dictionary<string, int?>();
+            if (val.Position == "TE" && depthSlot >= 2)
+            {
+                var teamRows = await depthChartRepository
+                    .GetByTeamAsync(depthDoc.NflTeam, season, depthDoc.Week, ct);
+                var te1Row = teamRows.FirstOrDefault(r => r.Position == "TE" && r.DepthTeam == 1);
+                if (te1Row is not null)
+                {
+                    var te1Player = await playerRepository.GetBySleeperIdAsync(te1Row.SleeperPlayerId, ct);
+                    te1AgeByTeam[depthDoc.NflTeam] = te1Player?.Age;
+                }
+            }
+
+            depthPenalty = DepthPenaltyCalculator.ComputeDepthPenalty(
+                sleeperPlayerId, val.Position, singleDepthLookup, te1AgeByTeam);
+        }
+
+        var adjustedTradeValue = Math.Round(val.TradeValue * depthPenalty, 1);
+        var isDepthPenalised = depthPenalty < 1.0;
 
         return Ok(new
         {
             found = true,
             tradeValue = val.TradeValue,
+            adjustedTradeValue,
+            depthPenaltyMultiplier = Math.Round(depthPenalty, 2),
+            depthSlot,
+            isDepthPenalised,
             breakoutScore = val.BreakoutScore,
             careerValueScore = val.CareerValueScore,
             yearsOfPrimeRemaining = val.YearsOfPrimeRemaining,

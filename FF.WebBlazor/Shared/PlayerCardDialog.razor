@@ -217,6 +217,17 @@
                                 @AgeRow()
                             }
                         </div>
+                        @if (_dynastyValue?.IsDepthPenalised == true)
+                        {
+                            var pct = (int)Math.Round(_dynastyValue.DepthPenaltyMultiplier * 100);
+                            var rawVal = _dynastyValue.TradeValue.ToString("F1");
+                            var adjVal = _dynastyValue.AdjustedTradeValue.ToString("F1");
+                            var slot = _dynastyValue.DepthSlot;
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                                <strong>Depth penalty applied (@(pct)% of raw value).</strong>
+                                Depth slot @slot — trade value adjusted from @rawVal → @adjVal.
+                            </MudAlert>
+                        }
                         @if (_dynastyValue?.Found != true)
                         {
                             <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
@@ -543,7 +554,12 @@
     private bool _dynastyValueLoaded = false;
 
     // Resolved helpers — prefer API-loaded data over callsite-passed values
-    private double ResolvedTradeValue => _dynastyValue?.Found == true ? _dynastyValue.TradeValue : (Player.DynastyTradeValue ?? 0);
+    private double ResolvedTradeValue =>
+        _dynastyValue?.Found == true
+            ? (_dynastyValue.IsDepthPenalised
+                ? _dynastyValue.AdjustedTradeValue
+                : _dynastyValue.TradeValue)
+            : (Player.DynastyTradeValue ?? 0);
     private double ResolvedBreakoutScore => _dynastyValue?.Found == true ? _dynastyValue.BreakoutScore : Player.FantasyProsScore;
     private double ResolvedCareerValue => _dynastyValue?.Found == true ? _dynastyValue.CareerValueScore : (Player.CareerValueScore ?? 0);
     private double ResolvedPrimeYears => _dynastyValue?.Found == true ? _dynastyValue.YearsOfPrimeRemaining : (Player.YearsOfPrimeRemaining ?? 0);
@@ -754,6 +770,10 @@
     private record DynastyValueResponse(
         bool Found,
         double TradeValue,
+        double AdjustedTradeValue,
+        double DepthPenaltyMultiplier,
+        int DepthSlot,
+        bool IsDepthPenalised,
         double BreakoutScore,
         double CareerValueScore,
         double YearsOfPrimeRemaining,

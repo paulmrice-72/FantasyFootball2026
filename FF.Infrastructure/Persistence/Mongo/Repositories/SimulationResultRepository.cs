@@ -139,4 +139,25 @@ public class SimulationResultRepository(
             .Select(g => g.First())
             .ToList();
     }
+
+    public async Task<IReadOnlyList<SimulationResultDocument>> GetLatestBySleeperIdsWithFallbackAsync(
+    IEnumerable<string> sleeperPlayerIds, int season, CancellationToken ct = default)
+    {
+        var ids = sleeperPlayerIds.ToList();
+
+        // Try requested season first
+        var results = await GetLatestBySleeperIdsAsync(ids, season, ct);
+
+        // If fewer than 10% of players have data, fall back to previous season.
+        // Threshold of 10% catches the offseason case where 2026 has no data yet
+        // without masking genuine sparse data during the season.
+        if (results.Count < ids.Count * 0.10 && season > 2020)
+        {
+            var fallback = await GetLatestBySleeperIdsAsync(ids, season - 1, ct);
+            if (fallback.Count > results.Count)
+                return fallback;
+        }
+
+        return results;
+    }
 }
