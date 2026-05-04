@@ -48,7 +48,7 @@ public class NflContextService(IAppSettingsRepository appSettingsRepo) : INflCon
         var sept1 = new DateTime(season, 9, 1, 0, 0, 0, DateTimeKind.Utc);
         var daysUntilThursday = ((int)DayOfWeek.Thursday - (int)sept1.DayOfWeek + 7) % 7;
         var seasonStart = sept1.AddDays(daysUntilThursday);
-        if (utcNow < seasonStart) return 18;
+        if (utcNow < seasonStart) return 0;
         var week = (int)((utcNow - seasonStart).TotalDays / 7) + 1;
         return Math.Clamp(week, 1, 18);
     }

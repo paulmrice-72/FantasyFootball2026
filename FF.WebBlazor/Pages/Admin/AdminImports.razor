@@ -18,20 +18,6 @@
     </MudText>
 </div>
 
-@* ── Season selector (shared across all panels) ──────────────────────── *@
-<MudPaper Class="pa-4 mb-4" Elevation="1">
-    <MudGrid Spacing="2" AlignItems="Center">
-        <MudItem xs="12" sm="6" md="4">
-            <MudNumericField T="int"
-                             @bind-Value="_season"
-                             Label="Target Season"
-                             Min="2024" Max="2030"
-                             Variant="Variant.Outlined"
-                             Margin="Margin.Dense"
-                             HelperText="Applied to all imports and triggers below" />
-        </MudItem>
-    </MudGrid>
-</MudPaper>
 @* ── Simulation Pipeline ─────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -39,38 +25,49 @@
         Simulation Pipeline
     </MudText>
     <MudGrid Spacing="3">
-        <MudItem xs="12" sm="6" md="4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Filled" Color="Color.Warning"
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.BarChart"
-                       OnClick="RunStatsSync"
-                       Disabled="_statsBusy">
+                       OnClick="RunStatsSync" Disabled="_statsBusy">
                 Stats Sync
             </MudButton>
             <MudText Typo="Typo.caption" Style="@StatsStatusStyle">@_statsStatus</MudText>
         </MudItem>
-        <MudItem xs="12" sm="6" md="4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Filled" Color="Color.Warning"
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.DirectionsRun"
-                       OnClick="RunSnapCountSync"
-                       Disabled="_snapBusy">
+                       OnClick="RunSnapCountSync" Disabled="_snapBusy">
                 Snap Count Sync
             </MudButton>
             <MudText Typo="Typo.caption" Style="@SnapStatusStyle">@_snapStatus</MudText>
         </MudItem>
-        <MudItem xs="12" sm="6" md="4">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Filled" Color="Color.Warning"
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.AutoAwesome"
-                       OnClick="RunProjections"
-                       Disabled="_projBusy">
+                       OnClick="RunProjections" Disabled="_projBusy">
                 Projections &amp; Sims
             </MudButton>
             <MudText Typo="Typo.caption" Style="@ProjStatusStyle">@_projStatus</MudText>
         </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.CloudDownload"
+                       OnClick="RunSeedSeasonAverages" Disabled="_seedBusy">
+                @if (_seedBusy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    @("Seeding — this takes ~30s...")
+                }
+                else
+                {
+                    @("Seed Season Averages")
+                }
+            </MudButton>
+            <MudText Typo="Typo.caption" Style="@SeedStatusStyle">@_seedStatus</MudText>
+        </MudItem>
     </MudGrid>
 </MudPaper>
+
 @* ── FantasyPros Rankings ─────────────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -78,16 +75,14 @@
         FantasyPros Rookie Rankings
     </MudText>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Export the rookie rankings CSV from FantasyPros and upload here. Replaces all existing FP rankings for the target season.
+        Export the rookie rankings CSV from FantasyPros and upload here.
+        Replaces all existing FP rankings for the target season.
     </MudText>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="8">
-            <MudFileUpload T="IBrowserFile"
-                           FilesChanged="@(f => _fpFile = f)"
-                           Accept=".csv">
+            <MudFileUpload T="IBrowserFile" FilesChanged="@(f => _fpFile = f)" Accept=".csv">
                 <ActivatorContent>
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Warning"
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning"
                                StartIcon="@Icons.Material.Filled.AttachFile">
                         @(_fpFile is null ? "Choose CSV file" : _fpFile.Name)
                     </MudButton>
@@ -95,8 +90,7 @@
             </MudFileUpload>
         </MudItem>
         <MudItem xs="12" sm="4">
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Warning"
+            <MudButton Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.CloudUpload"
                        OnClick="ImportFantasyPros"
                        Disabled="@(_fpFile is null || _fpBusy)">
@@ -125,12 +119,9 @@
     </MudText>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="8">
-            <MudFileUpload T="IBrowserFile"
-                           FilesChanged="@(f => _pffFile = f)"
-                           Accept=".csv">
+            <MudFileUpload T="IBrowserFile" FilesChanged="@(f => _pffFile = f)" Accept=".csv">
                 <ActivatorContent>
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Warning"
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning"
                                StartIcon="@Icons.Material.Filled.AttachFile">
                         @(_pffFile is null ? "Choose CSV file" : _pffFile.Name)
                     </MudButton>
@@ -138,8 +129,7 @@
             </MudFileUpload>
         </MudItem>
         <MudItem xs="12" sm="4">
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Warning"
+            <MudButton Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.CloudUpload"
                        OnClick="ImportPff"
                        Disabled="@(_pffFile is null || _pffBusy)">
@@ -168,12 +158,9 @@
     </MudText>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="5">
-            <MudFileUpload T="IBrowserFile"
-                           FilesChanged="@(f => _adpFile = f)"
-                           Accept=".csv">
+            <MudFileUpload T="IBrowserFile" FilesChanged="@(f => _adpFile = f)" Accept=".csv">
                 <ActivatorContent>
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Warning"
+                    <MudButton Variant="Variant.Outlined" Color="Color.Warning"
                                StartIcon="@Icons.Material.Filled.AttachFile">
                         @(_adpFile is null ? "Choose CSV file" : _adpFile.Name)
                     </MudButton>
@@ -181,15 +168,12 @@
             </MudFileUpload>
         </MudItem>
         <MudItem xs="12" sm="3">
-            <MudTextField @bind-Value="_adpSource"
-                          Label="Source label"
+            <MudTextField @bind-Value="_adpSource" Label="Source label"
                           Placeholder="e.g. FantasyPros"
-                          Variant="Variant.Outlined"
-                          Margin="Margin.Dense" />
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
         </MudItem>
         <MudItem xs="12" sm="4">
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Warning"
+            <MudButton Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.CloudUpload"
                        OnClick="ImportAdp"
                        Disabled="@(_adpFile is null || _adpBusy)">
@@ -206,6 +190,7 @@
         <MudAlert Severity="_adpSeverity" Dense="true" Class="mt-3">@_adpStatus</MudAlert>
     }
 </MudPaper>
+
 @* ── Writers' Room ──────────────────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -224,8 +209,8 @@
         <MudText Typo="Typo.caption" Style="@ArticlesStatusStyle">@_articlesStatus</MudText>
     </MudItem>
 </MudPaper>
-@* ── WAR ROOM BRIEFS — add after Writers' Room section, before Post-Draft Trigger Buttons ── *@
 
+@* ── WAR ROOM BRIEFS ─────────────────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
         <MudIcon Icon="@Icons.Material.Filled.MilitaryTech" Class="mr-2" Style="vertical-align:middle;" />
@@ -257,6 +242,7 @@
         <MudAlert Severity="_briefsSeverity" Dense="true" Class="mt-3">@_briefsStatus</MudAlert>
     }
 </MudPaper>
+
 @* ── FFC Consensus ADP Sync ──────────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color:var(--fc-amber);">
@@ -281,6 +267,7 @@
         <MudText Typo="Typo.caption" Style="@FfcAdpStatusStyle">@_ffcAdpStatus</MudText>
     </MudItem>
 </MudPaper>
+
 @* ── Post-Draft Trigger Buttons ───────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -292,63 +279,60 @@
         Combine Sync → Draft Picks Sync → Career Sims → DFV Calculation.
     </MudText>
     <MudGrid Spacing="3">
-
         <MudItem xs="12" sm="6" md="3">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Filled" Color="Color.Warning"
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.FitnessCenter"
-                       OnClick="RunCombineSync"
-                       Disabled="_combineBusy">
+                       OnClick="RunCombineSync" Disabled="_combineBusy">
                 Combine Sync
             </MudButton>
             <MudText Typo="Typo.caption" Style="@CombineStatusStyle">@_combineStatus</MudText>
         </MudItem>
-
         <MudItem xs="12" sm="6" md="3">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Filled" Color="Color.Warning"
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.ConfirmationNumber"
-                       OnClick="RunDraftPickSync"
-                       Disabled="_picksBusy">
+                       OnClick="RunDraftPickSync" Disabled="_picksBusy">
                 Draft Picks Sync
             </MudButton>
             <MudText Typo="Typo.caption" Style="@PicksStatusStyle">@_picksStatus</MudText>
         </MudItem>
-
         <MudItem xs="12" sm="6" md="3">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Filled" Color="Color.Warning"
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.Timeline"
-                       OnClick="RunCareerSims"
-                       Disabled="_simsBusy">
+                       OnClick="RunCareerSims" Disabled="_simsBusy">
                 Career Sims
             </MudButton>
             <MudText Typo="Typo.caption" Style="@SimsStatusStyle">@_simsStatus</MudText>
         </MudItem>
-
         <MudItem xs="12" sm="6" md="3">
-            <MudButton FullWidth="true"
-                       Variant="Variant.Filled" Color="Color.Warning"
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.TrendingUp"
-                       OnClick="RunDfv"
-                       Disabled="_dfvBusy">
+                       OnClick="RunDfv" Disabled="_dfvBusy">
                 DFV Calculation
             </MudButton>
             <MudText Typo="Typo.caption" Style="@DfvStatusStyle">@_dfvStatus</MudText>
         </MudItem>
-
     </MudGrid>
 </MudPaper>
+
 @code {
     [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
 
     private int _season;
     private int _week;
+
+    // ── Articles ────────────────────────────────────────────────────────────
     private bool _articlesBusy;
     private string _articlesStatus = string.Empty;
     private bool _articlesOk;
     private string ArticlesStatusStyle => string.IsNullOrEmpty(_articlesStatus) ? "display:none"
         : _articlesOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+
+    // ── Seed Season Averages ─────────────────────────────────────────────────
+    private bool _seedBusy;
+    private string _seedStatus = string.Empty;
+    private bool _seedOk;
+    private string SeedStatusStyle => string.IsNullOrEmpty(_seedStatus) ? "display:none"
+        : _seedOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
 
     protected override async Task OnInitializedAsync()
     {
@@ -364,44 +348,67 @@
             var http = HttpFactory.CreateClient("AuthAPI");
             var resp = await http.PostAsync("api/v1/admin/jobs/run-article-generation", null);
             _articlesOk = resp.IsSuccessStatusCode;
-            _articlesStatus = _articlesOk ? "Done ✓ — articles generated" : $"Failed ({(int)resp.StatusCode})";
+            _articlesStatus = _articlesOk
+                ? "Done ✓ — articles generated"
+                : $"Failed ({(int)resp.StatusCode})";
         }
         catch (Exception ex) { _articlesOk = false; _articlesStatus = ex.Message; }
         finally { _articlesBusy = false; }
     }
-    private string CombineStatusStyle => string.IsNullOrEmpty(_combineStatus) ? "display:none" :
-    _combineOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
 
-    private string PicksStatusStyle => string.IsNullOrEmpty(_picksStatus) ? "display:none" :
-        _picksOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private async Task RunSeedSeasonAverages()
+    {
+        _seedBusy = true;
+        _seedStatus = "Seeding — downloading nflverse stats, this takes ~30s...";
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsync(
+                $"api/v1/admin/jobs/seed-season-averages?season={_season}", null);
+            _seedOk = resp.IsSuccessStatusCode;
+            if (_seedOk)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<SeedResultDto>();
+                _seedStatus = $"Done ✓ — {body?.Seeded ?? 0} seeded, {body?.Unmatched ?? 0} unmatched";
+            }
+            else
+            {
+                _seedStatus = $"Failed ({(int)resp.StatusCode})";
+            }
+        }
+        catch (Exception ex) { _seedOk = false; _seedStatus = ex.Message; }
+        finally { _seedBusy = false; }
+    }
 
-    private string SimsStatusStyle => string.IsNullOrEmpty(_simsStatus) ? "display:none" :
-        _simsOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string CombineStatusStyle => string.IsNullOrEmpty(_combineStatus) ? "display:none"
+        : _combineOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string PicksStatusStyle => string.IsNullOrEmpty(_picksStatus) ? "display:none"
+        : _picksOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string SimsStatusStyle => string.IsNullOrEmpty(_simsStatus) ? "display:none"
+        : _simsOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string DfvStatusStyle => string.IsNullOrEmpty(_dfvStatus) ? "display:none"
+        : _dfvOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
 
-    private string DfvStatusStyle => string.IsNullOrEmpty(_dfvStatus) ? "display:none" :
-        _dfvOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
-
-    // ── Simulation pipeline ──────────────────────────────────────────────
+    // ── Simulation pipeline ─────────────────────────────────────────────────
     private bool _statsBusy; private string _statsStatus = string.Empty; private bool _statsOk;
     private bool _snapBusy; private string _snapStatus = string.Empty; private bool _snapOk;
     private bool _projBusy; private string _projStatus = string.Empty; private bool _projOk;
 
-    private string StatsStatusStyle => string.IsNullOrEmpty(_statsStatus) ? "display:none" :
-        _statsOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
-    private string SnapStatusStyle => string.IsNullOrEmpty(_snapStatus) ? "display:none" :
-        _snapOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
-    private string ProjStatusStyle => string.IsNullOrEmpty(_projStatus) ? "display:none" :
-        _projOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string StatsStatusStyle => string.IsNullOrEmpty(_statsStatus) ? "display:none"
+        : _statsOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string SnapStatusStyle => string.IsNullOrEmpty(_snapStatus) ? "display:none"
+        : _snapOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string ProjStatusStyle => string.IsNullOrEmpty(_projStatus) ? "display:none"
+        : _projOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
 
-    // ── War Room Briefs ────────────────────────────────────────────────────
+    // ── War Room Briefs ──────────────────────────────────────────────────────
     private bool _briefsBusy;
     private string _briefsStatus = string.Empty;
     private Severity _briefsSeverity = Severity.Info;
 
     private async Task RunGenerateBriefs()
     {
-        _briefsBusy = true;
-        _briefsStatus = string.Empty;
+        _briefsBusy = true; _briefsStatus = string.Empty;
         try
         {
             var http = HttpFactory.CreateClient("AuthAPI");
@@ -410,8 +417,8 @@
             if (resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadFromJsonAsync<BriefGenerateResultDto>();
-                _briefsStatus = $"✓ {body?.Generated ?? 0} briefs generated" +
-                    (body?.Failed > 0 ? $", {body.Failed} failed." : ".");
+                _briefsStatus = $"✓ {body?.Generated ?? 0} briefs generated"
+                    + (body?.Failed > 0 ? $", {body.Failed} failed." : ".");
                 _briefsSeverity = (body?.Failed ?? 0) > 0 ? Severity.Warning : Severity.Success;
             }
             else
@@ -420,44 +427,27 @@
                 _briefsSeverity = Severity.Error;
             }
         }
-        catch (Exception ex)
-        {
-            _briefsStatus = ex.Message;
-            _briefsSeverity = Severity.Error;
-        }
-        finally
-        {
-            _briefsBusy = false;
-        }
+        catch (Exception ex) { _briefsStatus = ex.Message; _briefsSeverity = Severity.Error; }
+        finally { _briefsBusy = false; }
     }
-
 
     // ── FantasyPros ──────────────────────────────────────────────────────────
     private IBrowserFile? _fpFile;
-    private bool _fpBusy;
-    private string _fpStatus = string.Empty;
-    private Severity _fpSeverity = Severity.Info;
+    private bool _fpBusy; private string _fpStatus = string.Empty; private Severity _fpSeverity = Severity.Info;
 
     // ── PFF ──────────────────────────────────────────────────────────────────
     private IBrowserFile? _pffFile;
-    private bool _pffBusy;
-    private string _pffStatus = string.Empty;
-    private Severity _pffSeverity = Severity.Info;
+    private bool _pffBusy; private string _pffStatus = string.Empty; private Severity _pffSeverity = Severity.Info;
 
     // ── ADP ──────────────────────────────────────────────────────────────────
     private IBrowserFile? _adpFile;
-    private bool _adpBusy;
-    private string _adpStatus = string.Empty;
-    private Severity _adpSeverity = Severity.Info;
+    private bool _adpBusy; private string _adpStatus = string.Empty; private Severity _adpSeverity = Severity.Info;
     private string _adpSource = "FantasyPros";
 
-    // ── FFC ADP Sync ──────────────────────────────────────────────────────────
-    private bool _ffcAdpBusy;
-    private string _ffcAdpStatus = string.Empty;
-    private bool _ffcAdpOk;
-
-    private string FfcAdpStatusStyle => string.IsNullOrEmpty(_ffcAdpStatus) ? "display:none" :
-        _ffcAdpOk ? "color:var(--mud-palette-success)" : "color:var(--mud-palette-error)";
+    // ── FFC ADP Sync ─────────────────────────────────────────────────────────
+    private bool _ffcAdpBusy; private string _ffcAdpStatus = string.Empty; private bool _ffcAdpOk;
+    private string FfcAdpStatusStyle => string.IsNullOrEmpty(_ffcAdpStatus) ? "display:none"
+        : _ffcAdpOk ? "color:var(--mud-palette-success)" : "color:var(--mud-palette-error)";
 
     private async Task RunFfcAdpSync()
     {
@@ -466,22 +456,12 @@
         {
             var http = HttpFactory.CreateClient("AuthAPI");
             var resp = await http.PostAsync("api/v1/admin/sync-ffc-adp", null);
-            if (resp.IsSuccessStatusCode)
-            {
-                _ffcAdpStatus = "FFC ADP sync triggered successfully.";
-                _ffcAdpOk = true;
-            }
-            else
-            {
-                _ffcAdpStatus = $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
-                _ffcAdpOk = false;
-            }
+            _ffcAdpOk = resp.IsSuccessStatusCode;
+            _ffcAdpStatus = _ffcAdpOk
+                ? "FFC ADP sync triggered successfully."
+                : $"Failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
         }
-        catch (Exception ex)
-        {
-            _ffcAdpStatus = $"Error: {ex.Message}";
-            _ffcAdpOk = false;
-        }
+        catch (Exception ex) { _ffcAdpOk = false; _ffcAdpStatus = $"Error: {ex.Message}"; }
         finally { _ffcAdpBusy = false; }
     }
 
@@ -491,17 +471,15 @@
     private bool _simsBusy; private string _simsStatus = string.Empty; private bool _simsOk;
     private bool _dfvBusy; private string _dfvStatus = string.Empty; private bool _dfvOk;
 
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
     private async Task<string> ReadFileAsTextAsync(IBrowserFile file)
     {
-        // 10 MB cap — CSVs are never this big but guards against accidents
         using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
         using var reader = new System.IO.StreamReader(stream);
         return await reader.ReadToEndAsync();
     }
 
-    // ── Import handlers ──────────────────────────────────────────────────────
+    // ── Import handlers ───────────────────────────────────────────────────────
     private async Task ImportFantasyPros()
     {
         if (_fpFile is null) return;
@@ -516,20 +494,11 @@
             {
                 var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
                 _fpStatus = $"✓ {body?.Imported ?? 0} rows imported for season {_season}. ({body?.Unmatched ?? 0} unmatched)";
-                _fpSeverity = Severity.Success;
-                _fpFile = null;
+                _fpSeverity = Severity.Success; _fpFile = null;
             }
-            else
-            {
-                _fpStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}";
-                _fpSeverity = Severity.Error;
-            }
+            else { _fpStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}"; _fpSeverity = Severity.Error; }
         }
-        catch (Exception ex)
-        {
-            _fpStatus = $"Error: {ex.Message}";
-            _fpSeverity = Severity.Error;
-        }
+        catch (Exception ex) { _fpStatus = $"Error: {ex.Message}"; _fpSeverity = Severity.Error; }
         finally { _fpBusy = false; }
     }
 
@@ -547,20 +516,11 @@
             {
                 var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
                 _pffStatus = $"✓ {body?.Imported ?? 0} rows imported for season {_season}. ({body?.Unmatched ?? 0} unmatched)";
-                _pffSeverity = Severity.Success;
-                _pffFile = null;
+                _pffSeverity = Severity.Success; _pffFile = null;
             }
-            else
-            {
-                _pffStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}";
-                _pffSeverity = Severity.Error;
-            }
+            else { _pffStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}"; _pffSeverity = Severity.Error; }
         }
-        catch (Exception ex)
-        {
-            _pffStatus = $"Error: {ex.Message}";
-            _pffSeverity = Severity.Error;
-        }
+        catch (Exception ex) { _pffStatus = $"Error: {ex.Message}"; _pffSeverity = Severity.Error; }
         finally { _pffBusy = false; }
     }
 
@@ -578,24 +538,15 @@
             {
                 var body = await resp.Content.ReadFromJsonAsync<ImportResultDto>();
                 _adpStatus = $"✓ {body?.Imported ?? 0} rows imported for season {_season}.";
-                _adpSeverity = Severity.Success;
-                _adpFile = null;
+                _adpSeverity = Severity.Success; _adpFile = null;
             }
-            else
-            {
-                _adpStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}";
-                _adpSeverity = Severity.Error;
-            }
+            else { _adpStatus = $"Import failed — {(int)resp.StatusCode} {resp.ReasonPhrase}"; _adpSeverity = Severity.Error; }
         }
-        catch (Exception ex)
-        {
-            _adpStatus = $"Error: {ex.Message}";
-            _adpSeverity = Severity.Error;
-        }
+        catch (Exception ex) { _adpStatus = $"Error: {ex.Message}"; _adpSeverity = Severity.Error; }
         finally { _adpBusy = false; }
     }
 
-    // ── Job trigger handlers ─────────────────────────────────────────────────
+    // ── Job trigger handlers ──────────────────────────────────────────────────
     private async Task RunCombineSync()
     {
         _combineBusy = true; _combineStatus = string.Empty;
@@ -630,13 +581,9 @@
         try
         {
             var http = HttpFactory.CreateClient("AuthAPI");
-            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-career-sims",
-                new { Season = _season });
+            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-career-sims", new { Season = _season });
             _simsOk = resp.IsSuccessStatusCode;
-            if (_simsOk)
-                _simsStatus = "Queued ✓ — monitor at /hangfire";
-            else
-                _simsStatus = $"Failed ({(int)resp.StatusCode})";
+            _simsStatus = _simsOk ? "Queued ✓ — monitor at /hangfire" : $"Failed ({(int)resp.StatusCode})";
         }
         catch (Exception ex) { _simsOk = false; _simsStatus = ex.Message; }
         finally { _simsBusy = false; }
@@ -648,13 +595,9 @@
         try
         {
             var http = HttpFactory.CreateClient("AuthAPI");
-            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-dfv",
-                new { Season = _season });
+            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-dfv", new { Season = _season });
             _dfvOk = resp.IsSuccessStatusCode;
-            if (_dfvOk)
-                _dfvStatus = "Queued ✓ — monitor at /hangfire";
-            else
-                _dfvStatus = $"Failed ({(int)resp.StatusCode})";
+            _dfvStatus = _dfvOk ? "Queued ✓ — monitor at /hangfire" : $"Failed ({(int)resp.StatusCode})";
         }
         catch (Exception ex) { _dfvOk = false; _dfvStatus = ex.Message; }
         finally { _dfvBusy = false; }
@@ -666,8 +609,7 @@
         try
         {
             var http = HttpFactory.CreateClient("AuthAPI");
-            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-stats-sync",
-                new { Season = _season });
+            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-stats-sync", new { Season = _season });
             _statsOk = resp.IsSuccessStatusCode;
             _statsStatus = _statsOk ? "Done ✓" : $"Failed ({(int)resp.StatusCode})";
         }
@@ -695,8 +637,7 @@
         try
         {
             var http = HttpFactory.CreateClient("AuthAPI");
-            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-projections",
-                new { Season = _season });
+            var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-projections", new { Season = _season });
             _projOk = resp.IsSuccessStatusCode;
             if (_projOk)
             {
@@ -709,9 +650,9 @@
         finally { _projBusy = false; }
     }
 
-    // ── Response DTOs ────────────────────────────────────────────────────────
+    // ── Response DTOs ─────────────────────────────────────────────────────────
     private record ImportResultDto(int Imported, int Unmatched, int Season);
     private record JobResultDto(string Message, int Count);
-
     private record BriefGenerateResultDto(int Generated, int Failed, List<string> Errors);
+    private record SeedResultDto(int Seeded, int Skipped, int Unmatched);
 }
