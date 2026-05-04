@@ -29,10 +29,10 @@ public class GetPositionalDepthGradesQueryHandler(
 
     private static readonly Dictionary<string, double> PositionBaseline = new()
     {
-        ["QB"] = 19.3,   // 2025 median QB1 across 12 starters
-        ["RB"] = 15.1,   // 2025 median RB across 24 starters  
-        ["WR"] = 13.1,   // 2025 median WR across 36 starters
-        ["TE"] = 12.1    // 2025 median TE1 across 12 starters
+        ["QB"] = 19.3,  // 2025 median QB1 across 12 starters
+        ["RB"] = 15.1,  // 2025 median RB across 24 starters
+        ["WR"] = 13.1,  // 2025 median WR across 36 starters
+        ["TE"] = 12.1   // 2025 median TE1 across 12 starters
     };
 
     private static readonly Dictionary<string, int> StarterSlots = new()
@@ -43,6 +43,14 @@ public class GetPositionalDepthGradesQueryHandler(
         ["TE"] = 1
     };
 
+    /// <summary>
+    /// Filler floor: backup players projecting below this fraction of the
+    /// positional baseline contribute 0 to depth score rather than a small
+    /// positive number. Prevents "4 aging TEs = Elite TE room" inflation.
+    /// Starter slots are exempt — they always count regardless of projection.
+    /// </summary>
+    private const double FillerFloorFraction = 0.40;
+
     public async Task<PositionalDepthGradesDto?> Handle(
         GetPositionalDepthGradesQuery request,
         CancellationToken cancellationToken)
@@ -51,21 +59,20 @@ public class GetPositionalDepthGradesQueryHandler(
             "Computing depth grades for user {UserId} league {LeagueId} rosterOverride {RosterId}",
             request.SleeperUserId, request.SleeperLeagueId, request.SleeperRosterId);
 
-        // 1 — Load roster: prefer explicit RosterId (opponent path) over UserId (my-team path)
+        // 1 — Load roster
         var rosterDoc = !string.IsNullOrEmpty(request.SleeperRosterId)
             ? await rosterPlayerRepository.GetByRosterIdAsync(
                 request.SleeperRosterId, request.SleeperLeagueId, cancellationToken)
             : await rosterPlayerRepository.GetBySleeperUserIdAsync(
                 request.SleeperUserId, request.SleeperLeagueId, cancellationToken);
 
-        if (rosterDoc is null || rosterDoc.PlayerIds.Count == 0)
-            return null;
+        if (rosterDoc is null || rosterDoc.PlayerIds.Count == 0) return null;
 
         var playerIds = rosterDoc.PlayerIds;
 
         // 2 — Bulk load players, sims, injuries
         var players = await playerRepository.GetBySleeperIdsAsync(playerIds, cancellationToken);
-        var simDocs = await simulationRepository.GetLatestBySleeperIdsAsync(
+        var simDocs = await simulationRepository.GetLatestBySleeperIdsWithFallbackAsync(
             playerIds, request.Season, cancellationToken);
         var injuries = await injuryAlertRepository.GetActiveAlertsAsync(null, cancellationToken);
 
@@ -82,6 +89,10 @@ public class GetPositionalDepthGradesQueryHandler(
 
         foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
         {
+            var baseline = PositionBaseline[pos];
+            var starterSlots = StarterSlots[pos];
+            var qualityFloor = baseline * FillerFloorFraction;
+
             var posPlayers = playerIds
                 .Where(id =>
                 {
@@ -97,7 +108,6 @@ public class GetPositionalDepthGradesQueryHandler(
                     var designation = injury?.Designation;
                     var isOut = designation is "IR" or "Out";
                     var median = sim is not null ? (double)sim.Median : 0.0;
-
                     var injuryFactor = designation switch
                     {
                         "Q" or "Doubtful" => 0.80,
@@ -116,27 +126,34 @@ public class GetPositionalDepthGradesQueryHandler(
                 .OrderByDescending(p => p.Median)
                 .ToList();
 
-            var starterSlots = StarterSlots[pos];
-            var baseline = PositionBaseline[pos];
-
+            // Starter score — top N players at the position
             var starterGroup = posPlayers.Take(starterSlots).ToList();
             var starterScore = starterGroup.Count > 0
                 ? starterGroup.Average(p => p.Median)
                 : 0.0;
 
+            // Depth score — weighted sum with filler floor applied to non-starters.
+            // Starter slots always count. Backups must exceed 40% of baseline to contribute.
             double depthScore = 0;
             for (int i = 0; i < posPlayers.Count; i++)
             {
-                var weight = i < DepthWeights.Length ? DepthWeights[i] : 0.05;
-                depthScore += posPlayers[i].Median * weight;
+                var isStarterSlot = i < starterSlots;
+                if (isStarterSlot || posPlayers[i].Median >= qualityFloor)
+                {
+                    var weight = i < DepthWeights.Length ? DepthWeights[i] : 0.05;
+                    depthScore += posPlayers[i].Median * weight;
+                }
+                // else: filler — projects below 40% of baseline, contributes 0
             }
 
-            var starterNorm = baseline > 0 ? (starterScore / baseline) * 50.0 : 0;
+            var starterNorm = baseline > 0
+                ? (starterScore / baseline) * 50.0
+                : 0;
             var depthNorm = baseline > 0
                 ? (depthScore / (baseline * starterSlots)) * 30.0
                 : 0;
-            var rawScore = Math.Clamp(starterNorm + depthNorm, 0, 100);
 
+            var rawScore = Math.Clamp(starterNorm + depthNorm, 0, 100);
             var (grade, label) = MapGrade((int)Math.Round(rawScore));
 
             var rosteredCount = posPlayers.Count;
@@ -171,13 +188,17 @@ public class GetPositionalDepthGradesQueryHandler(
         var pts = starterScore.ToString("F1");
         return grade switch
         {
-            "A+" or "A" => $"Elite {pos} room — starter projects {pts} pts with quality depth behind.",
-            "B+" or "B" => $"Solid {pos} position — {pts} pts projected from starter(s), decent depth.",
+            "A+" or "A" =>
+                $"Elite {pos} room — starter projects {pts} pts with quality depth behind.",
+            "B+" or "B" =>
+                $"Solid {pos} position — {pts} pts projected from starter(s), decent depth.",
             "C+" or "C" => healthy < rostered
                 ? $"Average {pos} depth with injury concerns — monitor the injury report."
                 : $"Average {pos} depth — {pts} pts projected. Waiver wire may help.",
-            "D" => $"Weak {pos} room — only {healthy} healthy player(s). Priority waiver target.",
-            _ => $"No viable {pos} option. Immediate waiver or trade action needed."
+            "D" =>
+                $"Weak {pos} room — only {healthy} healthy player(s). Priority waiver target.",
+            _ =>
+                $"No viable {pos} option. Immediate waiver or trade action needed."
         };
     }
 }

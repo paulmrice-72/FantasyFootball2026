@@ -14,26 +14,49 @@ public class GetDynastyTeamGradeQueryHandlerTests
 {
     private readonly Mock<IRosterPlayerRepository> _rosterRepo = new();
     private readonly Mock<IDynastyValuationRepository> _dynastyRepo = new();
+    private readonly Mock<IDepthChartRepository> _depthRepo = new();
+    private readonly Mock<IPlayerRepository> _playerRepo = new();
     private readonly Mock<ILogger<GetDynastyTeamGradeQueryHandler>> _logger = new();
 
-    private GetDynastyTeamGradeQueryHandler CreateHandler() =>
-        new(_rosterRepo.Object, _dynastyRepo.Object, _logger.Object);
+    public GetDynastyTeamGradeQueryHandlerTests()
+    {
+        // Depth chart returns empty for all tests — all valuations use WR position
+        // so DepthPenaltyCalculator returns 1.0 (no penalty) regardless.
+        _depthRepo
+            .Setup(r => r.GetLatestBySleeperIdsAsync(
+                It.IsAny<IReadOnlyList<string>>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
 
-    private static RosterPlayerDocument MakeRoster(params string[] ids) =>
-        new()
-        {
-            SleeperUserId = "user1",
-            SleeperLeagueId = "league1",
-            TeamName = "Test Team",
-            OwnerName = "Paul",
-            PlayerIds = ids.ToList(),
-            StarterIds = ids.Take(1).ToList()
-        };
+        _playerRepo
+            .Setup(r => r.GetBySleeperIdsAsync(
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+    }
+
+    private GetDynastyTeamGradeQueryHandler CreateHandler() =>
+        new(_rosterRepo.Object, _dynastyRepo.Object, _depthRepo.Object,
+            _playerRepo.Object, _logger.Object);
+
+    private static RosterPlayerDocument MakeRoster(params string[] ids) => new()
+    {
+        SleeperUserId = "user1",
+        SleeperLeagueId = "league1",
+        TeamName = "Test Team",
+        OwnerName = "Paul",
+        PlayerIds = ids.ToList(),
+        StarterIds = ids.Take(1).ToList()
+    };
 
     private static DynastyValuationDocument MakeValuation(
-        string sleeperId, CareerPhase phase, double tradeValue,
-        int age = 26, double breakout = 50, double yearsOfPrime = 3) =>
-        new()
+        string sleeperId,
+        CareerPhase phase,
+        double tradeValue,
+        int age = 26,
+        double breakout = 50,
+        double yearsOfPrime = 3) => new()
         {
             SleeperPlayerId = sleeperId,
             CareerPhase = phase,
@@ -49,13 +72,13 @@ public class GetDynastyTeamGradeQueryHandlerTests
     [Fact]
     public async Task Handle_NullRoster_ReturnsNull()
     {
-        _rosterRepo.Setup(r => r.GetBySleeperUserIdAsync(It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _rosterRepo
+            .Setup(r => r.GetBySleeperUserIdAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((RosterPlayerDocument?)null);
 
         var result = await CreateHandler().Handle(
-            new GetDynastyTeamGradeQuery("u", "l"),
-            CancellationToken.None);
+            new GetDynastyTeamGradeQuery("u", "l"), CancellationToken.None);
 
         result.Should().BeNull();
     }
@@ -63,28 +86,33 @@ public class GetDynastyTeamGradeQueryHandlerTests
     [Fact]
     public async Task Handle_NoValuations_ReturnsNull()
     {
-        _rosterRepo.Setup(r => r.GetBySleeperUserIdAsync(It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _rosterRepo
+            .Setup(r => r.GetBySleeperUserIdAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MakeRoster("p1", "p2"));
 
-        _dynastyRepo.Setup(r => r.GetBySleeperPlayerIdsAsync(
-            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _dynastyRepo
+            .Setup(r => r.GetBySleeperPlayerIdsAsync(
+                It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         var result = await CreateHandler().Handle(
-            new GetDynastyTeamGradeQuery("user1", "league1"),
-            CancellationToken.None);
+            new GetDynastyTeamGradeQuery("user1", "league1"), CancellationToken.None);
 
         result.Should().BeNull();
     }
 
-   [Fact]
+    [Fact]
     public async Task Handle_AllPrimeNoYouth_ContentionExceedsLongevity()
     {
-        _rosterRepo.Setup(r => r.GetBySleeperUserIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _rosterRepo
+            .Setup(r => r.GetBySleeperUserIdAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MakeRoster("p1", "p2"));
 
-        _dynastyRepo.Setup(r => r.GetBySleeperPlayerIdsAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _dynastyRepo
+            .Setup(r => r.GetBySleeperPlayerIdsAsync(
+                It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 MakeValuation("p1", CareerPhase.Prime, 90, age: 27),
                 MakeValuation("p2", CareerPhase.Prime, 85, age: 28)
@@ -103,14 +131,18 @@ public class GetDynastyTeamGradeQueryHandlerTests
     [Fact]
     public async Task Handle_YoungHeavyRoster_HighLongevityScore()
     {
-        _rosterRepo.Setup(r => r.GetBySleeperUserIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _rosterRepo
+            .Setup(r => r.GetBySleeperUserIdAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MakeRoster("p1", "p2", "p3"));
 
-        _dynastyRepo.Setup(r => r.GetBySleeperPlayerIdsAsync(It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _dynastyRepo
+            .Setup(r => r.GetBySleeperPlayerIdsAsync(
+                It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 MakeValuation("p1", CareerPhase.Ascending, 70, age: 22, breakout: 80, yearsOfPrime: 6),
-            MakeValuation("p2", CareerPhase.Ascending, 65, age: 23, breakout: 75, yearsOfPrime: 5),
-            MakeValuation("p3", CareerPhase.Ascending, 60, age: 21, breakout: 70, yearsOfPrime: 7)
+                MakeValuation("p2", CareerPhase.Ascending, 65, age: 23, breakout: 75, yearsOfPrime: 5),
+                MakeValuation("p3", CareerPhase.Ascending, 60, age: 21, breakout: 70, yearsOfPrime: 7)
             ]);
 
         var result = await CreateHandler().Handle(
@@ -126,20 +158,21 @@ public class GetDynastyTeamGradeQueryHandlerTests
     [Fact]
     public async Task Handle_ScoresClampedTo100()
     {
-        _rosterRepo.Setup(r => r.GetBySleeperUserIdAsync(It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _rosterRepo
+            .Setup(r => r.GetBySleeperUserIdAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(MakeRoster("p1", "p2"));
 
-        _dynastyRepo.Setup(r => r.GetBySleeperPlayerIdsAsync(
-            It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+        _dynastyRepo
+            .Setup(r => r.GetBySleeperPlayerIdsAsync(
+                It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 MakeValuation("p1", CareerPhase.Prime, 100, age: 25),
                 MakeValuation("p2", CareerPhase.Prime, 100, age: 26)
             ]);
 
         var result = await CreateHandler().Handle(
-            new GetDynastyTeamGradeQuery("user1", "league1"),
-            CancellationToken.None);
+            new GetDynastyTeamGradeQuery("user1", "league1"), CancellationToken.None);
 
         result!.ContentionScore.Should().BeLessThanOrEqualTo(100);
         result.LongevityScore.Should().BeLessThanOrEqualTo(100);
