@@ -22,6 +22,14 @@ public class BreakoutDetectionService(
     {
         var results = new List<DynastyValuationDocument>();
 
+        // ── Bulk-load all career sims in ONE query ─────────────────────────
+        // Replaces per-player GetByPlayerIdAsync calls inside the player loop.
+        var allSims = await careerSimRepository.GetAllBySeasonAsync(season, ct);
+        var simMap = allSims.ToDictionary(s => s.SleeperPlayerId, s => s);
+
+        logger.LogInformation(
+            "Bulk-loaded {Count} career sims for breakout detection", simMap.Count);
+
         foreach (var posStr in ModelledPositions)
         {
             var posEnum = Enum.Parse<Position>(posStr);
@@ -33,17 +41,14 @@ public class BreakoutDetectionService(
             {
                 if (player.SleeperPlayerId is null) continue;
 
-                // FIX (DRAFT-SCORE-001): Pre-draft rookies often have no DOB in Sleeper yet.
-                // Default to age 21 for rookies (YearsExperience == 0) and 22 for everyone
-                // else rather than skipping them entirely.
                 var playerAge = player.Age ?? (player.YearsExperience == 0 ? 21 : 22);
 
                 PlayerUsageMetricsDocument? usage = null;
                 if (player.GsisId is not null)
                     metricsMap.TryGetValue(player.GsisId, out usage);
 
-                CareerSimulationDocument? careerSim = await careerSimRepository
-                    .GetByPlayerIdAsync(player.SleeperPlayerId, ct);
+                // In-memory lookup — no DB call
+                simMap.TryGetValue(player.SleeperPlayerId, out var careerSim);
 
                 var scoreResult = ScorePlayer(player, usage, careerSim);
 
@@ -79,7 +84,7 @@ public class BreakoutDetectionService(
         PlayerUsageMetricsDocument? metrics,
         CareerSimulationDocument? careerSim)
     {
-        var age = player.Age ?? 22; // 22 = safe default for pre-draft rookie
+        var age = player.Age ?? 22;
         var signals = new List<string>();
         var pos = player.Position.ToString();
         double score = 0;
@@ -103,7 +108,7 @@ public class BreakoutDetectionService(
         var exp = player.YearsExperience ?? 0;
         var expScore = exp switch
         {
-            0 => 18.0, // Rookie — high ceiling, no tread on tires
+            0 => 18.0,
             1 => 10.0,
             2 or 3 => 20.0,
             4 => 15.0,
@@ -194,7 +199,8 @@ public class BreakoutDetectionService(
             signals);
     }
 
-    // ── Private helpers ─────────────────────────────────────────────────────
+    // ── Private helpers ──────────────────────────────────────────────────────
+
     private static decimal GetUsageTrend(PlayerUsageMetricsDocument m, string position) =>
         position switch
         {
