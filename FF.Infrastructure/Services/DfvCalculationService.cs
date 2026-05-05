@@ -59,27 +59,38 @@ public class DfvCalculationService(
         // Deflate before tier lookup so thresholds are comparable across positions.
         //
         // Adjusted CVS reference points (raw CVS / 1.4):
-        //   Josh Allen      1231 → 879   ≥ 850: top tier
-        //   Mahomes         1062 → 758 ┐
-        //   Lawrence        1080 → 771 ├ ≥ 700: solid starter
-        //   Purdy           1061 → 758 ┘
-        //   Hurts           1031 → 736 ┐
-        //   Herbert          991 → 708 ├ ≥ 650: good starter
-        //   Daniel Jones     953 → 681 ┘
-        //   Burrow           908 → 649 ┐
-        //   Jackson          893 → 638 ├ ≥ 550: average starter
-        //   Goff             869 → 621 ┘
-        //   Brissett         711 → 508   < 550: fringe/backup
-
+        // Josh Allen  1262 → 901  ≥ 850: top tier
+        // Burrow      1192 → 851  ≥ 850: top tier
+        // Hurts       1155 → 825  ≥ 700: solid starter
+        // Mahomes      925 → 661  ≥ 650: good starter
+        // Herbert      923 → 659  ≥ 650: good starter
+        // Purdy        965 → 689  ≥ 650: good starter
+        // Mayfield    1071 → 765  ≥ 700: solid starter (but age 31 → penalty applies)
+        // Goff         948 → 677  ≥ 650: good starter (but age 31 → penalty applies)
+        // Darnold      998 → 713  ≥ 700: solid starter (but volatile history)
         var adjustedCvs = valuation.CareerValueScore / 1.4;
-        return adjustedCvs switch
+
+        // Age penalty for QBs 30+ — dynasty value compresses past peak age (29).
+        // Does not affect Allen (29), Burrow (29), Hurts (27), Mahomes (30 → 0.93).
+        // Hits Mayfield (31 → 0.88), Goff (31 → 0.88), older vets (32+ → 0.82).
+        var agePenalty = valuation.Age switch
         {
-            >= 850 => 1.15,  // Generational franchise QB (Allen only)
-            >= 700 => 1.00,  // Solid starter — neutral, no superflex premium
-            >= 650 => 0.92,  // Good starter — slight discount vs WR/RB
-            >= 550 => 0.84,  // Average starter — meaningful discount
-            _ => 0.75   // Fringe/backup — penalize
+            >= 32 => 0.82,
+            31 => 0.88,
+            30 => 0.93,
+            _ => 1.00
         };
+
+        var baseTier = adjustedCvs switch
+        {
+            >= 850 => 1.15, // Generational franchise QB
+            >= 700 => 1.00, // Solid starter — neutral
+            >= 650 => 0.92, // Good starter — slight discount
+            >= 550 => 0.84, // Average starter — meaningful discount
+            _ => 0.75  // Fringe/backup — penalize
+        };
+
+        return baseTier * agePenalty;
     }
 
     public async Task<List<DynastyValuationDocument>> CalculateAllAsync(
@@ -90,7 +101,7 @@ public class DfvCalculationService(
         var isSuperflexFormat = scoringFormat is ScoringFormat.Superflex or ScoringFormat.SuperflexFullPpr;
         var scarcityMultipliers = isSuperflexFormat ? SuperflexMultipliers : StandardMultipliers;
 
-        // ── Load all valuations ──────────────────────────────────────────────
+        // ── Load all valuations ────────────────────────────────────────────
         var valuations = new List<DynastyValuationDocument>();
         foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
         {
@@ -104,23 +115,20 @@ public class DfvCalculationService(
             return [];
         }
 
-        // ── Bulk-load career sims in ONE query ───────────────────────────────
-        // Replaces N serial GetByPlayerIdAsync calls — the primary perf bottleneck.
-        // With ~700 players this was 700 round-trips; now it's 1.
+        // ── Bulk-load career sims in ONE query ─────────────────────────────
         var allSims = await careerSimRepository.GetAllBySeasonAsync(season, ct);
         var simMap = allSims.ToDictionary(s => s.SleeperPlayerId, s => s);
 
         logger.LogInformation(
-            "Bulk-loaded {Count} career sims for season {Season}",
-            simMap.Count, season);
+            "Bulk-loaded {Count} career sims for season {Season}", simMap.Count, season);
 
-        // ── Load FP rookie rankings for post-norm floor ──────────────────────
+        // ── Load FP rookie rankings for post-norm floor ────────────────────
         var fpRookieRankings = await fpRookieRepository.GetAllBySeasonAsync(season, ct);
         var fpRankMap = fpRookieRankings
             .Where(r => r.SleeperPlayerId is not null)
             .ToDictionary(r => r.SleeperPlayerId!, r => r.FantasyProsRank);
 
-        // ── Build raw DFV for every player ──────────────────────────────────
+        // ── Build raw DFV for every player ────────────────────────────────
         var rawDfvMap = new Dictionary<string, double>();
         foreach (var valuation in valuations)
         {
@@ -135,7 +143,6 @@ public class DfvCalculationService(
             var isFaSkillPlayer = string.IsNullOrEmpty(valuation.NflTeam)
                 && valuation.Position != "QB";
 
-            // In-memory lookup — no DB call
             if (!simMap.TryGetValue(valuation.SleeperPlayerId, out var careerSim))
             {
                 rawDfvMap[valuation.SleeperPlayerId] = 0;
@@ -150,26 +157,32 @@ public class DfvCalculationService(
 
             var breakoutBoost = 1.0 + (valuation.BreakoutScore / 100.0) * 0.25;
 
-            // ── Veteran production floor ─────────────────────────────────────
-            // Proven producers (CVS ≥ 600) can score low on breakout because
-            // the signal targets ascending players, not established elites.
-            // Floor breakoutBoost to 1.18 so veterans like CeeDee Lamb (CVS 761,
-            // breakout 10) and Jefferson (CVS 614, breakout 17) aren't buried.
-            if (valuation.CareerValueScore >= 600 && valuation.BreakoutScore < 25)
-                breakoutBoost = Math.Max(breakoutBoost, 1.18);
+            // ── Tiered veteran production floor ────────────────────────────
+            // Proven producers score low on breakout because the signal targets
+            // ascending players, not established elites. Apply a tiered floor
+            // based on CVS so Jefferson/Lamb/Chase aren't buried.
+            //
+            // CVS ≥ 800: elite WR1/RB1 — Jefferson (805), Ja'Marr Chase (1032)
+            // CVS ≥ 600: solid starter — AJ Brown, Tee Higgins, Amon-Ra
+            if (valuation.BreakoutScore < 25)
+            {
+                double veteranFloor = valuation.CareerValueScore switch
+                {
+                    >= 800 => 1.28,
+                    >= 600 => 1.18,
+                    _ => 1.0
+                };
+                breakoutBoost = Math.Max(breakoutBoost, veteranFloor);
+            }
 
             var faPenalty = isFaSkillPlayer ? 0.60 : 1.0;
             rawDfvMap[valuation.SleeperPlayerId] = raw * breakoutBoost * faPenalty;
         }
 
-        // ── Normalize ACROSS all positions to 0-95 ──────────────────────────
-        // 95 ceiling reserves headroom for post-norm rookie floor (97-100).
+        // ── Normalize ACROSS all positions to 0-95 ────────────────────────
         NormalizeAcrossAllPositions(valuations, rawDfvMap, ceiling: 95.0);
 
-        // ── Rookie floor applied POST-normalization ──────────────────────────
-        // Top FP-ranked rookies (age ≤ 22, yearsExperience == 0) get a TradeValue
-        // floor above the 95 organic ceiling — reflecting dynasty upside the
-        // career sim can't capture in year 1.
+        // ── Rookie floor applied POST-normalization ────────────────────────
         foreach (var valuation in valuations.Where(v => (v.YearsExperience ?? -1) == 0))
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var normalized)) continue;
@@ -191,7 +204,7 @@ public class DfvCalculationService(
             rawDfvMap[valuation.SleeperPlayerId] = Math.Max(normalized, floorTradeValue);
         }
 
-        // ── Final stamp — runs AFTER rookie floor ────────────────────────────
+        // ── Final stamp — runs AFTER rookie floor ──────────────────────────
         foreach (var valuation in valuations)
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var final)) continue;
@@ -239,8 +252,8 @@ public class DfvCalculationService(
         var multipliers = isSuperflexFormat ? SuperflexMultipliers : StandardMultipliers;
         var discountRate = DiscountRates.GetValueOrDefault(position, 0.12);
         var scarcity = multipliers.GetValueOrDefault(position, 1.0);
-
         double dfv = 0;
+
         foreach (var year in careerSim.YearProjections)
         {
             var yearIndex = year.Year - careerSim.Season;
@@ -251,13 +264,8 @@ public class DfvCalculationService(
         return dfv * scarcity;
     }
 
-    // ── Private ──────────────────────────────────────────────────────────────
+    // ── Private ───────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Normalizes all players across positions to 0-{ceiling}.
-    /// Called with ceiling=95 from CalculateAllAsync, leaving headroom for
-    /// the post-normalization rookie floor to push top prospects above 95.
-    /// </summary>
     private static void NormalizeAcrossAllPositions(
         List<DynastyValuationDocument> valuations,
         Dictionary<string, double> rawDfvMap,
@@ -279,7 +287,6 @@ public class DfvCalculationService(
             rawDfvMap[v.SleeperPlayerId] = Math.Round(scaled, 2);
         }
 
-        // Zero out players with no raw value
         foreach (var v in valuations)
         {
             if (rawDfvMap.TryGetValue(v.SleeperPlayerId, out var val) && val == 0)

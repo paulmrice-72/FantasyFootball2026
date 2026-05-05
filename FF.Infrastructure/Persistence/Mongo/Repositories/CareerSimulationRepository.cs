@@ -15,7 +15,6 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
     {
         var filter = Builders<CareerSimulationDocument>.Filter
             .Eq(x => x.SleeperPlayerId, sleeperPlayerId);
-
         return await _collection.Find(filter)
             .FirstOrDefaultAsync(CancellationToken.None);
     }
@@ -26,26 +25,32 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
     {
         var filter = Builders<CareerSimulationDocument>.Filter
             .Eq(x => x.Position, position);
-
         return await _collection.Find(filter)
             .SortByDescending(x => x.CareerValueScore)
             .ToListAsync(CancellationToken.None);
     }
 
-    /// <summary>
-    /// Loads all career simulations for the given season in one query.
-    /// Used by DfvCalculationService to bulk-load the sim map upfront,
-    /// replacing N serial GetByPlayerIdAsync calls with a single round-trip.
-    /// </summary>
     public async Task<List<CareerSimulationDocument>> GetAllBySeasonAsync(
         int season,
         CancellationToken ct = default)
     {
-        var filter = Builders<CareerSimulationDocument>.Filter
-            .Eq(x => x.Season, season);
-
-        return await _collection.Find(filter)
+        // Returns the most recent sim per player regardless of season.
+        // We don't filter by season because sims may be seeded with a
+        // prior-year season value (e.g. 2024 seed data used during off-season).
+        // Grouping by SleeperPlayerId and taking the latest ensures we always
+        // get exactly one sim per player.
+        var all = await _collection
+            .Find(Builders<CareerSimulationDocument>.Filter.Empty)
             .ToListAsync(CancellationToken.None);
+
+        // Deduplicate — keep latest per player (highest Season, then newest ComputedAt)
+        return all
+            .GroupBy(s => s.SleeperPlayerId)
+            .Select(g => g
+                .OrderByDescending(s => s.Season)
+                .ThenByDescending(s => s.ComputedAt)
+                .First())
+            .ToList();
     }
 
     public async Task UpsertAsync(
@@ -74,18 +79,17 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
             filter,
             update,
             new UpdateOptions { IsUpsert = true },
-            CancellationToken.None); // never use request CT for MongoDB writes
+            CancellationToken.None);
     }
 
-    /// <summary>
-    /// Upserts all documents in parallel using BulkWriteAsync.
-    /// Significantly faster than serial UpsertAsync calls for large batches.
-    /// </summary>
     public async Task UpsertBatchAsync(
         IEnumerable<CareerSimulationDocument> documents,
         CancellationToken ct = default)
     {
-        var models = documents.Select(document =>
+        var docList = documents.ToList();
+        if (docList.Count == 0) return;
+
+        var writes = docList.Select(document =>
         {
             var filter = Builders<CareerSimulationDocument>.Filter
                 .Eq(x => x.SleeperPlayerId, document.SleeperPlayerId);
@@ -109,13 +113,8 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
             {
                 IsUpsert = true
             };
-        }).ToList();
+        }).Cast<WriteModel<CareerSimulationDocument>>().ToList();
 
-        if (models.Count == 0) return;
-
-        await _collection.BulkWriteAsync(
-            models,
-            new BulkWriteOptions { IsOrdered = false },
-            CancellationToken.None);
+        await _collection.BulkWriteAsync(writes, new BulkWriteOptions { IsOrdered = false }, CancellationToken.None);
     }
 }
