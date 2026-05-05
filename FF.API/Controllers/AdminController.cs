@@ -5,6 +5,7 @@ using FF.Application.Features.DraftTools.Commands.SyncCombineData;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
+using FF.Domain.Enums;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Services;
@@ -27,7 +28,6 @@ public class AdminController(
     IPlatformSettingsRepository platformSettingsRepo,
     ILogger<AdminController> logger) : ControllerBase
 {
-    // ── existing user endpoints unchanged ───────────────────────────────
     [HttpGet("combine-debug")]
     public async Task<IActionResult> CombineDebug(
         [FromServices] IHttpClientFactory httpClientFactory,
@@ -36,23 +36,18 @@ public class AdminController(
         var http = httpClientFactory.CreateClient("NflverseClient");
         var csv = await http.GetStringAsync(
             "https://github.com/nflverse/nflverse-data/releases/download/combine/combine.csv", ct);
-
         var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-        // Find 2026 rows WITH drill data
         var with2026Drills = lines.Skip(1)
             .Where(l => l.StartsWith("2026") && l.Split(',').Length > 12
                         && !string.IsNullOrWhiteSpace(l.Split(',')[12]))
-            .Take(5)
-            .ToList();
+            .Take(5).ToList();
 
-        // Count by season
         var countBySeason = lines.Skip(1)
             .GroupBy(l => l.Split(',')[0])
             .Select(g => new { season = g.Key, count = g.Count() })
             .OrderByDescending(x => x.season)
-            .Take(5)
-            .ToList();
+            .Take(5).ToList();
 
         return Ok(new { with2026Drills, countBySeason });
     }
@@ -84,7 +79,6 @@ public class AdminController(
 
     public record SetPlatformSettingsRequest(bool RegistrationsEnabled, bool AiJobsEnabled);
 
-
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers(CancellationToken ct)
     {
@@ -112,8 +106,7 @@ public class AdminController(
     {
         var user = await userManager.FindByEmailAsync(email);
         if (user is null) return NotFound($"User {email} not found.");
-        if (await userManager.IsInRoleAsync(user, "Admin"))
-            return Ok($"{email} is already an Admin.");
+        if (await userManager.IsInRoleAsync(user, "Admin")) return Ok($"{email} is already an Admin.");
         await userManager.AddToRoleAsync(user, "Admin");
         return Ok($"{email} is now an Admin.");
     }
@@ -127,16 +120,12 @@ public class AdminController(
         return Ok($"Admin role removed from {email}.");
     }
 
-    // ── NEW: NFL Context simulation override ─────────────────────────────
-
-    /// <summary>Returns current app settings including any active simulation override.</summary>
     [HttpGet("nfl-context")]
     public async Task<IActionResult> GetNflContext()
     {
         var settings = await appSettingsRepo.GetAsync();
         var calendarSeason = NflContextService.CalcSeason(DateTime.UtcNow);
         var calendarWeek = NflContextService.CalcWeek(DateTime.UtcNow, calendarSeason);
-
         return Ok(new
         {
             CalendarSeason = calendarSeason,
@@ -149,10 +138,6 @@ public class AdminController(
         });
     }
 
-    /// <summary>
-    /// Sets a simulation override for season and/or week.
-    /// Pass null for either field to clear that override.
-    /// </summary>
     [HttpPost("nfl-context")]
     public async Task<IActionResult> SetNflContext([FromBody] NflContextOverrideRequest request)
     {
@@ -177,7 +162,6 @@ public class AdminController(
         });
     }
 
-    /// <summary>Clears all simulation overrides — reverts to calendar-based season/week.</summary>
     [HttpDelete("nfl-context")]
     public async Task<IActionResult> ClearNflContext()
     {
@@ -189,35 +173,59 @@ public class AdminController(
         return Ok("Simulation override cleared.");
     }
 
-    // ── Job triggers ─────────────────────────────────────────────────────────
-
     [HttpPost("jobs/run-career-sims")]
     public IActionResult RunCareerSims([FromBody] RunJobRequest request)
     {
         logger.LogInformation("Admin enqueuing career sims — season {Season}", request.Season);
         var jobId = BackgroundJob.Enqueue<RecalculateDynastyValuationsJob>(
             job => job.RunAsync(request.Season, CancellationToken.None));
-        return Accepted(new { Message = $"Dynasty pipeline queued — job {jobId}. Monitor at /hangfire.", JobId = jobId });
+        return Accepted(new
+        {
+            Message = $"Dynasty pipeline queued — job {jobId}. Monitor at /hangfire.",
+            JobId = jobId
+        });
     }
 
+    /// <summary>
+    /// Runs DFV calculation inline (not queued).
+    /// ScoringFormat defaults to Superflex — pass a different value for standard leagues.
+    /// Valid values: Standard, HalfPpr, FullPpr, Superflex, SuperflexFullPpr
+    /// </summary>
     [HttpPost("jobs/run-dfv")]
     public async Task<IActionResult> RunDfv(
-        [FromBody] RunJobRequest request,
+        [FromBody] RunDfvRequest request,
         [FromServices] IDfvCalculationService dfvService,
         [FromServices] IDynastyValuationRepository valuationRepository,
         CancellationToken ct)
     {
-        logger.LogInformation("Admin triggered DFV calculation — season {Season}", request.Season);
-        var results = await dfvService.CalculateAllAsync(request.Season, ct);
+        // Parse scoring format — default to Superflex if missing or invalid
+        var scoringFormat = ScoringFormat.Superflex;
+        if (!string.IsNullOrWhiteSpace(request.ScoringFormat)
+            && Enum.TryParse<ScoringFormat>(request.ScoringFormat, ignoreCase: true, out var parsed))
+        {
+            scoringFormat = parsed;
+        }
+
+        logger.LogInformation(
+            "Admin triggered DFV calculation — season {Season}, format {Format}",
+            request.Season, scoringFormat);
+
+        var results = await dfvService.CalculateAllAsync(request.Season, scoringFormat, ct);
         await valuationRepository.UpsertBatchAsync(results, ct);
-        return Ok(new { Message = "DFV calculation complete.", Count = results.Count });
+
+        return Ok(new
+        {
+            Message = "DFV calculation complete.",
+            Count = results.Count,
+            ScoringFormat = scoringFormat.ToString()
+        });
     }
 
     [HttpPost("jobs/run-stats-sync")]
     public async Task<IActionResult> RunStatsSync(
-    [FromBody] RunJobRequest request,
-    [FromServices] HistoricalStatsSyncJob statsSyncJob,
-    CancellationToken ct)
+        [FromBody] RunJobRequest request,
+        [FromServices] HistoricalStatsSyncJob statsSyncJob,
+        CancellationToken ct)
     {
         logger.LogInformation("Admin triggered stats sync — season {Season}", request.Season);
         await statsSyncJob.SyncCurrentSeasonAsync(request.Season);
@@ -233,10 +241,9 @@ public class AdminController(
         logger.LogInformation("Admin triggered combine sync — season {Season}", season);
         var result = await combineSync.Handle(
             new FF.Application.Features.DraftTools.Commands.SyncCombineData.SyncCombineDataCommand(season), ct);
-        return result.IsSuccess
-            ? Ok(result.Value)
-            : BadRequest(result.Error.Message);
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error.Message);
     }
+
     [HttpGet("nfl-context/public")]
     [AllowAnonymous]
     public async Task<IActionResult> GetNflContextPublic()
@@ -251,9 +258,9 @@ public class AdminController(
 
     [HttpPost("jobs/run-projections")]
     public async Task<IActionResult> RunProjections(
-    [FromBody] RunJobRequest request,
-    [FromServices] ProjectionRefreshJob projectionJob,
-    CancellationToken ct)
+        [FromBody] RunJobRequest request,
+        [FromServices] ProjectionRefreshJob projectionJob,
+        CancellationToken ct)
     {
         logger.LogInformation("Admin triggered projection refresh — season {Season}", request.Season);
         await projectionJob.RunAsync("admin-trigger", ct);
@@ -269,15 +276,17 @@ public class AdminController(
         await snapCountJob.RunAsync();
         return Ok(new { Message = "Snap count sync complete." });
     }
+
     [HttpPost("jobs/run-article-generation")]
     public async Task<IActionResult> RunArticleGeneration(
-    [FromServices] ArticleGenerationJob articleJob,
-    CancellationToken ct)
+        [FromServices] ArticleGenerationJob articleJob,
+        CancellationToken ct)
     {
         logger.LogInformation("Admin triggered article generation");
         await articleJob.RunAsync(ct);
         return Ok(new { Message = "Article generation complete." });
     }
+
     [HttpPost("sync-ffc-adp")]
     public IActionResult TriggerFfcAdpSync()
     {
@@ -285,11 +294,6 @@ public class AdminController(
         return Ok(new { message = "FFC ADP sync job enqueued." });
     }
 
-    /// <summary>
-    /// Seeds season-average sim data from nflverse player_stats CSV.
-    /// Week=0 sentinel — represents season average, not a weekly projection.
-    /// Typically run once after the season ends (file published ~February).
-    /// </summary>
     [HttpPost("jobs/seed-season-averages")]
     public async Task<IActionResult> SeedSeasonAverages(
         [FromQuery] int season,
@@ -297,12 +301,10 @@ public class AdminController(
         CancellationToken ct)
     {
         logger.LogInformation("Admin triggered season-average sim seed for season {Season}", season);
-
         if (season < 2020 || season > DateTime.UtcNow.Year)
             return BadRequest($"Season must be between 2020 and {DateTime.UtcNow.Year}.");
 
         var result = await mediator.Send(new SeedSeasonAverageSimsCommand(season), ct);
-
         return Ok(new
         {
             Message = $"Season-average sim seed complete for {season}.",
@@ -311,6 +313,15 @@ public class AdminController(
             result.Unmatched
         });
     }
+
+    // ── Request records ─────────────────────────────────────────────────────
     public record RunJobRequest(int Season);
+
+    /// <summary>
+    /// DFV-specific request — extends RunJobRequest with optional ScoringFormat.
+    /// ScoringFormat string is parsed to the enum server-side; invalid values default to Superflex.
+    /// </summary>
+    public record RunDfvRequest(int Season, string? ScoringFormat = null);
+
     public record NflContextOverrideRequest(int? Season, int? Week);
 }
