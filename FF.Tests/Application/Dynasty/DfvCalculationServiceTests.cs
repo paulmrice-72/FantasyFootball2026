@@ -312,10 +312,25 @@ public class DfvCalculationServiceTests
             }]);
 
         var sut = CreateSut();
+
+        // Rookie has FP rank #1  ← move this AFTER CreateSut()
+        _fpRookieRepo
+            .Setup(r => r.GetAllBySeasonAsync(2026, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new FantasyProsRookieRankingDocument
+    {
+        SleeperPlayerId = "rookie",
+        PlayerName = "Test Rookie",
+        Position = "RB",
+        FantasyProsRank = 1,
+        Season = 2026
+    }]);
+
         var result = await sut.CalculateAllAsync(2026);
 
         var rookie = result.First(r => r.SleeperPlayerId == "rookie");
         var vet = result.First(r => r.SleeperPlayerId == "vet");
         rookie.TradeValue.Should().BeGreaterThan(vet.TradeValue);
+
+
     }
 }

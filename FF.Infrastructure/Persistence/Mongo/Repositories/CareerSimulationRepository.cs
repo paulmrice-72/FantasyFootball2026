@@ -10,26 +10,47 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
         context.Database.GetCollection<CareerSimulationDocument>("career_simulations");
 
     public async Task<CareerSimulationDocument?> GetByPlayerIdAsync(
-        string sleeperPlayerId, CancellationToken ct = default)
+        string sleeperPlayerId,
+        CancellationToken ct = default)
     {
         var filter = Builders<CareerSimulationDocument>.Filter
             .Eq(x => x.SleeperPlayerId, sleeperPlayerId);
+
         return await _collection.Find(filter)
             .FirstOrDefaultAsync(CancellationToken.None);
     }
 
     public async Task<List<CareerSimulationDocument>> GetByPositionAsync(
-        string position, CancellationToken ct = default)
+        string position,
+        CancellationToken ct = default)
     {
         var filter = Builders<CareerSimulationDocument>.Filter
             .Eq(x => x.Position, position);
+
         return await _collection.Find(filter)
             .SortByDescending(x => x.CareerValueScore)
             .ToListAsync(CancellationToken.None);
     }
 
+    /// <summary>
+    /// Loads all career simulations for the given season in one query.
+    /// Used by DfvCalculationService to bulk-load the sim map upfront,
+    /// replacing N serial GetByPlayerIdAsync calls with a single round-trip.
+    /// </summary>
+    public async Task<List<CareerSimulationDocument>> GetAllBySeasonAsync(
+        int season,
+        CancellationToken ct = default)
+    {
+        var filter = Builders<CareerSimulationDocument>.Filter
+            .Eq(x => x.Season, season);
+
+        return await _collection.Find(filter)
+            .ToListAsync(CancellationToken.None);
+    }
+
     public async Task UpsertAsync(
-        CareerSimulationDocument document, CancellationToken ct = default)
+        CareerSimulationDocument document,
+        CancellationToken ct = default)
     {
         var filter = Builders<CareerSimulationDocument>.Filter
             .Eq(x => x.SleeperPlayerId, document.SleeperPlayerId);
@@ -50,15 +71,51 @@ public class CareerSimulationRepository(MongoDbContext context) : ICareerSimulat
             .SetOnInsert(x => x.Id, document.Id);
 
         await _collection.UpdateOneAsync(
-            filter, update,
+            filter,
+            update,
             new UpdateOptions { IsUpsert = true },
-            CancellationToken.None);  // ← never use request CT for MongoDB writes
+            CancellationToken.None); // never use request CT for MongoDB writes
     }
 
+    /// <summary>
+    /// Upserts all documents in parallel using BulkWriteAsync.
+    /// Significantly faster than serial UpsertAsync calls for large batches.
+    /// </summary>
     public async Task UpsertBatchAsync(
-        IEnumerable<CareerSimulationDocument> documents, CancellationToken ct = default)
+        IEnumerable<CareerSimulationDocument> documents,
+        CancellationToken ct = default)
     {
-        foreach (var document in documents)
-            await UpsertAsync(document, CancellationToken.None);
+        var models = documents.Select(document =>
+        {
+            var filter = Builders<CareerSimulationDocument>.Filter
+                .Eq(x => x.SleeperPlayerId, document.SleeperPlayerId);
+
+            var update = Builders<CareerSimulationDocument>.Update
+                .Set(x => x.PlayerName, document.PlayerName)
+                .Set(x => x.Position, document.Position)
+                .Set(x => x.CurrentAge, document.CurrentAge)
+                .Set(x => x.Season, document.Season)
+                .Set(x => x.CareerPhase, document.CareerPhase)
+                .Set(x => x.YearProjections, document.YearProjections)
+                .Set(x => x.CareerValueScore, document.CareerValueScore)
+                .Set(x => x.PeakYearValue, document.PeakYearValue)
+                .Set(x => x.PeakYear, document.PeakYear)
+                .Set(x => x.YearsOfPrimeRemaining, document.YearsOfPrimeRemaining)
+                .Set(x => x.ComputedAt, document.ComputedAt)
+                .Set(x => x.Iterations, document.Iterations)
+                .SetOnInsert(x => x.Id, document.Id);
+
+            return new UpdateOneModel<CareerSimulationDocument>(filter, update)
+            {
+                IsUpsert = true
+            };
+        }).ToList();
+
+        if (models.Count == 0) return;
+
+        await _collection.BulkWriteAsync(
+            models,
+            new BulkWriteOptions { IsOrdered = false },
+            CancellationToken.None);
     }
 }
