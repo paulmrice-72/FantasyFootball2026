@@ -1,19 +1,25 @@
 ﻿using FF.Domain.Documents;
+using FF.Domain.Enums;
 
 namespace FF.Application.Interfaces.Services;
 
 public interface IDfvCalculationService
 {
     /// <summary>
-    /// Calculates DFV for all players and normalizes to 0-100 scale.
-    /// Normalization requires the full player set — cannot be done per-player.
+    /// Calculates DFV for all players and normalizes to 0-100 scale across
+    /// all positions. ScoringFormat drives position scarcity multipliers
+    /// (superflex formats heavily boost QB value).
     /// </summary>
     Task<List<DynastyValuationDocument>> CalculateAllAsync(
-        int season, CancellationToken ct = default);
+        int season,
+        ScoringFormat scoringFormat = ScoringFormat.HalfPpr,
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Raw (un-normalized) DFV for a single player. Used in trade analyzer
-    /// where we compare two sides without re-normalizing the full population.
+    /// Raw (un-normalized) DFV for a single player. Used in trade analyzer.
     /// </summary>
-    double CalculateRawDfv(CareerSimulationDocument careerSim, string position);
+    double CalculateRawDfv(
+        CareerSimulationDocument careerSim,
+        string position,
+        ScoringFormat scoringFormat = ScoringFormat.HalfPpr);
 }
