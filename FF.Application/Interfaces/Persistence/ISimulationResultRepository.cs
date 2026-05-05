@@ -18,4 +18,5 @@ public interface ISimulationResultRepository
     /// Returns the season-average (Week=0) result for the most recent available season.
     /// </summary>
     Task<SimulationResultDocument?> GetMostRecentByNameAsync(string playerName, string position, int season, CancellationToken ct = default);
+    Task<List<SimulationResultDocument>> GetAllSeasonAveragesAsync(CancellationToken ct = default);
 }

@@ -43,11 +43,9 @@ public class CareerSimulationService(
         ["TE"] = 27
     };
 
-    // Minimum FPPG a player must have in their baseline to be treated as
-    // a legitimate starter. Below this = depth/backup level, not starter.
     private static readonly Dictionary<string, double> StarterThreshold = new()
     {
-        ["QB"] = 16.0,  // raised from 14.0 — spot starts don't make you a starter
+        ["QB"] = 16.0,
         ["RB"] = 7.0,
         ["WR"] = 7.5,
         ["TE"] = 6.0
@@ -60,10 +58,38 @@ public class CareerSimulationService(
         var results = new List<CareerSimulationDocument>();
         var positions = new[] { Position.QB, Position.RB, Position.WR, Position.TE };
 
+        // ── Bulk-load aging curves ─────────────────────────────────────────
         var curves = new Dictionary<string, AgingCurveDocument?>();
         foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
             curves[pos] = await agingCurveRepository.GetByPositionAsync(pos, ct);
 
+        // ── Bulk-load ALL season-average sim results in ONE query ──────────
+        // Replaces per-player serial DB calls in GetBaselineFppgAsync.
+        // With ~700 players × up to 3 season fallbacks = up to 2,100 queries
+        // eliminated and replaced with 1 query + in-memory lookups.
+        var allSimResults = await simulationResultRepository.GetAllSeasonAveragesAsync(ct);
+
+        logger.LogInformation(
+            "Bulk-loaded {Count} season-average sim results for baseline lookup",
+            allSimResults.Count);
+
+        // Primary lookup: SleeperPlayerId → best (most recent season) result
+        var simByPlayerId = allSimResults
+            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0)
+            .GroupBy(r => r.SleeperPlayerId!)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(r => r.Season).First());
+
+        // Fallback lookup: "PlayerName|Position" → best result
+        var simByNamePos = allSimResults
+            .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0)
+            .GroupBy(r => $"{r.PlayerName}|{r.Position}")
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(r => r.Season).First());
+
+        // ── Simulate each player ───────────────────────────────────────────
         foreach (var position in positions)
         {
             var players = await playerRepository.GetByPositionAsync(position, ct);
@@ -77,8 +103,14 @@ public class CareerSimulationService(
 
                 try
                 {
-                    var sim = await SimulatePlayerAsync(
-                        player, posStr, curves[posStr], season, ct);
+                    var sim = SimulatePlayer(
+                        player,
+                        posStr,
+                        curves[posStr],
+                        season,
+                        simByPlayerId,
+                        simByNamePos);
+
                     results.Add(sim);
                 }
                 catch (Exception ex)
@@ -98,26 +130,46 @@ public class CareerSimulationService(
     {
         var player = await playerRepository.GetBySleeperIdAsync(sleeperPlayerId, ct)
             ?? throw new InvalidOperationException($"Player not found: {sleeperPlayerId}");
+
         var posStr = player.Position.ToString();
         var curve = await agingCurveRepository.GetByPositionAsync(posStr, ct);
-        return await SimulatePlayerAsync(player, posStr, curve, CurrentSeason, ct);
+
+        // Single-player path still uses targeted queries (infrequent, acceptable)
+        var allSimResults = await simulationResultRepository.GetAllSeasonAveragesAsync(ct);
+
+        var simByPlayerId = allSimResults
+            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0)
+            .GroupBy(r => r.SleeperPlayerId!)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Season).First());
+
+        var simByNamePos = allSimResults
+            .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0)
+            .GroupBy(r => $"{r.PlayerName}|{r.Position}")
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Season).First());
+
+        return SimulatePlayer(player, posStr, curve, CurrentSeason, simByPlayerId, simByNamePos);
     }
 
-    // ── Private ──────────────────────────────────────────────────────────────
+    // ── Private ────────────────────────────────────────────────────────────────
 
-    private async Task<CareerSimulationDocument> SimulatePlayerAsync(
+    private CareerSimulationDocument SimulatePlayer(
         FF.Domain.Entities.Player player,
         string position,
         AgingCurveDocument? curve,
         int season,
-        CancellationToken ct)
+        Dictionary<string, SimulationResultDocument> simByPlayerId,
+        Dictionary<string, SimulationResultDocument> simByNamePos)
     {
         var currentAge = player.Age ?? (player.YearsExperience == 0 ? 21 : 22);
 
-        var simBaseline = await GetBaselineFppgAsync(
-            player.SleeperPlayerId!, player.FullName, position, season, ct);
-        var baseFppg = GetBaselineFppgWithContext(position, simBaseline, player);
+        var simBaseline = GetBaselineFppg(
+            player.SleeperPlayerId!,
+            player.FullName,
+            position,
+            simByPlayerId,
+            simByNamePos);
 
+        var baseFppg = GetBaselineFppgWithContext(position, simBaseline, player);
         if (baseFppg <= 0) baseFppg = GetDepthLevelFppg(position);
 
         var yearProjections = new List<CareerYearProjection>();
@@ -189,50 +241,64 @@ public class CareerSimulationService(
         };
     }
 
-    private async Task<double> GetBaselineFppgAsync(
+    /// <summary>
+    /// Pure in-memory baseline lookup — no DB calls.
+    /// Uses pre-loaded dictionaries built once at the start of SimulateAllPlayersAsync.
+    /// </summary>
+    private double GetBaselineFppg(
         string sleeperPlayerId,
         string playerName,
         string position,
-        int season,
-        CancellationToken ct)
+        Dictionary<string, SimulationResultDocument> simByPlayerId,
+        Dictionary<string, SimulationResultDocument> simByNamePos)
     {
-        try
-        {
-            // Primary: SleeperPlayerId lookup (works for established players)
-            for (int s = season; s >= season - 2; s--)
-            {
-                var result = await simulationResultRepository
-                    .GetMostRecentBySleeperIdAsync(sleeperPlayerId, s, ct);
-                if (result?.Median > 0) return (double)result.Median;
-            }
+        SimulationResultDocument? sim = null;
 
-            // Fallback: name+position match for players missing GSIS bridge
-            // (e.g. 2025 rookies whose GsisId isn't yet populated in Sleeper)
-            var nameResult = await simulationResultRepository
-                .GetMostRecentByNameAsync(playerName, position, season, ct);
-            if (nameResult?.Median > 0)
+        if (simByPlayerId.TryGetValue(sleeperPlayerId, out var byId) && byId.Median > 0)
+            sim = byId;
+        else
+        {
+            var key = $"{playerName}|{position}";
+            if (simByNamePos.TryGetValue(key, out var byName) && byName.Median > 0)
             {
                 logger.LogDebug(
                     "Used name fallback for {Player} — SleeperPlayerId {Id} had no sim result",
                     playerName, sleeperPlayerId);
-                return (double)nameResult.Median;
+                sim = byName;
             }
-
-            return 0;
         }
-        catch { return 0; }
+
+        if (sim is null) return 0;
+
+        var baseline = (double)sim.Median;
+
+        // Availability discount — high stdDev/median ratio signals injury-prone
+        // or limited-sample players whose baseline overstates true dynasty value.
+        // Threshold 0.19: captures Tua (0.20), McCaffrey-type injury histories
+        // without penalizing normal variance (Allen ~0.15, Hurts ~0.16).
+        if (position == "QB" && sim.StandardDeviation > 0 && sim.Median > 0)
+        {
+            var volatility = (double)sim.StandardDeviation / (double)sim.Median;
+            if (volatility > 0.19)
+            {
+                baseline *= 0.82; // ~18% discount — moves Tua from 16.5 → 13.5
+                logger.LogDebug(
+                    "Volatility discount applied to {Player} — ratio {Ratio:F2}",
+                    playerName, volatility);
+            }
+        }
+
+        return baseline;
     }
 
     private static double GetBaselineFppgWithContext(
-       string position,
-       double simulationBaseline,
-       FF.Domain.Entities.Player player)
+        string position,
+        double simulationBaseline,
+        FF.Domain.Entities.Player player)
     {
-        // ── Rookies (YearsExperience == 0) ────────────────────────────────────
         if (player.YearsExperience == 0)
         {
             if (simulationBaseline > 0) return simulationBaseline;
-
             if (position == "QB")
             {
                 var pick = player.DraftPick ?? 999;
@@ -241,20 +307,15 @@ public class CareerSimulationService(
                     ? GetStarterAverageFppg(position)
                     : GetDepthLevelFppg(position);
             }
-
             return GetStarterAverageFppg(position);
         }
 
-        // ── Established players (YearsExperience >= 1) ────────────────────────
         if (simulationBaseline > 0)
         {
             var threshold = StarterThreshold.GetValueOrDefault(position, 7.0);
             if (player.YearsExperience >= 1 && simulationBaseline < threshold)
                 return GetDepthLevelFppg(position);
 
-            // QB credibility cap — small-sample starters with limited experience
-            // shouldn't project as franchise QBs off a partial-season baseline.
-            // Self-corrects when 2025 full-season data is available.
             if (position == "QB" && player.YearsExperience <= 3)
             {
                 var credibilityCap = player.YearsExperience switch
@@ -267,43 +328,47 @@ public class CareerSimulationService(
                 return Math.Min(simulationBaseline, credibilityCap);
             }
 
+            // Veteran age regression — QBs 30+ should not project from a single
+            // peak season. Cap at a declining-starter level to prevent career-year
+            // outliers (Mayfield 2024, Goff 2024) from inflating dynasty value.
+            if (position == "QB" && player.YearsExperience >= 7)
+            {
+                var ageCap = (player.Age ?? 30) switch
+                {
+                    >= 32 => 16.0,
+                    31 => 18.0,
+                    30 => 20.0,
+                    _ => simulationBaseline
+                };
+                return Math.Min(simulationBaseline, ageCap);
+            }
+
             return simulationBaseline;
         }
 
-        // No sim data, has experience — fringe/unsigned veteran
         return 0.1;
     }
 
-    /// <summary>
-    /// Starter-level position averages — used only for rookies as a baseline.
-    /// Represents a true starter slot, not a depth player.
-    /// </summary>
     private static double GetStarterAverageFppg(string position) => position switch
     {
-        "QB" => 18.0,   // QB1-QB16 average
-        "RB" => 9.0,    // RB1-RB24 average
-        "WR" => 10.0,   // WR1-WR36 average
-        "TE" => 8.5,    // TE1-TE12 average
+        "QB" => 18.0,
+        "RB" => 9.0,
+        "WR" => 10.0,
+        "TE" => 8.5,
         _ => 9.0
     };
 
-    /// <summary>
-    /// Depth/backup level — used for established players who fall below
-    /// the starter threshold. Significantly lower than starter average.
-    /// </summary>
     private static double GetDepthLevelFppg(string position) => position switch
     {
-        "QB" => 6.0,    // Career backup — occasionally starts but not a real starter
-        "RB" => 4.0,    // Depth RB / committee back
-        "WR" => 4.5,    // WR4/5 level
-        "TE" => 3.5,    // TE2/depth TE
+        "QB" => 6.0,
+        "RB" => 4.0,
+        "WR" => 4.5,
+        "TE" => 3.5,
         _ => 4.0
     };
 
     private static double GetAgingMultiplier(
-        AgingCurveDocument? curve,
-        string position,
-        int age)
+        AgingCurveDocument? curve, string position, int age)
     {
         if (curve is null) return GetFallbackMultiplier(position, age);
         if (curve.AgeValueMap.TryGetValue(age, out var val)) return val / 100.0;
@@ -322,10 +387,10 @@ public class CareerSimulationService(
     private static CareerPhase ClassifyPhase(string position, int age)
     {
         var peak = PeakAges.GetValueOrDefault(position, 26);
-        return age < peak - 2 ? CareerPhase.Ascending :
-               age <= peak + 2 ? CareerPhase.Prime :
-               age <= peak + 5 ? CareerPhase.Declining :
-                                 CareerPhase.Unknown;
+        return age < peak - 2 ? CareerPhase.Ascending
+            : age <= peak + 2 ? CareerPhase.Prime
+            : age <= peak + 5 ? CareerPhase.Declining
+            : CareerPhase.Unknown;
     }
 
     private static double GetPositionVariance(string position) => position switch
