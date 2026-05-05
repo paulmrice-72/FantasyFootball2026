@@ -231,4 +231,15 @@ public class SimulationResultRepository(
         }
         return null;
     }
+
+    public async Task<List<SimulationResultDocument>> GetAllSeasonAveragesAsync(
+        CancellationToken ct = default)
+    {
+        var filter = Builders<SimulationResultDocument>.Filter
+            .Eq(x => x.Week, 0);
+
+        return await _collection
+            .Find(filter)
+            .ToListAsync(CancellationToken.None);
+    }
 }

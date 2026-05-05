@@ -12,7 +12,8 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
         context.Database.GetCollection<DynastyValuationDocument>("dynasty_valuations");
 
     public async Task<DynastyValuationDocument?> GetBySleeperIdAsync(
-        string sleeperPlayerId, CancellationToken ct = default)
+        string sleeperPlayerId,
+        CancellationToken ct = default)
     {
         var filter = Builders<DynastyValuationDocument>.Filter
             .Eq(x => x.SleeperPlayerId, sleeperPlayerId);
@@ -20,7 +21,8 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
     }
 
     public async Task<List<DynastyValuationDocument>> GetByPositionAsync(
-        string position, CancellationToken ct = default)
+        string position,
+        CancellationToken ct = default)
     {
         var filter = Builders<DynastyValuationDocument>.Filter
             .Eq(x => x.Position, position);
@@ -30,7 +32,9 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
     }
 
     public async Task<List<DynastyValuationDocument>> GetTopByTradeValueAsync(
-        int count, string? position = null, CancellationToken ct = default)
+        int count,
+        string? position = null,
+        CancellationToken ct = default)
     {
         var filter = position is null
             ? Builders<DynastyValuationDocument>.Filter.Empty
@@ -43,13 +47,59 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
     }
 
     public async Task UpsertAsync(
-        DynastyValuationDocument document, CancellationToken ct = default)
+        DynastyValuationDocument document,
+        CancellationToken ct = default)
     {
         var filter = Builders<DynastyValuationDocument>.Filter
             .Eq(x => x.SleeperPlayerId, document.SleeperPlayerId);
 
-        // Build update definition — only set PlayerName if non-null/empty
-        // to prevent pipeline reruns from overwriting good names with nulls
+        var update = BuildUpdate(document);
+
+        await _collection.UpdateOneAsync(
+            filter,
+            update,
+            new UpdateOptions { IsUpsert = true },
+            CancellationToken.None);
+    }
+
+    public async Task UpsertBatchAsync(
+        IEnumerable<DynastyValuationDocument> documents,
+        CancellationToken ct = default)
+    {
+        var docList = documents.ToList();
+        if (docList.Count == 0) return;
+
+        var writes = docList.Select(document =>
+        {
+            var filter = Builders<DynastyValuationDocument>.Filter
+                .Eq(x => x.SleeperPlayerId, document.SleeperPlayerId);
+
+            return new UpdateOneModel<DynastyValuationDocument>(filter, BuildUpdate(document))
+            {
+                IsUpsert = true
+            };
+        }).Cast<WriteModel<DynastyValuationDocument>>().ToList();
+
+        await _collection.BulkWriteAsync(
+            writes,
+            new BulkWriteOptions { IsOrdered = false },
+            CancellationToken.None);
+    }
+
+    public async Task<List<DynastyValuationDocument>> GetBySleeperPlayerIdsAsync(
+        IEnumerable<string> sleeperPlayerIds,
+        CancellationToken ct = default)
+    {
+        var filter = Builders<DynastyValuationDocument>.Filter
+            .In(x => x.SleeperPlayerId, sleeperPlayerIds);
+        return await _collection.Find(filter).ToListAsync(ct);
+    }
+
+    // ── Private ───────────────────────────────────────────────────────────────
+
+    private static UpdateDefinition<DynastyValuationDocument> BuildUpdate(
+        DynastyValuationDocument document)
+    {
         var updateDefs = new List<UpdateDefinition<DynastyValuationDocument>>
         {
             Builders<DynastyValuationDocument>.Update.Set(x => x.PlayerId, document.PlayerId),
@@ -58,12 +108,14 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
             Builders<DynastyValuationDocument>.Update.Set(x => x.Age, document.Age),
             Builders<DynastyValuationDocument>.Update.Set(x => x.YearsExperience, document.YearsExperience),
             Builders<DynastyValuationDocument>.Update.Set(x => x.Season, document.Season),
+            Builders<DynastyValuationDocument>.Update.Set(x => x.ScoringFormat, document.ScoringFormat),
             Builders<DynastyValuationDocument>.Update.Set(x => x.BreakoutScore, document.BreakoutScore),
             Builders<DynastyValuationDocument>.Update.Set(x => x.BreakoutClassification, document.BreakoutClassification),
             Builders<DynastyValuationDocument>.Update.Set(x => x.BreakoutSignals, document.BreakoutSignals),
             Builders<DynastyValuationDocument>.Update.Set(x => x.BreakoutScoredAt, document.BreakoutScoredAt),
             Builders<DynastyValuationDocument>.Update.Set(x => x.TradeValue, document.TradeValue),
             Builders<DynastyValuationDocument>.Update.Set(x => x.DiscountedFutureValue, document.DiscountedFutureValue),
+            Builders<DynastyValuationDocument>.Update.Set(x => x.TradeValueComputedAt, document.TradeValueComputedAt),
             Builders<DynastyValuationDocument>.Update.Set(x => x.CareerValueScore, document.CareerValueScore),
             Builders<DynastyValuationDocument>.Update.Set(x => x.PeakYear, document.PeakYear),
             Builders<DynastyValuationDocument>.Update.Set(x => x.YearsOfPrimeRemaining, document.YearsOfPrimeRemaining),
@@ -76,24 +128,6 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
             updateDefs.Add(Builders<DynastyValuationDocument>.Update
                 .Set(x => x.PlayerName, document.PlayerName));
 
-        var update = Builders<DynastyValuationDocument>.Update.Combine(updateDefs);
-
-        await _collection.UpdateOneAsync(
-            filter, update, new UpdateOptions { IsUpsert = true }, CancellationToken.None);
-    }
-
-    public async Task UpsertBatchAsync(
-        IEnumerable<DynastyValuationDocument> documents, CancellationToken ct = default)
-    {
-        foreach (var document in documents)
-            await UpsertAsync(document, ct);
-    }
-
-    public async Task<List<DynastyValuationDocument>> GetBySleeperPlayerIdsAsync(
-        IEnumerable<string> sleeperPlayerIds, CancellationToken ct = default)
-    {
-        var filter = Builders<DynastyValuationDocument>.Filter
-            .In(x => x.SleeperPlayerId, sleeperPlayerIds);
-        return await _collection.Find(filter).ToListAsync(ct);
+        return Builders<DynastyValuationDocument>.Update.Combine(updateDefs);
     }
 }
