@@ -1,14 +1,8 @@
 ﻿// FF.Application/Interfaces/Services/ILeagueContextResolverService.cs
+using FF.Domain.Enums;
 using FF.Domain.ValueObjects;
 
 namespace FF.Application.Interfaces.Services;
-
-public enum ScoringFormat
-{
-    Standard = 0,
-    HalfPpr = 1,
-    Ppr = 2
-}
 
 public record LeagueContext(
     Guid LeagueId,

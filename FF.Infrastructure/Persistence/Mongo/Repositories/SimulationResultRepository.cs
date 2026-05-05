@@ -66,9 +66,6 @@ public class SimulationResultRepository(
     {
         var docs = documents.ToList();
 
-        // Season-average docs (Week=0) are keyed by SleeperPlayerId — they have no
-        // PlayerId (nflverse GSIS id). Use a dedicated bulk path to avoid the
-        // PlayerId=null collision in the standard UpsertAsync filter.
         var seasonAvgDocs = docs.Where(d => d.Week == 0).ToList();
         var weeklyDocs = docs.Where(d => d.Week != 0).ToList();
 
@@ -93,7 +90,6 @@ public class SimulationResultRepository(
             if (string.IsNullOrEmpty(doc.Id))
                 doc.Id = MongoDB.Bson.ObjectId.GenerateNewId().ToString();
 
-            // Key: SleeperPlayerId + Season + Week=0
             var filter = Builders<SimulationResultDocument>.Filter.And(
                 Builders<SimulationResultDocument>.Filter.Eq(x => x.SleeperPlayerId, doc.SleeperPlayerId),
                 Builders<SimulationResultDocument>.Filter.Eq(x => x.Season, doc.Season),
@@ -177,20 +173,13 @@ public class SimulationResultRepository(
             Builders<SimulationResultDocument>.Filter.In(x => x.SleeperPlayerId, ids),
             Builders<SimulationResultDocument>.Filter.Eq(x => x.Season, season));
 
-        // Fetch all matching docs — client-side sort because MongoDB driver cannot
-        // translate the Week=0 sentinel conditional expression server-side.
-        var docs = await _collection
-            .Find(filter)
-            .ToListAsync(ct);
+        var docs = await _collection.Find(filter).ToListAsync(ct);
 
-        // Week=0 (season-average sentinel) wins over any weekly doc; else latest week.
-        // int.MaxValue pushes Week=0 to the top of the descending sort.
         var results = docs
             .GroupBy(d => d.SleeperPlayerId)
             .Select(g => g.OrderByDescending(d => d.Week == 0 ? int.MaxValue : d.Week).First())
             .ToList();
 
-        // Offseason fallback: if requested season has no data at all, try season-1.
         if (results.Count == 0 && season >= DateTime.UtcNow.Year && season > 2020)
         {
             logger.LogInformation(
@@ -201,9 +190,7 @@ public class SimulationResultRepository(
                 Builders<SimulationResultDocument>.Filter.In(x => x.SleeperPlayerId, ids),
                 Builders<SimulationResultDocument>.Filter.Eq(x => x.Season, season - 1));
 
-            var fallbackDocs = await _collection
-                .Find(fallbackFilter)
-                .ToListAsync(ct);
+            var fallbackDocs = await _collection.Find(fallbackFilter).ToListAsync(ct);
 
             return fallbackDocs
                 .GroupBy(d => d.SleeperPlayerId)
@@ -212,5 +199,36 @@ public class SimulationResultRepository(
         }
 
         return results;
+    }
+
+    public async Task<SimulationResultDocument?> GetMostRecentByNameAsync(
+       string playerName, string position, int season, CancellationToken ct = default)
+    {
+        for (int s = season; s >= season - 2; s--)
+        {
+            var filter = Builders<SimulationResultDocument>.Filter.And(
+                Builders<SimulationResultDocument>.Filter.Eq(x => x.PlayerName, playerName),
+                Builders<SimulationResultDocument>.Filter.Eq(x => x.Position, position),
+                Builders<SimulationResultDocument>.Filter.Eq(x => x.Season, s));
+
+            var results = await _collection
+                .Find(filter)
+                .ToListAsync(ct);
+
+            if (results.Count == 0) continue;
+
+            // Prefer Week=0 season average; otherwise take highest-week result
+            var best = results.FirstOrDefault(r => r.Week == 0)
+                ?? results.OrderByDescending(r => r.Week).First();
+
+            if (best.Median > 0)
+            {
+                logger.LogDebug(
+                    "Name fallback matched {Player} ({Pos}) via season {Season} week {Week}",
+                    playerName, position, s, best.Week);
+                return best;
+            }
+        }
+        return null;
     }
 }

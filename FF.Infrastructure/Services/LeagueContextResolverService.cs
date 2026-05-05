@@ -1,6 +1,7 @@
 ﻿// FF.Infrastructure/Services/LeagueContextResolverService.cs
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
+using FF.Domain.Enums;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -41,7 +42,7 @@ public class LeagueContextResolverService : ILeagueContextResolverService
 
         var scoringFormat = league.RecPerReception switch
         {
-            >= 1m => ScoringFormat.Ppr,
+            >= 1m => ScoringFormat.FullPpr,
             >= 0.5m => ScoringFormat.HalfPpr,
             _ => ScoringFormat.Standard
         };

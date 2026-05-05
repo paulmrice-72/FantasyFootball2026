@@ -216,13 +216,13 @@ else if (_filtered.Count > 0)
         _error = null;
         _all = [];
         StateHasChanged();
-
         try
         {
-            var position = Positions[_activeTab];
-            var posParam = string.IsNullOrEmpty(position) ? "" : $"&position={position}";
+            // Always load all positions — tab filtering is client-side only.
+            // Passing position= to the API breaks cross-position normalization
+            // because it limits the result set to position-ranked TradeValues.
             var rows = await Http.GetFromJsonAsync<List<DynastyRow>>(
-                $"api/v1/dynasty/valuations?top={_topCount}{posParam}");
+                $"api/v1/dynasty/valuations?top={_topCount}");
             _all = rows ?? [];
         }
         catch (Exception ex)
