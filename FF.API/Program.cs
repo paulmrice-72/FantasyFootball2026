@@ -359,6 +359,12 @@ try
         Cron.Weekly(DayOfWeek.Tuesday, 9),
         utcOptions);
 
+    RecurringJob.AddOrUpdate<CalibrationValidationJob>(
+        "calibration validation",
+        job => job.RunAsync(2026, "Superflex", CancellationToken.None),
+        Cron.Weekly(DayOfWeek.Tuesday, 9),
+        utcOptions);
+
     BackgroundJob.Enqueue<SeedPickValuesJob>(job => job.SeedAsync());
     //RecurringJob.AddOrUpdate<WaiverSyncJob>(
     //recurringJobId: "waiver-sync",

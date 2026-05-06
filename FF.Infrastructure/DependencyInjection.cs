@@ -188,6 +188,9 @@ public static class DependencyInjection
         services.AddScoped<ILeagueContextResolverService, LeagueContextResolverService>();
         services.AddSleeperApiClient();
 
+        services.AddScoped<ICalibrationResultRepository, CalibrationResultRepository>();
+        services.AddScoped<CalibrationValidationJob>();
+
         // Identity
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         {
@@ -530,6 +533,17 @@ public static class DependencyInjection
                     cm.MapIdMember(c => c.Id)
                         .SetIdGenerator(StringObjectIdGenerator.Instance)
                         .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(CalibrationResultDocument)))
+            {
+                BsonClassMap.RegisterClassMap<CalibrationResultDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                        .SetSerializer(new StringSerializer(BsonType.String));
                 });
             }
         }
