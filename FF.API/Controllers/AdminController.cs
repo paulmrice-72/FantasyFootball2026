@@ -2,6 +2,7 @@
 using FF.Application.Features.Admin.Commands.SetPlatformSettings;
 using FF.Application.Features.Admin.Queries.GetPlatformSettings;
 using FF.Application.Features.Calibration.Commands;
+using FF.Application.Features.DraftTools.Commands.ImportFantasyProsDynastyRankings;
 using FF.Application.Features.DraftTools.Commands.SyncCombineData;
 using FF.Application.Features.Simulations.Commands.SeedSeasonAverageSims;
 using FF.Application.Interfaces.Persistence;
@@ -17,6 +18,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using static FF.API.Controllers.DraftToolsController;
 
 namespace FF.API.Controllers;
 
@@ -360,6 +362,23 @@ public class AdminController(
         return Ok(history);
     }
 
+    [HttpPost("import/fantasypros-dynasty")]
+    public async Task<IActionResult> ImportFantasyProsDynastyRankings(
+    [FromBody] AdminImportFantasyProsRequest request,
+    [FromServices] IMediator mediator,
+    CancellationToken ct)
+    {
+        logger.LogInformation(
+            "Admin triggered FP Dynasty Rankings import — season {Season}", request.Season);
+
+        var result = await mediator.Send(
+            new ImportFantasyProsDynastyRankingsCommand(request.CsvContent, request.Season), ct);
+
+        return result.IsSuccess
+            ? Ok(new { result.Value.Imported, result.Value.Unmatched, result.Value.Season })
+            : BadRequest(result.Error);
+    }
+
     // ── Request records ─────────────────────────────────────────────────────
     public record RunJobRequest(int Season);
 
@@ -371,4 +390,5 @@ public class AdminController(
 
     public record NflContextOverrideRequest(int? Season, int? Week);
     public record RunCalibrationRequest(int Season, string? ScoringFormat);
+    public record AdminImportFantasyProsRequest(string CsvContent, int Season);
 }
