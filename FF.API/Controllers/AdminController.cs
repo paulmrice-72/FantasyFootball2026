@@ -1,7 +1,9 @@
 ﻿// FF.API/Controllers/AdminController.cs
 using FF.Application.Features.Admin.Commands.SetPlatformSettings;
 using FF.Application.Features.Admin.Queries.GetPlatformSettings;
+using FF.Application.Features.Calibration.Commands;
 using FF.Application.Features.DraftTools.Commands.SyncCombineData;
+using FF.Application.Features.Simulations.Commands.SeedSeasonAverageSims;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
@@ -15,7 +17,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using FF.Application.Features.Simulations.Commands.SeedSeasonAverageSims;
 
 namespace FF.API.Controllers;
 
@@ -314,6 +315,51 @@ public class AdminController(
         });
     }
 
+    [HttpPost("jobs/run-calibration")]
+    public async Task<IActionResult> RunCalibration(
+    [FromBody] RunCalibrationRequest request,
+    [FromServices] IMediator mediator,
+    CancellationToken ct)
+    {
+        logger.LogInformation(
+            "Admin triggered calibration harness — season {Season}, format {Format}",
+            request.Season, request.ScoringFormat);
+
+        var result = await mediator.Send(
+            new RunCalibrationCommand(request.Season, request.ScoringFormat ?? "Superflex"), ct);
+
+        return Ok(new
+        {
+            result.SpearmanRho,
+            result.AvgAbsDelta,
+            result.Top10Overlap,
+            result.PlayerCount,
+            Top20Snapshot = result.Top20Snapshot
+        });
+    }
+
+    [HttpGet("calibration/latest")]
+    public async Task<IActionResult> GetLatestCalibration(
+        [FromServices] ICalibrationResultRepository calibrationRepo,
+        CancellationToken ct)
+    {
+        var latest = await calibrationRepo.GetLatestAsync(ct);
+        if (latest is null)
+            return NotFound("No calibration runs found. Run calibration from the Admin Imports page.");
+
+        return Ok(latest);
+    }
+
+    [HttpGet("calibration/history")]
+    public async Task<IActionResult> GetCalibrationHistory(
+        [FromServices] ICalibrationResultRepository calibrationRepo,
+        CancellationToken ct,
+        [FromQuery] int count = 10)
+    {
+        var history = await calibrationRepo.GetRecentAsync(count, ct);
+        return Ok(history);
+    }
+
     // ── Request records ─────────────────────────────────────────────────────
     public record RunJobRequest(int Season);
 
@@ -324,4 +370,5 @@ public class AdminController(
     public record RunDfvRequest(int Season, string? ScoringFormat = null);
 
     public record NflContextOverrideRequest(int? Season, int? Week);
+    public record RunCalibrationRequest(int Season, string? ScoringFormat);
 }

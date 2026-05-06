@@ -182,7 +182,84 @@
         <MudAlert Severity="_adpSeverity" Dense="true" Class="mt-3">@_adpStatus</MudAlert>
     }
 </MudPaper>
+@* ── Calibration Harness ─────────────────────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
+        <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="mr-2" Style="vertical-align:middle;" />
+        Dynasty Ranking Calibration
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Compares our dynasty rankings against FantasyPros top-200. Run after any DFV pipeline execution.
+        Targets: Spearman ρ ≥ 0.85 · Avg delta ≤ 8.0 · Top-10 overlap ≥ 7/10.
+    </MudText>
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.BarChart"
+                       OnClick="RunCalibration" Disabled="_calibBusy">
+                @if (_calibBusy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    @("Calibrating...")
+                }
+                else
+                {
 
+                    @("Run Calibration")
+                }
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    @if (_calibResult is not null)
+    {
+        <MudGrid Spacing="2" Class="mt-3">
+            <MudItem xs="4" sm="4">
+                <MudPaper Class="pa-3 text-center" Elevation="0" Style="background: var(--mud-palette-surface);">
+                    <MudText Typo="Typo.h5" Style="@RhoColor">@_calibResult.SpearmanRho.ToString("F4")</MudText>
+                    <MudText Typo="Typo.caption">Spearman ρ (target ≥ 0.85)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="4" sm="4">
+                <MudPaper Class="pa-3 text-center" Elevation="0" Style="background: var(--mud-palette-surface);">
+                    <MudText Typo="Typo.h5" Style="@DeltaColor">@_calibResult.AvgAbsDelta.ToString("F1")</MudText>
+                    <MudText Typo="Typo.caption">Avg |Δ rank| (target ≤ 8.0)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="4" sm="4">
+                <MudPaper Class="pa-3 text-center" Elevation="0" Style="background: var(--mud-palette-surface);">
+                    <MudText Typo="Typo.h5" Style="@OverlapColor">@_calibResult.Top10Overlap/10</MudText>
+                    <MudText Typo="Typo.caption">Top-10 overlap (target ≥ 7)</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Top-20 Comparison</MudText>
+        <MudTable Items="_calibResult.Top20Snapshot" Dense="true" Hover="true" Elevation="0">
+            <HeaderContent>
+                <MudTh>Our Rank</MudTh>
+                <MudTh>Player</MudTh>
+                <MudTh>Pos</MudTh>
+                <MudTh>Our TV</MudTh>
+                <MudTh>FP Rank</MudTh>
+                <MudTh>Δ</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.OurRank</MudTd>
+                <MudTd>@context.PlayerName</MudTd>
+                <MudTd>@context.Position</MudTd>
+                <MudTd>@context.OurTradeValue.ToString("F1")</MudTd>
+                <MudTd>@context.FpRank</MudTd>
+                <MudTd Style="@DeltaRowColor(context.Delta)">@(context.Delta > 0 ? $"+{context.Delta}" : context.Delta.ToString())</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+
+    @if (!string.IsNullOrEmpty(_calibStatus))
+    {
+        <MudAlert Severity="_calibSeverity" Dense="true" Class="mt-3">@_calibStatus</MudAlert>
+    }
+</MudPaper>
 @* ── Writers' Room ──────────────────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -656,6 +733,66 @@
         catch (Exception ex) { _projOk = false; _projStatus = ex.Message; }
         finally { _projBusy = false; }
     }
+
+    // ── Calibration ────────────────────────────────────────────────────────
+    private bool _calibBusy;
+    private string _calibStatus = string.Empty;
+    private Severity _calibSeverity = Severity.Info;
+    private CalibrationResultDto? _calibResult;
+
+    private string RhoColor => _calibResult?.SpearmanRho >= 0.85
+        ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string DeltaColor => _calibResult?.AvgAbsDelta <= 8.0
+        ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string OverlapColor => _calibResult?.Top10Overlap >= 7
+        ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private static string DeltaRowColor(int delta) => Math.Abs(delta) <= 5
+        ? "color: inherit" : Math.Abs(delta) <= 15
+        ? "color: var(--mud-palette-warning)" : "color: var(--mud-palette-error)";
+
+    private async Task RunCalibration()
+    {
+        _calibBusy = true;
+        _calibStatus = string.Empty;
+        _calibResult = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync(
+                "api/v1/admin/jobs/run-calibration",
+                new { Season = _season, ScoringFormat = _scoringFormat });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                _calibResult = await resp.Content.ReadFromJsonAsync<CalibrationResultDto>();
+                _calibSeverity = Severity.Success;
+                _calibStatus = $"✓ Calibration complete — {_calibResult?.PlayerCount} players compared.";
+            }
+            else
+            {
+                var err = await resp.Content.ReadAsStringAsync();
+                _calibStatus = $"Failed ({(int)resp.StatusCode}): {err}";
+                _calibSeverity = Severity.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _calibStatus = $"Error: {ex.Message}";
+            _calibSeverity = Severity.Error;
+        }
+        finally { _calibBusy = false; }
+    }
+
+    private record CalibrationResultDto(
+        double SpearmanRho,
+        double AvgAbsDelta,
+        int Top10Overlap,
+        int PlayerCount,
+        List<CalibrationPlayerSnapshotDto> Top20Snapshot);
+
+    private record CalibrationPlayerSnapshotDto(
+        int OurRank, string PlayerName, string Position,
+        double OurTradeValue, int FpRank, int Delta);
 
     // ── Response DTOs ────────────────────────────────────────────────────────
     private record ImportResultDto(int Imported, int Unmatched, int Season);
