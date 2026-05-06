@@ -1,46 +1,48 @@
-﻿// FF.Infrastructure/Persistence/MongoDB/Repositories/FantasyProsRookieRankingRepository.cs
-using FF.Application.Interfaces.Persistence;
+﻿using FF.Application.Interfaces.Persistence;
 using FF.Domain.Documents;
 using FF.Infrastructure.Persistence.Mongo;
 using MongoDB.Driver;
 
 namespace FF.Infrastructure.Persistence.Mongo.Repositories;
 
-public class FantasyProsRookieRankingRepository(MongoDbContext context)
-    : IFantasyProsRookieRankingRepository
+public class FantasyProsRookieRankingRepository(MongoDbContext context) : IFantasyProsRookieRankingRepository
 {
     private readonly IMongoCollection<FantasyProsRookieRankingDocument> _collection =
         context.GetCollection<FantasyProsRookieRankingDocument>("fantasyPros_rookie_rankings");
 
     public async Task<IReadOnlyList<FantasyProsRookieRankingDocument>> GetBySleeperPlayerIdsAsync(
-        IEnumerable<string> sleeperPlayerIds,
-        CancellationToken cancellationToken = default)
+        IEnumerable<string> sleeperPlayerIds, CancellationToken cancellationToken = default)
     {
         var filter = Builders<FantasyProsRookieRankingDocument>.Filter
             .In(x => x.SleeperPlayerId, sleeperPlayerIds);
-
-        return await _collection
-            .Find(filter)
-            .ToListAsync(cancellationToken);
+        return await _collection.Find(filter).ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<FantasyProsRookieRankingDocument>> GetAllBySeasonAsync(
-            int season, CancellationToken cancellationToken = default)
+        int season, CancellationToken cancellationToken = default)
     {
         var filter = Builders<FantasyProsRookieRankingDocument>.Filter
             .Eq(x => x.Season, season);
-        return await _collection
-            .Find(filter)
-            .SortBy(x => x.FantasyProsRank)
-            .ToListAsync(cancellationToken);
+        return await _collection.Find(filter).SortBy(x => x.FantasyProsRank).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<FantasyProsRookieRankingDocument>> GetAllBySeasonAndTypeAsync(
+        int season, string rankingType, CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<FantasyProsRookieRankingDocument>.Filter.And(
+            Builders<FantasyProsRookieRankingDocument>.Filter.Eq(x => x.Season, season),
+            Builders<FantasyProsRookieRankingDocument>.Filter.Eq(x => x.RankingType, rankingType));
+        return await _collection.Find(filter).SortBy(x => x.FantasyProsRank).ToListAsync(cancellationToken);
     }
 
     public async Task UpsertAsync(
-        FantasyProsRookieRankingDocument document,
-        CancellationToken cancellationToken = default)
+        FantasyProsRookieRankingDocument document, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<FantasyProsRookieRankingDocument>.Filter
-            .Eq(x => x.SleeperPlayerId, document.SleeperPlayerId);
+        // Key on SleeperPlayerId + RankingType so rookie and dynasty records
+        // for the same player coexist without overwriting each other.
+        var filter = Builders<FantasyProsRookieRankingDocument>.Filter.And(
+            Builders<FantasyProsRookieRankingDocument>.Filter.Eq(x => x.SleeperPlayerId, document.SleeperPlayerId),
+            Builders<FantasyProsRookieRankingDocument>.Filter.Eq(x => x.RankingType, document.RankingType));
 
         var update = Builders<FantasyProsRookieRankingDocument>.Update
             .SetOnInsert(x => x.Id, document.Id)
@@ -52,16 +54,15 @@ public class FantasyProsRookieRankingRepository(MongoDbContext context)
             .Set(x => x.PositionRank, document.PositionRank)
             .Set(x => x.Tier, document.Tier)
             .Set(x => x.Season, document.Season)
+            .Set(x => x.RankingType, document.RankingType)
             .Set(x => x.ImportedAt, document.ImportedAt);
 
         await _collection.UpdateOneAsync(
-            filter, update,
-            new UpdateOptions { IsUpsert = true },
-            CancellationToken.None);
+            filter, update, new UpdateOptions { IsUpsert = true }, CancellationToken.None);
     }
+
     public async Task UpsertManyAsync(
-        IEnumerable<FantasyProsRookieRankingDocument> documents,
-        CancellationToken cancellationToken = default)
+        IEnumerable<FantasyProsRookieRankingDocument> documents, CancellationToken cancellationToken = default)
     {
         foreach (var doc in documents)
             await UpsertAsync(doc, cancellationToken);
