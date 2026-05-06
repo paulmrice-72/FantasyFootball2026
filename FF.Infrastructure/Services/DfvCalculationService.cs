@@ -120,7 +120,8 @@ public class DfvCalculationService(
         var fpRookieRankings = await fpRookieRepository.GetAllBySeasonAsync(season, ct);
         var fpRankMap = fpRookieRankings
             .Where(r => r.SleeperPlayerId is not null)
-            .ToDictionary(r => r.SleeperPlayerId!, r => r.FantasyProsRank);
+            .GroupBy(r => r.SleeperPlayerId!)
+            .ToDictionary(g => g.Key, g => g.OrderBy(r => r.FantasyProsRank).First().FantasyProsRank);
 
         // ── Build raw DFV for every player ──────────────────────────────────
         var rawDfvMap = new Dictionary<string, double>();

@@ -70,6 +70,12 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
                     ImportedAt = DateTime.UtcNow
                 });
             }
+            // Deduplicate on Id — if the same player appears twice in the CSV
+            // (e.g. listed under both offense and flex rankings), keep the better rank.
+            documents = documents
+                .GroupBy(d => d.Id)
+                .Select(g => g.OrderBy(d => d.FantasyProsRank).First())
+                .ToList();
 
             await rankingRepository.UpsertManyAsync(documents, cancellationToken);
 
