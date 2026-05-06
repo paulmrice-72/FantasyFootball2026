@@ -33,9 +33,8 @@ public class CareerSimulationServiceTests
 
     private void SetupNoSimResults() =>
         _simResultRepo
-            .Setup(r => r.GetMostRecentBySleeperIdAsync(
-                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((SimulationResultDocument?)null);
+            .Setup(r => r.GetAllSeasonAveragesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
 
     private void SetupNoCurve() =>
         _agingCurveRepo
