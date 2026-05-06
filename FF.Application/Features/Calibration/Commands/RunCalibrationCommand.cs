@@ -27,12 +27,12 @@ public class RunCalibrationCommandHandler(
 
         // Load FantasyPros dynasty rankings — we use the imported FP rookie+veteran rankings
         // FP overall dynasty rankings are stored in fantasyPros_rookie_rankings for the current season
-        var fpRankings = await fpRookieRepo.GetAllBySeasonAsync(request.Season, ct);
+        var fpRankings = await fpRookieRepo.GetAllBySeasonAndTypeAsync(request.Season, "Dynasty", ct);
 
         if (fpRankings.Count == 0)
             throw new InvalidOperationException(
-                $"No FantasyPros rankings found for season {request.Season}. " +
-                "Import the FP dynasty CSV on the Admin Imports page first.");
+                $"No FantasyPros dynasty rankings found for season {request.Season}. " +
+                "Import the FP Dynasty CSV on the Admin Imports page first.");
 
         // Build a lookup: SleeperPlayerId → FP rank
         var fpBySleeperIdRank = fpRankings

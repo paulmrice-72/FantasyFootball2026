@@ -104,7 +104,49 @@
         <MudAlert Severity="_fpSeverity" Dense="true" Class="mt-3">@_fpStatus</MudAlert>
     }
 </MudPaper>
+@* ── FantasyPros Dynasty Rankings Import ─────────────────────────────── *@
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Class="mr-2" Style="vertical-align:middle;" />
+        FantasyPros Dynasty Rankings
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        Full dynasty overall rankings (all positions). Used by the calibration harness.
+        Download from FantasyPros → Dynasty → Overall Rankings → Export CSV.
+    </MudText>
+    <MudGrid Spacing="2" AlignItems="Center">
+        <MudItem xs="12" sm="6" md="4">
+            <MudFileUpload T="IBrowserFile" FilesChanged="OnDynastyRankingsFileSelected" Accept=".csv">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" FullWidth="true">
+                        Select Dynasty CSV
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.CloudUpload"
+                       OnClick="ImportDynastyRankings"
+                       Disabled="_dynastyImportBusy || _dynastyFile == null">
+                @if (_dynastyImportBusy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    @("Importing...")
+                }
+                else
+                {
 
+                    @("Import Dynasty Rankings")
+                }
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+    @if (!string.IsNullOrEmpty(_dynastyImportStatus))
+    {
+        <MudAlert Severity="_dynastyImportSeverity" Dense="true" Class="mt-3">@_dynastyImportStatus</MudAlert>
+    }
+</MudPaper>
 @* ── PFF Draft Grades ─────────────────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
@@ -782,7 +824,49 @@
         }
         finally { _calibBusy = false; }
     }
+    // ── FP Dynasty Rankings Import ─────────────────────────────────────────
+    private IBrowserFile? _dynastyFile;
+    private bool _dynastyImportBusy;
+    private string _dynastyImportStatus = string.Empty;
+    private Severity _dynastyImportSeverity = Severity.Info;
 
+    private void OnDynastyRankingsFileSelected(IBrowserFile file) => _dynastyFile = file;
+
+    private async Task ImportDynastyRankings()
+    {
+        if (_dynastyFile == null) return;
+        _dynastyImportBusy = true;
+        _dynastyImportStatus = string.Empty;
+        try
+        {
+            using var stream = _dynastyFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var csvContent = await reader.ReadToEndAsync();
+
+            var http = HttpFactory.CreateClient("AuthAPI");
+            var resp = await http.PostAsJsonAsync(
+                "api/v1/admin/import/fantasypros-dynasty",
+                new { CsvContent = csvContent, Season = _season });
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<ImportResult>();
+                _dynastyImportSeverity = result?.Unmatched > 50 ? Severity.Warning : Severity.Success;
+                _dynastyImportStatus = $"✓ Imported {result?.Imported} players — {result?.Unmatched} unmatched.";
+            }
+            else
+            {
+                _dynastyImportStatus = $"Failed ({(int)resp.StatusCode}): {await resp.Content.ReadAsStringAsync()}";
+                _dynastyImportSeverity = Severity.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _dynastyImportStatus = $"Error: {ex.Message}";
+            _dynastyImportSeverity = Severity.Error;
+        }
+        finally { _dynastyImportBusy = false; }
+    }
     private record CalibrationResultDto(
         double SpearmanRho,
         double AvgAbsDelta,
@@ -799,4 +883,5 @@
     private record JobResultDto(string Message, int Count);
     private record BriefGenerateResultDto(int Generated, int Failed, List<string> Errors);
     private record SeedResultDto(int Seeded, int Skipped, int Unmatched);
+    private record ImportResult(int Imported, int Unmatched, int Season);
 }
