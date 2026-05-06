@@ -108,7 +108,9 @@ public class DfvCalculationService(
         // Replaces N serial GetByPlayerIdAsync calls — the primary perf bottleneck.
         // With ~700 players this was 700 round-trips; now it's 1.
         var allSims = await careerSimRepository.GetAllBySeasonAsync(season, ct);
-        var simMap = allSims.ToDictionary(s => s.SleeperPlayerId, s => s);
+        var simMap = allSims
+            .GroupBy(s => s.SleeperPlayerId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.ComputedAt).First());
 
         logger.LogInformation(
             "Bulk-loaded {Count} career sims for season {Season}",

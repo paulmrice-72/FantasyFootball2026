@@ -161,7 +161,10 @@ public class CareerSimulationService(
         // ── Simulate each player ─────────────────────────────────────────────
         foreach (var position in positions)
         {
-            var players = await playerRepository.GetByPositionAsync(position, ct);
+            var players = (await playerRepository.GetByPositionAsync(position, ct))
+                .GroupBy(p => p.SleeperPlayerId)
+                .Select(g => g.First())
+                .ToList();
             var posStr = position.ToString();
 
             foreach (var player in players)
