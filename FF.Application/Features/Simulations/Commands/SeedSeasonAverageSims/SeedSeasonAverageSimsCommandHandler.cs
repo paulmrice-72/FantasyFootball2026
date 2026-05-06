@@ -16,13 +16,10 @@ public class SeedSeasonAverageSimsCommandHandler(
 {
     private static readonly HashSet<string> SkillPositions = ["QB", "RB", "WR", "TE"];
 
-    // nflverse publishes player_stats_{season}.csv after season ends (typically Feb).
-    // Columns relevant to us: season, season_type, player_name, position,
-    //   games, receptions, fantasy_points, recent_team
-    // Half-PPR = fantasy_points + (receptions * 0.5)
-    // Season average = halfPpr / games
-    private const string NflverseUrlTemplate =
+    private const string SeasonAggregateUrlTemplate =
         "https://github.com/nflverse/nflverse-data/releases/download/player_stats/player_stats_season_{0}.csv";
+    private const string WeeklyUrlTemplate =
+        "https://github.com/nflverse/nflverse-data/releases/download/player_stats/player_stats_{0}.csv";
 
     public async Task<SeedSeasonAverageSimsResult> Handle(
         SeedSeasonAverageSimsCommand request,
@@ -30,71 +27,136 @@ public class SeedSeasonAverageSimsCommandHandler(
     {
         logger.LogInformation("SeedSeasonAverageSims starting for season {Season}", request.Season);
 
-        // 1 — Download CSV
-        var url = string.Format(NflverseUrlTemplate, request.Season);
-        var http = httpClientFactory.CreateClient("NflverseClient");
         string csv;
-        try
+        bool isWeeklyFile;
+
+        // ── 1: Get CSV content ────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(request.CsvContent))
         {
-            csv = await http.GetStringAsync(url, cancellationToken);
+            // Provided directly — detect weekly vs aggregate by header
+            csv = request.CsvContent;
+            var firstLine = csv.Split('\n').FirstOrDefault() ?? string.Empty;
+            isWeeklyFile = firstLine.Contains(",week,", StringComparison.OrdinalIgnoreCase)
+                || firstLine.StartsWith("week,", StringComparison.OrdinalIgnoreCase)
+                || firstLine.Contains("\"week\"", StringComparison.OrdinalIgnoreCase);
+            logger.LogInformation(
+                "Using provided CSV content — weeklyFile={IsWeekly}, season {Season}",
+                isWeeklyFile, request.Season);
         }
-        catch (Exception ex)
+        else
         {
-            logger.LogError(ex, "Failed to download nflverse player_stats for season {Season}", request.Season);
-            throw new InvalidOperationException(
-                $"Could not download player_stats_{request.Season}.csv from nflverse. " +
-                $"The file may not be published yet (typically available in February after season ends).", ex);
+            // Try season aggregate from nflverse first
+            var http = httpClientFactory.CreateClient("NflverseClient");
+            var seasonUrl = string.Format(SeasonAggregateUrlTemplate, request.Season);
+            string? downloaded = null;
+            isWeeklyFile = false;
+
+            try
+            {
+                var response = await http.GetAsync(seasonUrl, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var firstLine = content.Split('\n').FirstOrDefault() ?? string.Empty;
+                    bool looksWeekly = firstLine.Contains(",week,", StringComparison.OrdinalIgnoreCase)
+                        || firstLine.StartsWith("week,", StringComparison.OrdinalIgnoreCase)
+                        || firstLine.Contains("\"week\"", StringComparison.OrdinalIgnoreCase);
+                    if (!looksWeekly)
+                    {
+                        downloaded = content;
+                        logger.LogInformation("Using season aggregate file for {Season}", request.Season);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Season aggregate download failed for {Season} — trying weekly file", request.Season);
+            }
+
+            if (downloaded is null)
+            {
+                // Fall back to weekly file
+                var weeklyUrl = string.Format(WeeklyUrlTemplate, request.Season);
+                logger.LogInformation(
+                    "Season aggregate not available for {Season} — falling back to weekly URL", request.Season);
+                try
+                {
+                    downloaded = await http.GetStringAsync(weeklyUrl, cancellationToken);
+                    isWeeklyFile = true;
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        $"Neither season aggregate (player_stats_season_{request.Season}.csv) " +
+                        $"nor weekly file (player_stats_{request.Season}.csv) could be downloaded from nflverse. " +
+                        $"Upload the CSV directly via the Admin import panel instead.", ex);
+                }
+            }
+
+            csv = downloaded;
         }
 
-        // 2 — Parse CSV
+        // ── 2: Parse CSV ──────────────────────────────────────────────────────
         var rows = ParseCsv(csv);
-        // After parsing, validate we got the right file
-        if (rows.Count > 0 && rows[0].ContainsKey("week"))
-            throw new InvalidOperationException(
-                $"Downloaded file appears to be the weekly stats file (contains 'week' column). " +
-                $"Expected the season aggregate file player_stats_season_{request.Season}.csv.");
+        logger.LogInformation(
+            "Parsed {Count} rows from CSV (weeklyFile={IsWeekly})", rows.Count, isWeeklyFile);
 
-        logger.LogInformation("Parsed {Count} rows from nflverse player_stats_{Season}.csv",
-            rows.Count, request.Season);
+        // ── 3: Filter / aggregate ─────────────────────────────────────────────
+        List<Dictionary<string, string>> eligible;
 
-        // 3 — Filter: REG season, skill positions, games > 0
-        var eligible = rows
-            .Where(r =>
-                r.TryGetValue("season_type", out var st) && st.Trim() == "REG" &&
-                r.TryGetValue("position", out var pos) && SkillPositions.Contains(pos.Trim().ToUpper()) &&
-                r.TryGetValue("games", out var gamesStr) &&
-                decimal.TryParse(gamesStr, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var gamesVal) &&
-                gamesVal > 0)
-            .ToList();
+        if (isWeeklyFile)
+        {
+            eligible = AggregateWeeklyToSeason(rows);
+            logger.LogInformation(
+                "{Count} players after aggregating weekly rows for {Season}",
+                eligible.Count, request.Season);
+        }
+        else
+        {
+            eligible = rows
+                .Where(r =>
+                    r.TryGetValue("season_type", out var st) && st.Trim() == "REG"
+                    && r.TryGetValue("position", out var pos)
+                    && SkillPositions.Contains(pos.Trim().ToUpper())
+                    && r.TryGetValue("games", out var gamesStr)
+                    && decimal.TryParse(gamesStr, NumberStyles.Float,
+                        CultureInfo.InvariantCulture, out var g) && g > 0)
+                .ToList();
+            logger.LogInformation("{Count} eligible REG-season rows after filtering", eligible.Count);
+        }
 
-        logger.LogInformation("{Count} eligible REG-season rows after filtering", eligible.Count);
-
-        // 4 — Load all Sleeper players for name matching
+        // ── 4: Load Sleeper players for name matching ─────────────────────────
         var allPlayers = await playerRepository.GetAllAsync(cancellationToken);
         var playerByNormalizedName = allPlayers
             .Where(p => p.SleeperPlayerId != null && p.FullName != null)
             .GroupBy(p => NormalizeName(p.FullName!))
             .ToDictionary(g => g.Key, g => g.First());
 
-        // 5 — Build sim docs
+        // ── 5: Build sim docs ─────────────────────────────────────────────────
         var toUpsert = new List<SimulationResultDocument>();
         int skipped = 0, unmatched = 0;
 
         foreach (var row in eligible)
         {
             var playerName = row.GetValueOrDefault("player_display_name")
-                          ?? row.GetValueOrDefault("player_name")
-                          ?? string.Empty;
+                ?? row.GetValueOrDefault("player_name")
+                ?? string.Empty;
             var position = row["position"].Trim().ToUpper();
             var nflTeam = row.GetValueOrDefault("recent_team") ?? string.Empty;
 
             if (!int.TryParse(row.GetValueOrDefault("games"), out var games) || games <= 0)
-            { skipped++; continue; }
+            {
+                skipped++;
+                continue;
+            }
 
             if (!decimal.TryParse(row.GetValueOrDefault("fantasy_points"),
                     NumberStyles.Float, CultureInfo.InvariantCulture, out var stdPts))
-            { skipped++; continue; }
+            {
+                skipped++;
+                continue;
+            }
 
             if (!decimal.TryParse(row.GetValueOrDefault("receptions"),
                     NumberStyles.Float, CultureInfo.InvariantCulture, out var receptions))
@@ -103,7 +165,6 @@ public class SeedSeasonAverageSimsCommandHandler(
             var halfPprTotal = stdPts + (receptions * 0.5m);
             var avgHalfPpr = halfPprTotal / games;
 
-            // Name match to Sleeper player
             var normalized = NormalizeName(playerName);
             if (!playerByNormalizedName.TryGetValue(normalized, out var player))
             {
@@ -119,16 +180,16 @@ public class SeedSeasonAverageSimsCommandHandler(
                 Position = position,
                 NflTeam = nflTeam,
                 Season = request.Season,
-                Week = 0,              // sentinel: season average
+                Week = 0,
                 Median = Math.Round(avgHalfPpr, 2),
                 Floor = Math.Round(avgHalfPpr * 0.6m, 2),
                 Ceiling = Math.Round(avgHalfPpr * 1.5m, 2),
                 Mean = Math.Round(avgHalfPpr, 2),
                 BaseProjection = Math.Round(avgHalfPpr, 2),
-                StandardDeviation = Math.Round(avgHalfPpr * 0.20m, 2), // ~20% StdDev as approximation
+                StandardDeviation = Math.Round(avgHalfPpr * 0.20m, 2),
                 BoomProbability = 0.20m,
                 BustProbability = 0.15m,
-                Iterations = 0,              // not a simulation run — seeded from actuals
+                Iterations = 0,
                 ScoringFormat = "HalfPPR",
                 CalculatedAt = DateTime.UtcNow,
                 OpponentTeam = string.Empty,
@@ -139,7 +200,8 @@ public class SeedSeasonAverageSimsCommandHandler(
         }
 
         logger.LogInformation(
-            "Upserting {Count} season-average sim docs for season {Season} (skipped={Skip}, unmatched={Unmatched})",
+            "Upserting {Count} season-average sim docs for season {Season} " +
+            "(skipped={Skip}, unmatched={Unmatched})",
             toUpsert.Count, request.Season, skipped, unmatched);
 
         await simRepository.UpsertBatchAsync(toUpsert, cancellationToken);
@@ -150,7 +212,65 @@ public class SeedSeasonAverageSimsCommandHandler(
             Unmatched: unmatched);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static List<Dictionary<string, string>> AggregateWeeklyToSeason(
+        List<Dictionary<string, string>> weeklyRows)
+    {
+        var eligible = weeklyRows
+            .Where(r =>
+                r.TryGetValue("season_type", out var st) && st.Trim() == "REG"
+                && r.TryGetValue("position", out var pos)
+                && SkillPositions.Contains(pos.Trim().ToUpper())
+                && r.TryGetValue("fantasy_points", out var fp)
+                && decimal.TryParse(fp, NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out _))
+            .ToList();
+
+        return eligible
+            .GroupBy(r =>
+            {
+                var name = r.GetValueOrDefault("player_display_name")
+                    ?? r.GetValueOrDefault("player_name")
+                    ?? string.Empty;
+                var pos = r["position"].Trim().ToUpper();
+                return $"{name}|{pos}";
+            })
+            .Select(g =>
+            {
+                var sample = g.First();
+
+                var totalPts = g.Sum(r =>
+                    decimal.TryParse(r.GetValueOrDefault("fantasy_points"),
+                        NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : 0m);
+
+                var totalRec = g.Sum(r =>
+                    decimal.TryParse(r.GetValueOrDefault("receptions"),
+                        NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : 0m);
+
+                var gamesPlayed = g.Count(r =>
+                    decimal.TryParse(r.GetValueOrDefault("fantasy_points"),
+                        NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0);
+
+                if (gamesPlayed == 0) return null;
+
+                return new Dictionary<string, string>
+                {
+                    ["player_display_name"] = sample.GetValueOrDefault("player_display_name")
+                        ?? sample.GetValueOrDefault("player_name")
+                        ?? string.Empty,
+                    ["position"] = sample["position"].Trim().ToUpper(),
+                    ["recent_team"] = sample.GetValueOrDefault("recent_team") ?? string.Empty,
+                    ["season_type"] = "REG",
+                    ["games"] = gamesPlayed.ToString(),
+                    ["fantasy_points"] = totalPts.ToString(CultureInfo.InvariantCulture),
+                    ["receptions"] = totalRec.ToString(CultureInfo.InvariantCulture),
+                };
+            })
+            .Where(r => r is not null)
+            .Select(r => r!)
+            .ToList();
+    }
 
     private static string NormalizeName(string name) =>
         name.ToLowerInvariant()
@@ -195,32 +315,24 @@ public class SeedSeasonAverageSimsCommandHandler(
         for (int i = 0; i < line.Length; i++)
         {
             char c = line[i];
-
             if (c == '"')
             {
-                // Handle escaped quotes ("")
                 if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
                 {
                     current.Append('"');
-                    i++; // skip next quote
+                    i++;
                 }
-                else
-                {
-                    inQuotes = !inQuotes;
-                }
+                else inQuotes = !inQuotes;
             }
             else if (c == ',' && !inQuotes)
             {
                 result.Add(current.ToString());
                 current.Clear();
             }
-            else
-            {
-                current.Append(c);
-            }
+            else current.Append(c);
         }
 
-        result.Add(current.ToString()); // last field
+        result.Add(current.ToString());
         return result.ToArray();
     }
 }
