@@ -36,6 +36,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.IdGenerators;
+using MongoDB.Bson.Serialization.Options;
 using MongoDB.Bson.Serialization.Serializers;
 
 namespace FF.Infrastructure;
@@ -340,8 +341,11 @@ public static class DependencyInjection
                     cm.AutoMap();
                     cm.SetIgnoreExtraElements(true);
                     cm.MapIdMember(c => c.Id)
-                      .SetIdGenerator(StringObjectIdGenerator.Instance)
-                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                        .SetIdGenerator(StringObjectIdGenerator.Instance)
+                        .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                    cm.MapMember(c => c.AgeValueMap)
+                        .SetSerializer(new DictionaryInterfaceImplementerSerializer<Dictionary<int, double>>(
+                            DictionaryRepresentation.ArrayOfDocuments));
                 });
             }
 

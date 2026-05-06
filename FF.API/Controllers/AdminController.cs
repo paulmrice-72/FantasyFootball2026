@@ -379,6 +379,35 @@ public class AdminController(
             : BadRequest(result.Error);
     }
 
+    [HttpPost("import/seed-season-averages-csv")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> SeedSeasonAveragesCsv(
+      [FromBody] SeedSeasonAveragesCsvRequest request,
+      [FromServices] IMediator mediator,
+      CancellationToken ct)
+    {
+        if (request.Season < 2020 || request.Season > DateTime.UtcNow.Year + 1)
+            return BadRequest($"Season must be between 2020 and {DateTime.UtcNow.Year + 1}.");
+
+        if (string.IsNullOrWhiteSpace(request.CsvContent))
+            return BadRequest("CsvContent is required.");
+
+        logger.LogInformation(
+            "Admin triggered season-average sim seed via CSV upload — season {Season}", request.Season);
+
+        var result = await mediator.Send(
+            new SeedSeasonAverageSimsCommand(request.Season, request.CsvContent), ct);
+
+        return Ok(new
+        {
+            Message = $"Season-average sim seed complete for {request.Season}.",
+            result.Seeded,
+            result.Skipped,
+            result.Unmatched
+        });
+    }
+
+    public record SeedSeasonAveragesCsvRequest(string CsvContent, int Season);
     // ── Request records ─────────────────────────────────────────────────────
     public record RunJobRequest(int Season);
 

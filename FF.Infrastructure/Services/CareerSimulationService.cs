@@ -19,6 +19,21 @@ public class CareerSimulationService(
     private const int ProjectYears = 5;
     private const int CurrentSeason = 2026;
 
+    // ── Empirical Bayes shrinkage ─────────────────────────────────────────────
+    // credibility = min(YearsExp, 5) / (min(YearsExp, 5) + K)
+    // blended     = credibility × raw + (1 - credibility) × prior
+    // K=3: rookie → 0% credibility (full prior), 5yr vet → 62.5% (cap)
+    // Admin-configurable in a future sprint (ADMIN-WEIGHT-001).
+    private const double ShrinkageK = 3.0;
+
+    private static readonly Dictionary<string, double> PositionPriors = new()
+    {
+        ["QB"] = 14.0,  // median starter, excludes top-tier inflation
+        ["RB"] = 9.5,   // accounts for committee backs
+        ["WR"] = 9.0,   // slot + role players drag median down
+        ["TE"] = 7.5,   // heavy TE2 population
+    };
+
     private static readonly Dictionary<string, double> BaseInjuryRisk = new()
     {
         ["QB"] = 0.12,
@@ -51,45 +66,99 @@ public class CareerSimulationService(
         ["TE"] = 6.0
     };
 
+    private static readonly Dictionary<string, double> PostPeakWindow = new()
+    {
+        ["QB"] = 8.0,
+        ["RB"] = 5.0,
+        ["WR"] = 9.0,
+        ["TE"] = 8.0,
+    };
+
     public async Task<List<CareerSimulationDocument>> SimulateAllPlayersAsync(
-        int season,
-        CancellationToken ct = default)
+        int season, CancellationToken ct = default)
     {
         var results = new List<CareerSimulationDocument>();
         var positions = new[] { Position.QB, Position.RB, Position.WR, Position.TE };
 
-        // ── Bulk-load aging curves ─────────────────────────────────────────
+        // ── Bulk-load aging curves ───────────────────────────────────────────
         var curves = new Dictionary<string, AgingCurveDocument?>();
         foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
             curves[pos] = await agingCurveRepository.GetByPositionAsync(pos, ct);
 
-        // ── Bulk-load ALL season-average sim results in ONE query ──────────
-        // Replaces per-player serial DB calls in GetBaselineFppgAsync.
-        // With ~700 players × up to 3 season fallbacks = up to 2,100 queries
-        // eliminated and replaced with 1 query + in-memory lookups.
+        // ── Bulk-load ALL season-average sim results in ONE query ────────────
         var allSimResults = await simulationResultRepository.GetAllSeasonAveragesAsync(ct);
-
         logger.LogInformation(
             "Bulk-loaded {Count} season-average sim results for baseline lookup",
             allSimResults.Count);
 
-        // Primary lookup: SleeperPlayerId → best (most recent season) result
+        // Multi-season merge — average 2024+2025 where both exist.
+        // Prevents one outlier season (Darnold 2024: 18.1) from seeding
+        // an inflated 5-year projection. Uses best single season only as fallback.
         var simByPlayerId = allSimResults
-            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0)
+            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0
+                && r.Week == 0) // season-average sentinel only
             .GroupBy(r => r.SleeperPlayerId!)
             .ToDictionary(
                 g => g.Key,
-                g => g.OrderByDescending(r => r.Season).First());
+                g =>
+                {
+                    var seasons = g.OrderByDescending(r => r.Season).ToList();
+                    if (seasons.Count == 1) return seasons[0];
+                    // Average the two most recent seasons
+                    var recent = seasons[0];
+                    var prior = seasons[1];
+                    return new SimulationResultDocument
+                    {
+                        SleeperPlayerId = recent.SleeperPlayerId,
+                        PlayerName = recent.PlayerName,
+                        Position = recent.Position,
+                        NflTeam = recent.NflTeam,
+                        Season = recent.Season,
+                        Week = 0,
+                        Median = Math.Round((recent.Median + prior.Median) / 2, 2),
+                        Floor = Math.Round((recent.Floor + prior.Floor) / 2, 2),
+                        Ceiling = Math.Round((recent.Ceiling + prior.Ceiling) / 2, 2),
+                        Mean = Math.Round((recent.Mean + prior.Mean) / 2, 2),
+                        BaseProjection = Math.Round((recent.BaseProjection + prior.BaseProjection) / 2, 2),
+                        StandardDeviation = recent.StandardDeviation,
+                        ScoringFormat = recent.ScoringFormat,
+                        CalculatedAt = DateTime.UtcNow,
+                        PlayerRole = "SeasonAverage"
+                    };
+                });
 
-        // Fallback lookup: "PlayerName|Position" → best result
         var simByNamePos = allSimResults
-            .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0)
+            .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0
+                && r.Week == 0)
             .GroupBy(r => $"{r.PlayerName}|{r.Position}")
             .ToDictionary(
                 g => g.Key,
-                g => g.OrderByDescending(r => r.Season).First());
+                g =>
+                {
+                    var seasons = g.OrderByDescending(r => r.Season).ToList();
+                    if (seasons.Count == 1) return seasons[0];
+                    var recent = seasons[0];
+                    var prior = seasons[1];
+                    return new SimulationResultDocument
+                    {
+                        SleeperPlayerId = recent.SleeperPlayerId,
+                        PlayerName = recent.PlayerName,
+                        Position = recent.Position,
+                        Season = recent.Season,
+                        Week = 0,
+                        Median = Math.Round((recent.Median + prior.Median) / 2, 2),
+                        Floor = Math.Round((recent.Floor + prior.Floor) / 2, 2),
+                        Ceiling = Math.Round((recent.Ceiling + prior.Ceiling) / 2, 2),
+                        Mean = Math.Round((recent.Mean + prior.Mean) / 2, 2),
+                        BaseProjection = Math.Round((recent.BaseProjection + prior.BaseProjection) / 2, 2),
+                        StandardDeviation = recent.StandardDeviation,
+                        ScoringFormat = recent.ScoringFormat,
+                        CalculatedAt = DateTime.UtcNow,
+                        PlayerRole = "SeasonAverage"
+                    };
+                });
 
-        // ── Simulate each player ───────────────────────────────────────────
+        // ── Simulate each player ─────────────────────────────────────────────
         foreach (var position in positions)
         {
             var players = await playerRepository.GetByPositionAsync(position, ct);
@@ -104,13 +173,8 @@ public class CareerSimulationService(
                 try
                 {
                     var sim = SimulatePlayer(
-                        player,
-                        posStr,
-                        curves[posStr],
-                        season,
-                        simByPlayerId,
-                        simByNamePos);
-
+                        player, posStr, curves[posStr], season,
+                        simByPlayerId, simByNamePos);
                     results.Add(sim);
                 }
                 catch (Exception ex)
@@ -125,8 +189,7 @@ public class CareerSimulationService(
     }
 
     public async Task<CareerSimulationDocument> SimulatePlayerCareerAsync(
-        string sleeperPlayerId,
-        CancellationToken ct = default)
+        string sleeperPlayerId, CancellationToken ct = default)
     {
         var player = await playerRepository.GetBySleeperIdAsync(sleeperPlayerId, ct)
             ?? throw new InvalidOperationException($"Player not found: {sleeperPlayerId}");
@@ -134,9 +197,7 @@ public class CareerSimulationService(
         var posStr = player.Position.ToString();
         var curve = await agingCurveRepository.GetByPositionAsync(posStr, ct);
 
-        // Single-player path still uses targeted queries (infrequent, acceptable)
         var allSimResults = await simulationResultRepository.GetAllSeasonAveragesAsync(ct);
-
         var simByPlayerId = allSimResults
             .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0)
             .GroupBy(r => r.SleeperPlayerId!)
@@ -150,7 +211,7 @@ public class CareerSimulationService(
         return SimulatePlayer(player, posStr, curve, CurrentSeason, simByPlayerId, simByNamePos);
     }
 
-    // ── Private ────────────────────────────────────────────────────────────────
+    // ── Private ───────────────────────────────────────────────────────────────
 
     private CareerSimulationDocument SimulatePlayer(
         FF.Domain.Entities.Player player,
@@ -162,15 +223,14 @@ public class CareerSimulationService(
     {
         var currentAge = player.Age ?? (player.YearsExperience == 0 ? 21 : 22);
 
-        var simBaseline = GetBaselineFppg(
-            player.SleeperPlayerId!,
-            player.FullName,
-            position,
-            simByPlayerId,
-            simByNamePos);
+        var rawBaseline = GetBaselineFppg(
+            player.SleeperPlayerId!, player.FullName, position,
+            simByPlayerId, simByNamePos);
 
-        var baseFppg = GetBaselineFppgWithContext(position, simBaseline, player);
-        if (baseFppg <= 0) baseFppg = GetDepthLevelFppg(position);
+        var baseFppg = ApplyShrinkage(position, rawBaseline, player);
+
+        if (baseFppg <= 0)
+            baseFppg = GetDepthLevelFppg(position);
 
         var yearProjections = new List<CareerYearProjection>();
         var rng = new Random();
@@ -196,6 +256,7 @@ public class CareerSimulationService(
             }
 
             Array.Sort(yearSamples);
+
             var median = yearSamples[Iterations / 2];
             var floor = yearSamples[(int)(Iterations * 0.10)];
             var ceiling = yearSamples[(int)(Iterations * 0.90)];
@@ -242,8 +303,8 @@ public class CareerSimulationService(
     }
 
     /// <summary>
-    /// Pure in-memory baseline lookup — no DB calls.
-    /// Uses pre-loaded dictionaries built once at the start of SimulateAllPlayersAsync.
+    /// Pure in-memory baseline lookup — no DB calls. Volatility discount
+    /// removed; shrinkage handles low-evidence players naturally.
     /// </summary>
     private double GetBaselineFppg(
         string sleeperPlayerId,
@@ -270,83 +331,69 @@ public class CareerSimulationService(
 
         if (sim is null) return 0;
 
-        var baseline = (double)sim.Median;
-
-        // Availability discount — high stdDev/median ratio signals injury-prone
-        // or limited-sample players whose baseline overstates true dynasty value.
-        // Threshold 0.19: captures Tua (0.20), McCaffrey-type injury histories
-        // without penalizing normal variance (Allen ~0.15, Hurts ~0.16).
-        if (position == "QB" && sim.StandardDeviation > 0 && sim.Median > 0)
-        {
-            var volatility = (double)sim.StandardDeviation / (double)sim.Median;
-            if (volatility > 0.19)
-            {
-                baseline *= 0.82; // ~18% discount — moves Tua from 16.5 → 13.5
-                logger.LogDebug(
-                    "Volatility discount applied to {Player} — ratio {Ratio:F2}",
-                    playerName, volatility);
-            }
-        }
-
-        return baseline;
+        return (double)sim.Median;
     }
 
-    private static double GetBaselineFppgWithContext(
+    /// <summary>
+    /// Empirical Bayes shrinkage — blends raw FPPG toward position prior
+    /// weighted by evidence (years of experience).
+    ///
+    /// credibility = min(YearsExp, 5) / (min(YearsExp, 5) + K)
+    /// blended     = credibility × raw + (1 - credibility) × prior
+    ///
+    /// K=3:  0 yrs → 0% (full prior)  1 yr → 25%  3 yrs → 50%  5+ yrs → 62.5%
+    ///
+    /// Journeyman cap: age 28+, exp 8+ QBs capped at 21.0 FPPG blended.
+    /// Catches Mayfield/Darnold/Goff without affecting Allen/Burrow/Hurts.
+    ///
+    /// Age regression multipliers apply in SimulatePlayer AFTER this returns.
+    /// </summary>
+    private static double ApplyShrinkage(
         string position,
-        double simulationBaseline,
+        double rawFppg,
         FF.Domain.Entities.Player player)
     {
-        if (player.YearsExperience == 0)
+        var prior = PositionPriors.GetValueOrDefault(position, 9.0);
+        var clampedExp = Math.Min(player.YearsExperience ?? 0, 5);
+        var credibility = clampedExp / (clampedExp + ShrinkageK);
+
+        // Rookie QB with no sim data and no draft pedigree → depth-level,
+        // not prior. Prior (14.0) is still too high for unknown QBs —
+        // it puts Beck/Green/Simpson in the top 20 via superflex inflation.
+        if (position == "QB" && (player.YearsExperience ?? 0) == 0 && rawFppg <= 0)
         {
-            if (simulationBaseline > 0) return simulationBaseline;
-            if (position == "QB")
-            {
-                var pick = player.DraftPick ?? 999;
-                var round = player.DraftRound ?? 99;
-                return (round == 1 && pick <= 5)
-                    ? GetStarterAverageFppg(position)
-                    : GetDepthLevelFppg(position);
-            }
-            return GetStarterAverageFppg(position);
+            var round = player.DraftRound ?? 99;
+            var pick = player.DraftPick ?? 999;
+            // Only top-5 picks earn the starter prior; everyone else is depth
+            return (round == 1 && pick <= 5)
+                ? prior          // 14.0 — high pick, legitimate prospect
+                : GetDepthLevelFppg(position);  // 6.0 — unknown/late round
         }
 
-        if (simulationBaseline > 0)
+        // Standard shrinkage blend
+        var blended = rawFppg <= 0
+            ? prior
+            : credibility * rawFppg + (1.0 - credibility) * prior;
+
+        // Journeyman QB cap — Mayfield (31/exp8), Darnold (28/exp8), Goff tier.
+        // Allen age 29 exp 7, Burrow age 29 exp 6 — NOT caught.
+        if (position == "QB"
+            && (player.Age ?? 0) >= 28
+            && (player.YearsExperience ?? 0) >= 8)
+        {
+            blended = Math.Min(blended, 21.0);
+        }
+
+        // Starter threshold gate — experienced depth players pulled UP toward
+        // prior get floored to depth level instead.
+        if ((player.YearsExperience ?? 0) >= 1)
         {
             var threshold = StarterThreshold.GetValueOrDefault(position, 7.0);
-            if (player.YearsExperience >= 1 && simulationBaseline < threshold)
+            if (blended < threshold)
                 return GetDepthLevelFppg(position);
-
-            if (position == "QB" && player.YearsExperience <= 3)
-            {
-                var credibilityCap = player.YearsExperience switch
-                {
-                    1 => 14.0,
-                    2 => 16.0,
-                    3 => 18.0,
-                    _ => simulationBaseline
-                };
-                return Math.Min(simulationBaseline, credibilityCap);
-            }
-
-            // Veteran age regression — QBs 30+ should not project from a single
-            // peak season. Cap at a declining-starter level to prevent career-year
-            // outliers (Mayfield 2024, Goff 2024) from inflating dynasty value.
-            if (position == "QB" && player.YearsExperience >= 7)
-            {
-                var ageCap = (player.Age ?? 30) switch
-                {
-                    >= 32 => 16.0,
-                    31 => 18.0,
-                    30 => 20.0,
-                    _ => simulationBaseline
-                };
-                return Math.Min(simulationBaseline, ageCap);
-            }
-
-            return simulationBaseline;
         }
 
-        return 0.1;
+        return blended;
     }
 
     private static double GetStarterAverageFppg(string position) => position switch
@@ -407,6 +454,8 @@ public class CareerSimulationService(
         var peak = PeakAges.GetValueOrDefault(position, 26);
         if (age <= peak)
             return 0.6 + 0.4 * ((double)(age - 18) / (peak - 18));
-        return Math.Max(0.1, 1.0 - 0.9 * Math.Pow((double)(age - peak) / 15.0, 2));
+
+        var window = PostPeakWindow.GetValueOrDefault(position, 8.0);
+        return Math.Max(0.1, 1.0 - 0.9 * Math.Pow((double)(age - peak) / window, 2));
     }
 }
