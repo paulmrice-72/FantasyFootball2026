@@ -4,6 +4,9 @@
 @using MudBlazor
 @inject HttpClient Http
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject LeagueStateService LeagueState
+@inject NflContextClientService NflContext
 @attribute [Authorize]
 
 <PageTitle>Projection Weight Tuner</PageTitle>
@@ -11,11 +14,13 @@
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
     <MudText Typo="Typo.h5" Class="mb-1">Projection Weight Tuner</MudText>
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
-        Adjust how the regression model weighs each factor when calculating projections.
+        Adjust projection model weights, preview the effect, then push to simulations to propagate across My Matchup, Waiver Wire, and Optimizer.
     </MudText>
 
     <MudGrid>
-        <MudItem xs="12" md="5">
+
+        @* ── LEFT: Weight Profile ── *@
+        <MudItem xs="12" md="4">
             <MudPaper Class="pa-6" Elevation="2">
                 <MudText Typo="Typo.h6" Class="mb-4">Weight Profile</MudText>
 
@@ -30,8 +35,7 @@
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
                     How much more weight recent games get vs older games
                 </MudText>
-                <MudSlider @bind-Value="_recentGameWeight"
-                           Min="0.1" Max="0.9" Step="0.05"
+                <MudSlider @bind-Value="_recentGameWeight" Min="0.1" Max="0.9" Step="0.05"
                            Color="Color.Primary" Class="mb-4" />
 
                 <MudText Typo="Typo.subtitle2" Class="mb-1">
@@ -40,8 +44,7 @@
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
                     How much snap percentage affects the projection
                 </MudText>
-                <MudSlider @bind-Value="_snapCountWeight"
-                           Min="0.0" Max="0.4" Step="0.05"
+                <MudSlider @bind-Value="_snapCountWeight" Min="0.0" Max="0.4" Step="0.05"
                            Color="Color.Primary" Class="mb-4" />
 
                 <MudText Typo="Typo.subtitle2" Class="mb-1">
@@ -50,61 +53,55 @@
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
                     How much the opponent defensive ranking adjusts the projection
                 </MudText>
-                <MudSlider @bind-Value="_matchupWeight"
-                           Min="0.0" Max="0.5" Step="0.05"
+                <MudSlider @bind-Value="_matchupWeight" Min="0.0" Max="0.5" Step="0.05"
                            Color="Color.Primary" Class="mb-4" />
 
                 <MudDivider Class="mb-4" />
 
-                <MudNumericField @bind-Value="_minGamesRequired"
-                                 Label="Minimum Games Required"
-                                 Min="2" Max="8"
-                                 Variant="Variant.Outlined"
-                                 Class="mb-4" />
+                <MudNumericField @bind-Value="_minGamesRequired" Label="Minimum Games Required"
+                                 Min="2" Max="8" Variant="Variant.Outlined" Class="mb-4" />
 
-                <MudNumericField @bind-Value="_lookbackWeeks"
-                                 Label="Lookback Window (weeks)"
-                                 Min="4" Max="17"
-                                 Variant="Variant.Outlined"
-                                 Class="mb-4" />
+                <MudNumericField @bind-Value="_lookbackWeeks" Label="Lookback Window (weeks)"
+                                 Min="4" Max="17" Variant="Variant.Outlined" Class="mb-4" />
 
                 <MudStack Row="true" Spacing="2">
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               OnClick="SaveProfile"
-                               Disabled="_saving">
-                        @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
-                        else { <span>Save Profile</span> }
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               OnClick="SaveProfile" Disabled="_saving">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+
+                            <span>Save Profile</span>
+                        }
                     </MudButton>
-                    <MudButton Variant="Variant.Outlined"
-                               Color="Color.Secondary"
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
                                OnClick="ResetToDefaults">
-                        Reset Defaults
+                        Reset
                     </MudButton>
                 </MudStack>
             </MudPaper>
         </MudItem>
 
-        <MudItem xs="12" md="7">
+        @* ── RIGHT: Preview + Push ── *@
+        <MudItem xs="12" md="8">
             <MudPaper Class="pa-6" Elevation="2">
-                <MudText Typo="Typo.h6" Class="mb-4">Run Projections</MudText>
 
-                <MudGrid>
-                    <MudItem xs="6">
-                        <MudNumericField @bind-Value="_season"
-                                         Label="Season"
-                                         Variant="Variant.Outlined" />
+                @* Controls bar *@
+                <MudGrid Spacing="2" Class="mb-4">
+                    <MudItem xs="6" sm="3">
+                        <MudNumericField @bind-Value="_season" Label="Season"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" />
                     </MudItem>
-                    <MudItem xs="6">
-                        <MudNumericField @bind-Value="_week"
-                                         Label="Week"
-                                         Min="1" Max="18"
-                                         Variant="Variant.Outlined" />
+                    <MudItem xs="6" sm="3">
+                        <MudNumericField @bind-Value="_week" Label="Week" Min="1" Max="18"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" />
                     </MudItem>
-                    <MudItem xs="12">
-                        <MudSelect @bind-Value="_position"
-                                   Label="Position"
-                                   Variant="Variant.Outlined">
+                    <MudItem xs="12" sm="3">
+                        <MudSelect @bind-Value="_position" Label="Position"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense">
                             <MudSelectItem Value="@("")">All</MudSelectItem>
                             <MudSelectItem Value="@("QB")">QB</MudSelectItem>
                             <MudSelectItem Value="@("RB")">RB</MudSelectItem>
@@ -112,22 +109,82 @@
                             <MudSelectItem Value="@("TE")">TE</MudSelectItem>
                         </MudSelect>
                     </MudItem>
-                    <MudItem xs="12">
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Success"
-                                   FullWidth="true"
-                                   OnClick="LoadProjections"
-                                   Disabled="_loading">
-                            @if (_loading) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> }
-                            else { <span>Load Projections</span> }
-                        </MudButton>
+                    <MudItem xs="12" sm="3" Class="d-flex align-end">
+                        <MudTooltip Text="Show only your rostered players">
+                            <MudToggleIconButton @bind-Toggled="_myRosterOnly"
+                                                 Icon="@Icons.Material.Filled.Groups"
+                                                 ToggledIcon="@Icons.Material.Filled.Groups"
+                                                 Color="Color.Default"
+                                                 ToggledColor="Color.Primary"
+                                                 Title="My Roster" />
+                        </MudTooltip>
                     </MudItem>
                 </MudGrid>
 
+                @* Action buttons *@
+                <MudStack Row="true" Spacing="2" Class="mb-4">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Preview"
+                               OnClick="LoadPreview" Disabled="_loading">
+                        @if (_loading)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+
+                            <span>Preview</span>
+                        }
+                    </MudButton>
+
+                    <MudTooltip Text="Saves profile, recalculates projections, and runs simulations for this season/week. Updates My Matchup, Waiver Wire, and Optimizer.">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.Publish"
+                                   OnClick="PushToSimulations"
+                                   Disabled="_pushing || _saving">
+                            @if (_pushing)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>@_pushStatus</span>
+                            }
+                            else
+                            {
+                                <span>Save &amp; Push to Simulations</span>
+                            }
+                        </MudButton>
+                    </MudTooltip>
+                </MudStack>
+
+                @* Push progress *@
+                @if (_pushComplete)
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                        Pipeline complete — @_pushResultSummary. My Matchup, Waiver Wire, and Optimizer are up to date.
+                    </MudAlert>
+                }
+
+                @* My Roster filter indicator *@
+                @if (_myRosterOnly && !string.IsNullOrEmpty(LeagueState.ActiveLeagueId))
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                        Showing your roster for the active league (@_rosterPlayerIds.Count players).
+                    </MudAlert>
+                }
+                else if (_myRosterOnly && string.IsNullOrEmpty(LeagueState.ActiveLeagueId))
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                        No active league selected — showing all players.
+                    </MudAlert>
+                }
+
+                @* Preview table *@
                 @if (_projections.Any())
                 {
-                    <MudTable Items="_projections" Dense="true" Hover="true"
-                              Class="mt-4" SortLabel="Sort By">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                        Regression model output — weights applied, pre-simulation. @(_myRosterOnly && _rosterPlayerIds.Any() ? $"Filtered to your {_displayedProjections.Count()} rostered players." : $"{_displayedProjections.Count()} players.")
+                    </MudText>
+                    <MudTable Items="_displayedProjections" Dense="true" Hover="true"
+                              FixedHeader="true" Height="420px" SortLabel="Sort By">
                         <HeaderContent>
                             <MudTh><MudTableSortLabel SortBy="new Func<ProjectionRow, object>(x => x.PlayerName)">Player</MudTableSortLabel></MudTh>
                             <MudTh>Pos</MudTh>
@@ -139,7 +196,13 @@
                             <MudTh>R²</MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd>@context.PlayerName</MudTd>
+                            <MudTd>
+                                <MudButton Variant="Variant.Text"
+                                           Style="font-weight:600; color: var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                           OnClick="@(() => _ = OpenPlayerCard(context))">
+                                    @context.PlayerName
+                                </MudButton>
+                            </MudTd>
                             <MudTd>
                                 <MudChip T="string" Size="Size.Small" Color="@PositionColor(context.Position)">
                                     @context.Position
@@ -154,37 +217,62 @@
                         </RowTemplate>
                     </MudTable>
                 }
+
             </MudPaper>
         </MudItem>
+
     </MudGrid>
 </MudContainer>
 
 @code {
+    // ── Weight profile state ──────────────────────────────────────────
     private string _profileName = "Default";
     private double _recentGameWeight = 0.6;
     private double _snapCountWeight = 0.15;
     private double _matchupWeight = 0.25;
     private int _minGamesRequired = 3;
     private int _lookbackWeeks = 12;
-    private int _season = 2024;
-    private int _week = 18;
+
+    // ── Preview controls ──────────────────────────────────────────────
+    private int _season;
+    private int _week;
     private string _position = "";
+    private bool _myRosterOnly = false;
+
+    // ── Loading state ─────────────────────────────────────────────────
     private bool _saving;
     private bool _loading;
-    private List<ProjectionRow> _projections = [];
+    private bool _pushing;
+    private bool _pushComplete;
+    private string _pushStatus = "";
+    private string _pushResultSummary = "";
 
+    // ── Data ──────────────────────────────────────────────────────────
+    private List<ProjectionRow> _projections = [];
+    private HashSet<string> _rosterPlayerIds = [];
+
+    private IEnumerable<ProjectionRow> _displayedProjections =>
+        _myRosterOnly && _rosterPlayerIds.Any()
+            ? _projections.Where(p => _rosterPlayerIds.Contains(p.SleeperPlayerId))
+            : _projections;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
-        await LoadProfile();
+        var (season, week) = await NflContext.GetContextAsync();
+        _season = season;
+        _week = Math.Max(1, week);
+
+        await Task.WhenAll(LoadProfile(), LoadRoster());
     }
 
+    // ── Profile ───────────────────────────────────────────────────────
     private async Task LoadProfile()
     {
         try
         {
             var profile = await Http.GetFromJsonAsync<WeightProfileResponse>(
                 "api/v1/projections/weight-profile");
-
             if (profile is not null)
             {
                 _profileName = profile.ProfileName;
@@ -203,21 +291,17 @@
         _saving = true;
         try
         {
-            var response = await Http.PostAsJsonAsync("api/v1/projections/weight-profile",
-                new
-                {
-                    profileName = _profileName,
-                    recentGameWeight = (decimal)_recentGameWeight,
-                    snapCountWeight = (decimal)_snapCountWeight,
-                    matchupWeight = (decimal)_matchupWeight,
-                    minGamesRequired = _minGamesRequired,
-                    lookbackWeeks = _lookbackWeeks
-                });
-
-            if (response.IsSuccessStatusCode)
-                Snackbar.Add("Profile saved", Severity.Success);
-            else
-                Snackbar.Add("Failed to save profile", Severity.Error);
+            var response = await Http.PostAsJsonAsync("api/v1/projections/weight-profile", new
+            {
+                profileName = _profileName,
+                recentGameWeight = (decimal)_recentGameWeight,
+                snapCountWeight = (decimal)_snapCountWeight,
+                matchupWeight = (decimal)_matchupWeight,
+                minGamesRequired = _minGamesRequired,
+                lookbackWeeks = _lookbackWeeks
+            });
+            Snackbar.Add(response.IsSuccessStatusCode ? "Profile saved" : "Failed to save profile",
+                response.IsSuccessStatusCode ? Severity.Success : Severity.Error);
         }
         finally { _saving = false; }
     }
@@ -232,9 +316,27 @@
         _lookbackWeeks = 12;
     }
 
-    private async Task LoadProjections()
+    // ── Roster filter ─────────────────────────────────────────────────
+    private async Task LoadRoster()
+    {
+        var leagueId = LeagueState.ActiveLeagueId;
+        if (string.IsNullOrEmpty(leagueId)) return;
+        try
+        {
+            var roster = await Http.GetFromJsonAsync<RosterDto>(
+                $"api/v1/team/roster?sleeperLeagueId={leagueId}");
+            _rosterPlayerIds = roster?.Players
+                .Select(p => p.SleeperPlayerId)
+                .ToHashSet() ?? [];
+        }
+        catch { /* roster filter unavailable */ }
+    }
+
+    // ── Preview ───────────────────────────────────────────────────────
+    private async Task LoadPreview()
     {
         _loading = true;
+        _pushComplete = false;
         try
         {
             var url = $"api/v1/projections?season={_season}&week={_week}";
@@ -245,14 +347,103 @@
             _projections = (results ?? [])
                 .OrderByDescending(x => x.ProjectedPointsHalfPpr)
                 .Select(x => new ProjectionRow(
-                    x.PlayerName, x.Position, x.NflTeam,
+                    x.PlayerName, x.Position, x.NflTeam, x.SleeperPlayerId,
                     x.ProjectedPointsHalfPpr, x.ProjectedPointsPpr,
                     x.ProjectedPoints, x.GameSampleSize, x.RSquared))
                 .ToList();
+
+            if (!_projections.Any())
+                Snackbar.Add("No projection data for this season/week. Run Preview after pushing.", Severity.Warning);
         }
         finally { _loading = false; }
     }
 
+    // ── Push to simulations ───────────────────────────────────────────
+    private async Task PushToSimulations()
+    {
+        _pushing = true;
+        _pushComplete = false;
+        _pushResultSummary = "";
+
+        try
+        {
+            // Step 1 — Save profile
+            _pushStatus = "Saving profile...";
+            StateHasChanged();
+            await SaveProfile();
+
+            // Step 2 — Recalculate projections
+            _pushStatus = "Calculating projections...";
+            StateHasChanged();
+            var calcResponse = await Http.PostAsync(
+                $"api/v1/projections/calculate?season={_season}&week={_week}", null);
+            if (!calcResponse.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Projection calculation failed.", Severity.Error);
+                return;
+            }
+            var calcResult = await calcResponse.Content.ReadFromJsonAsync<CalcResult>();
+
+            // Step 3 — Run simulations
+            _pushStatus = "Running simulations...";
+            StateHasChanged();
+            var simResponse = await Http.PostAsync(
+                $"api/v1/projections/simulate?season={_season}&week={_week}", null);
+            if (!simResponse.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Simulation run failed.", Severity.Error);
+                return;
+            }
+
+            // Step 4 — Auto-refresh preview
+            _pushStatus = "Refreshing preview...";
+            StateHasChanged();
+            await LoadPreview();
+
+            _pushResultSummary = $"{calcResult?.ProjectionsCalculated ?? 0} players projected, simulations complete for {_season} Week {_week}"; _pushComplete = true;
+            Snackbar.Add("Pipeline complete — simulations updated.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Push failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _pushing = false;
+            _pushStatus = "";
+        }
+    }
+
+    // ── Player card dialog ────────────────────────────────────────────
+    private async Task OpenPlayerCard(ProjectionRow row)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: row.SleeperPlayerId,
+            FullName: row.PlayerName,
+            Position: row.Position,
+            NflTeam: row.NflTeam,
+            Age: null,
+            DraftRound: null, DraftPick: null, CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{row.SleeperPlayerId}.jpg",
+            FantasyProsRank: null, FantasyProsTier: null,
+            PffGrade: null, PffRank: null, ConsensusAdp: null,
+            DynastyScore: 0, DraftCapitalScore: 0, PositionalScore: 0,
+            ValuationBlendScore: 0, FantasyProsScore: 0, PffGradeScore: 0,
+            ConsensusAdpScore: 0, AgeMultiplier: 0, AthleticismSignalScore: 0,
+            AthleticismScore: null, SpeedScore: null, FortyYard: null,
+            LeagueId: LeagueState.ActiveLeagueId);
+
+        var parameters = new DialogParameters<PlayerCardDialog>
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
+        };
+
+        await DialogService.ShowAsync<PlayerCardDialog>(row.PlayerName, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────
     private static Color PositionColor(string position) => position switch
     {
         "QB" => Color.Error,
@@ -262,8 +453,9 @@
         _ => Color.Default
     };
 
+    // ── DTOs ──────────────────────────────────────────────────────────
     private record ProjectionRow(
-        string PlayerName, string Position, string NflTeam,
+        string PlayerName, string Position, string NflTeam, string SleeperPlayerId,
         decimal HalfPpr, decimal Ppr, decimal Std,
         int GameSampleSize, decimal RSquared);
 
@@ -273,7 +465,12 @@
         int LookbackWeeks, string ProfileName);
 
     private record ProjectionResponse(
-        string PlayerName, string Position, string NflTeam,
+        string PlayerName, string Position, string NflTeam, string SleeperPlayerId,
         decimal ProjectedPoints, decimal ProjectedPointsPpr,
         decimal ProjectedPointsHalfPpr, int GameSampleSize, decimal RSquared);
+
+    private record CalcResult(int ProjectionsCalculated, int PlayersSkipped);
+
+    private record RosterDto(List<RosterPlayerDto> Players);
+    private record RosterPlayerDto(string SleeperPlayerId);
 }
