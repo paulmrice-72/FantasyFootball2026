@@ -29,4 +29,5 @@ public record RookieTargetDto(
     int PositionRank,
     string? Tier,
     string NeedLevel,
-    string FitLabel);
+    string FitLabel,
+    double? ConsensusAdp = null);   // ← dynasty rookie ADP from consensus_adp collection

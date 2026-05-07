@@ -25,16 +25,12 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
                 return Result.Failure<ImportFantasyProsResult>(
                     new Error("FP_IMPORT_EMPTY", "CSV contained no parseable rows"));
 
-            // Load all rookies for name matching
             var rookies = await playerRepository.GetRookiesAsync(null, cancellationToken);
 
-            // Use first match if normalized names collide — handles placeholder/duplicate names
             var nameMap = rookies
                 .Where(p => p.SleeperPlayerId != null)
                 .GroupBy(p => NormalizeName(p.FullName))
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.First().SleeperPlayerId!);
+                .ToDictionary(g => g.Key, g => g.First().SleeperPlayerId!);
 
             var documents = new List<FantasyProsRookieRankingDocument>();
             int unmatched = 0;
@@ -43,22 +39,23 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
             {
                 var normalizedName = NormalizeName(row.PlayerName);
                 var sleeperPlayerId = nameMap.TryGetValue(normalizedName, out var id)
-                    ? id
-                    : string.Empty;
+                    ? id : string.Empty;
 
                 if (string.IsNullOrEmpty(sleeperPlayerId))
                 {
-                    logger.LogWarning(
-                        "FP Import: No Sleeper match for '{PlayerName}'",
-                        row.PlayerName);
+                    logger.LogWarning("FP Import: No Sleeper match for '{PlayerName}'", row.PlayerName);
                     unmatched++;
                 }
 
+                // Id includes season so imports from different years don't collide.
+                // Format: "{sleeperPlayerId}-{season}" for matched, "unmatched-{rank}-{season}" for misses.
+                var docId = string.IsNullOrEmpty(sleeperPlayerId)
+                    ? $"unmatched-{row.Rank}-{request.Season}"
+                    : $"{sleeperPlayerId}-{request.Season}";
+
                 documents.Add(new FantasyProsRookieRankingDocument
                 {
-                    Id = string.IsNullOrEmpty(sleeperPlayerId)
-                        ? $"unmatched-{row.Rank}"
-                        : sleeperPlayerId,
+                    Id = docId,
                     SleeperPlayerId = sleeperPlayerId,
                     PlayerName = row.PlayerName,
                     Position = row.Position,
@@ -70,8 +67,8 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
                     ImportedAt = DateTime.UtcNow
                 });
             }
-            // Deduplicate on Id — if the same player appears twice in the CSV
-            // (e.g. listed under both offense and flex rankings), keep the better rank.
+
+            // Deduplicate on Id — same player listed twice in CSV, keep better rank.
             documents = documents
                 .GroupBy(d => d.Id)
                 .Select(g => g.OrderBy(d => d.FantasyProsRank).First())
@@ -94,17 +91,12 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
         }
     }
 
-    // ── CSV parsing ──────────────────────────────────────────────────────
-    // Handles FantasyPros ECR export format:
-    // "RK","PLAYER NAME",TEAM,"POS","AGE","BEST","WORST","AVG.","STD.DEV","ECR VS. ADP"
+    // ── CSV parsing ──────────────────────────────────────────────────────────
     private static List<FpRow> ParseCsv(string csv)
     {
         var rows = new List<FpRow>();
-
-        // Normalize line endings — FantasyPros exports CRLF on Windows
         var normalized = csv.Replace("\r\n", "\n").Replace("\r", "\n");
         var lines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
         if (lines.Length < 2) return rows;
 
         var headers = lines[0].Split(',')
@@ -134,7 +126,6 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
             var rankStr = Safe(cols, iRank).Trim();
             if (!int.TryParse(rankStr, out var rank)) continue;
 
-            // Strip position rank suffix: "RB1" -> "RB", "WR2" -> "WR"
             var rawPos = Safe(cols, iPos).ToUpperInvariant();
             var position = new string(rawPos.TakeWhile(char.IsLetter).ToArray());
             var posRankStr = new string(rawPos.SkipWhile(char.IsLetter).ToArray());
@@ -160,31 +151,25 @@ public class ImportFantasyProsRookieRankingsCommandHandler(
 
         foreach (var ch in line)
         {
-            if (ch == '"')
-            {
-                inQuotes = !inQuotes;
-            }
+            if (ch == '"') { inQuotes = !inQuotes; }
             else if (ch == ',' && !inQuotes)
             {
                 result.Add(current.ToString().Trim().Trim('"'));
                 current.Clear();
             }
-            else
-            {
-                current.Append(ch);
-            }
+            else { current.Append(ch); }
         }
         result.Add(current.ToString().Trim().Trim('"'));
         return result.ToArray();
     }
 
-    private static string Safe(string[] cols, int idx)
-        => idx >= 0 && idx < cols.Length ? cols[idx].Trim().Trim('"') : string.Empty;
+    private static string Safe(string[] cols, int idx) =>
+        idx >= 0 && idx < cols.Length ? cols[idx].Trim().Trim('"') : string.Empty;
 
-    // Normalize: lowercase, strip punctuation, handle "Jr", "III" etc
-    private static string NormalizeName(string name)
-        => new string([.. name.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c == ' ')])
+    private static string NormalizeName(string name) =>
+        new string([.. name.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c == ' ')])
             .Trim();
 
-    private record FpRow(int Rank, string PlayerName, string Position, string Team, int PositionRank, string? Tier);
+    private record FpRow(int Rank, string PlayerName, string Position,
+        string Team, int PositionRank, string? Tier);
 }

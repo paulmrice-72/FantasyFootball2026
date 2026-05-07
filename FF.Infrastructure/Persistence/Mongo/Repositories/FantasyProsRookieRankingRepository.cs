@@ -1,4 +1,5 @@
-﻿using FF.Application.Interfaces.Persistence;
+﻿// FF.Infrastructure/Persistence/Mongo/Repositories/FantasyProsRookieRankingRepository.cs
+using FF.Application.Interfaces.Persistence;
 using FF.Domain.Documents;
 using FF.Infrastructure.Persistence.Mongo;
 using MongoDB.Driver;
@@ -38,11 +39,10 @@ public class FantasyProsRookieRankingRepository(MongoDbContext context) : IFanta
     public async Task UpsertAsync(
         FantasyProsRookieRankingDocument document, CancellationToken cancellationToken = default)
     {
-        // Key on SleeperPlayerId + RankingType so rookie and dynasty records
-        // for the same player coexist without overwriting each other.
-        var filter = Builders<FantasyProsRookieRankingDocument>.Filter.And(
-            Builders<FantasyProsRookieRankingDocument>.Filter.Eq(x => x.SleeperPlayerId, document.SleeperPlayerId),
-            Builders<FantasyProsRookieRankingDocument>.Filter.Eq(x => x.RankingType, document.RankingType));
+        // Key on Id (which includes season + rankingType suffix) — prevents cross-season
+        // duplicate key collisions that occur when filtering on SleeperPlayerId + RankingType alone.
+        var filter = Builders<FantasyProsRookieRankingDocument>.Filter
+            .Eq(d => d.Id, document.Id);
 
         var update = Builders<FantasyProsRookieRankingDocument>.Update
             .SetOnInsert(x => x.Id, document.Id)

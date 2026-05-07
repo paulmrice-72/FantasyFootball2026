@@ -1,5 +1,4 @@
 ﻿// FF.Application/Features/DraftTools/Commands/ImportConsensusAdp/ImportConsensusAdpCommandHandler.cs
-using FF.Application.Features.DraftTools.Commands.ImportPffDraftGrades;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Domain.Documents;
@@ -11,9 +10,13 @@ namespace FF.Application.Features.DraftTools.Commands.ImportConsensusAdp;
 
 /// <summary>
 /// Imports consensus rookie ADP from CSV.
-/// Expected header: Rank,PlayerName,Position,Team,ADP
+///
+/// Supported column layouts (case-insensitive):
+///   FantasyPros ADP export:  "Rank","Player","Team","Bye","POS","AVG"
+///   Manual/custom format:    Rank,PlayerName,Position,Team,ADP
+///
+/// Position suffix (e.g. RB1, WR2) is stripped automatically.
 /// ADP is a pick number (1.0 = best) — stored raw, normalized in the calculator.
-/// Source label (e.g. "NFFC", "Underdog", "Sleeper") stored for transparency.
 /// </summary>
 public class ImportConsensusAdpCommandHandler(
     IConsensusAdpRepository adpRepository,
@@ -35,9 +38,8 @@ public class ImportConsensusAdpCommandHandler(
             var rookies = await playerRepository.GetRookiesAsync(null, cancellationToken);
             var nameMap = rookies
                 .Where(p => p.SleeperPlayerId != null)
-                .ToDictionary(
-                    p => NormalizeName(p.FullName),
-                    p => p.SleeperPlayerId!);
+                .GroupBy(p => NormalizeName(p.FullName))
+                .ToDictionary(g => g.Key, g => g.First().SleeperPlayerId!);
 
             var documents = new List<ConsensusAdpDocument>();
             int unmatched = 0;
@@ -71,6 +73,13 @@ public class ImportConsensusAdpCommandHandler(
                 });
             }
 
+            // Dedup on Id — same player can appear twice in FP exports (e.g. listed at
+            // multiple positions). Keep the lower (better) ADP rank entry.
+            documents = documents
+                .GroupBy(d => d.Id)
+                .Select(g => g.OrderBy(d => d.AdpRank ?? int.MaxValue).First())
+                .ToList();
+
             await adpRepository.UpsertManyAsync(documents, cancellationToken);
 
             logger.LogInformation(
@@ -88,35 +97,67 @@ public class ImportConsensusAdpCommandHandler(
         }
     }
 
-    // Expected header: Rank,PlayerName,Position,Team,ADP
+    /// <summary>
+    /// Parses both supported CSV layouts:
+    ///   FP export:  "Rank","Player","Team","Bye","POS","AVG"
+    ///   Custom:      Rank,PlayerName,Position,Team,ADP
+    /// Column lookup is case-insensitive and tries multiple aliases per field.
+    /// </summary>
     private static List<AdpRow> ParseCsv(string csv)
     {
         var rows = new List<AdpRow>();
-        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var lines = csv.Replace("\r\n", "\n").Replace("\r", "\n")
+                       .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
         if (lines.Length < 2) return rows;
 
         var headers = lines[0].Split(',')
-            .Select(h => h.Trim().ToLowerInvariant())
+            .Select(h => h.Trim().Trim('"').ToLowerInvariant())
             .ToArray();
 
-        int IdxOf(string name) => Array.IndexOf(headers, name);
+        // Accept multiple column name aliases per field
+        int IdxOf(params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var idx = Array.IndexOf(headers, name);
+                if (idx >= 0) return idx;
+            }
+            return -1;
+        }
 
         int iRank = IdxOf("rank");
-        int iName = IdxOf("playername");
-        int iPos = IdxOf("position");
+        int iName = IdxOf("player", "playername", "player name");   // FP uses "player"
+        int iPos = IdxOf("pos", "position");
         int iTeam = IdxOf("team");
-        int iAdp = IdxOf("adp");
+        int iAdp = IdxOf("avg", "adp");                            // FP uses "avg"
+
+        if (iRank < 0 || iName < 0 || iAdp < 0)
+        {
+            // Return empty — caller will surface the "no parseable rows" error
+            return rows;
+        }
 
         foreach (var line in lines.Skip(1))
         {
             var cols = line.Split(',');
-            if (!int.TryParse(Safe(cols, iRank), out var rank)) continue;
-            if (!double.TryParse(Safe(cols, iAdp), out var adp)) continue;
+
+            var rankStr = Safe(cols, iRank);
+            if (!int.TryParse(rankStr, out var rank)) continue;
+
+            var adpStr = Safe(cols, iAdp);
+            if (!double.TryParse(adpStr, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var adp)) continue;
+
+            // Strip position rank suffix: "RB1" → "RB", "WR12" → "WR"
+            var rawPos = Safe(cols, iPos).ToUpperInvariant();
+            var position = new string(rawPos.TakeWhile(char.IsLetter).ToArray());
+            if (string.IsNullOrEmpty(position)) position = "UNK";
 
             rows.Add(new AdpRow(
                 Rank: rank,
                 PlayerName: Safe(cols, iName),
-                Position: Safe(cols, iPos).ToUpperInvariant(),
+                Position: position,
                 Team: Safe(cols, iTeam).ToUpperInvariant(),
                 Adp: Math.Max(1, adp)));
         }

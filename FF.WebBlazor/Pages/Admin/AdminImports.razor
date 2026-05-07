@@ -1,4 +1,4 @@
-﻿@page "/admin/imports"
+@page "/admin/imports"
 @layout AdminLayout
 @attribute [Authorize(Roles = "Admin")]
 @using Microsoft.AspNetCore.Authorization
@@ -24,6 +24,28 @@
         <MudIcon Icon="@Icons.Material.Filled.Memory" Class="mr-2" Style="vertical-align:middle;" />
         Simulation Pipeline
     </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Stats Sync</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Downloads weekly player stats from nflverse and computes usage metrics. Run every Tuesday in-season. No file needed — auto API pull.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Snap Count Sync</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Pulls snap counts from nflverse to update snap% metrics used in breakout detection. Run after Stats Sync each Tuesday.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Projections &amp; Sims</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Runs regression projections then Monte Carlo simulations for the current week. Feeds My Matchup, Optimizer, and Waiver Wire. Run after Stats Sync.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Seed Season Averages (button)</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Downloads the prior-year season aggregate from nflverse (<code>player_stats_season_{year}.csv</code>) and upserts into simulation_results (Week=0). Only available after nflverse publishes the season file (~March). Use the CSV upload below during the off-season.</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="3">
         <MudItem xs="12" sm="6" md="3">
             <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
@@ -74,12 +96,27 @@
         <MudIcon Icon="@Icons.Material.Filled.TableChart" Class="mr-2" Style="vertical-align:middle;" />
         Seed Season Averages — CSV Upload
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Upload a weekly player stats CSV from nflverse (<code>player_stats_{year}.csv</code>) when
-        the season aggregate is not yet published. The file will be aggregated to per-game season
-        averages and upserted into simulation_results (Week=0 sentinel).
-        Source: <a href="https://github.com/nflverse/nflverse-data/releases/tag/player_stats" target="_blank">nflverse player_stats release</a>
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Source</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        <a href="https://github.com/nflverse/nflverse-data/releases/tag/player_stats" target="_blank" style="color:var(--fc-cyan);">nflverse player_stats release</a>
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">File: <code>player_stats_{year}.csv</code> (weekly file, not season aggregate)</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">When to Run</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Off-season only — when the prior-year season aggregate is not yet published by nflverse (~Nov–Feb). The system aggregates weekly rows to per-game averages and seeds simulation_results (Week=0).</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Format</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Standard nflverse weekly CSV — no transformation needed. Max file size: 20MB. System filters to season_type=REG automatically.</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="5" md="4">
             <MudFileUpload T="IBrowserFile" FilesChanged="OnSeasonStatsFileSelected" Accept=".csv">
@@ -119,15 +156,33 @@
     }
 </MudPaper>
 
-@* ── FantasyPros Rankings ─────────────────────────────────────────────── *@
+@* ── FantasyPros Rookie Rankings ─────────────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
         <MudIcon Icon="@Icons.Material.Filled.FormatListNumbered" Class="mr-2" Style="vertical-align:middle;" />
         FantasyPros Rookie Rankings
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Export the rookie rankings CSV from FantasyPros and upload here. Replaces all existing FP rankings for the target season.
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Source &amp; Navigation</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        <a href="https://www.fantasypros.com/nfl/rankings/dynasty-rookie-overall.php" target="_blank" style="color:var(--fc-cyan);">FantasyPros → Dynasty → Rookie Rankings</a>
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">Click <strong>Export</strong> (top right of rankings table) → CSV</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">When to Run</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Immediately post-NFL Draft (late April). Re-run any time FP updates their consensus — typically weekly through August. Feeds rookie floor scoring in DFV pipeline.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Expected Format</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Standard FP ECR export — no transformation needed. Header row: <code>"RK","PLAYER NAME",TEAM,"POS","AGE","BEST","WORST","AVG.","STD.DEV","ECR VS. ADP"</code>. Position suffix (e.g. RB1) stripped automatically.</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="8">
             <MudFileUpload T="IBrowserFile" FilesChanged="@(f => _fpFile = f)" Accept=".csv">
@@ -158,16 +213,33 @@
     }
 </MudPaper>
 
-@* ── FantasyPros Dynasty Rankings Import ─────────────────────────────── *@
+@* ── FantasyPros Dynasty Rankings ─────────────────────────────────────── *@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1">
         <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Class="mr-2" Style="vertical-align:middle;" />
         FantasyPros Dynasty Rankings
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Full dynasty overall rankings (all positions). Used by the calibration harness.
-        Download from FantasyPros → Dynasty → Overall Rankings → Export CSV.
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Source &amp; Navigation</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        <a href="https://www.fantasypros.com/nfl/rankings/dynasty-overall.php" target="_blank" style="color:var(--fc-cyan);">FantasyPros → Dynasty → Overall Rankings</a>
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">Select <strong>Superflex</strong> from the format dropdown before exporting. Click <strong>Export</strong> → CSV.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">When to Run</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Before running the Calibration Harness below. Re-import any time you want a fresh benchmark — FP updates weekly. This is the calibration target, not a scoring input.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Expected Format</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Same ECR export format as rookie rankings. Header: <code>"RK",TIERS,"PLAYER NAME",TEAM,"POS",...`</code>. Covers all positions — not rookies only.</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="6" md="4">
             <MudFileUpload T="IBrowserFile" FilesChanged="OnDynastyRankingsFileSelected" Accept=".csv">
@@ -208,9 +280,29 @@
         <MudIcon Icon="@Icons.Material.Filled.Grade" Class="mr-2" Style="vertical-align:middle;" />
         PFF Draft Grades
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Upload the PFF post-draft grades CSV. Run after the NFL Draft completes.
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Source</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        <a href="https://www.pff.com/news/nfl-2026-nfl-draft-grades" target="_blank" style="color:var(--fc-cyan);">PFF — NFL Draft Grades article</a>
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">Free article published within 24h of draft end. No CSV download — copy grades into the format below manually or paste into a spreadsheet and export.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">When to Run</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Once per year, within a few days of the NFL Draft (late April). PFF grades are stable — re-import only if they update their grades, which is rare. Feeds PFF Grade signal in Dynasty Score breakdown.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Required CSV Format</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Must be manually constructed. Exact header required:</MudText>
+                    <code style="font-size:.75rem; color:var(--fc-cyan); display:block; margin-top:4px;">Rank,PlayerName,Position,Team,Grade</code>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">Grade is 0–100 (PFF scale). Example row: <code>1,Travis Hunter,WR,JAC,93.5</code></MudText>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="8">
             <MudFileUpload T="IBrowserFile" FilesChanged="@(f => _pffFile = f)" Accept=".csv">
@@ -245,11 +337,31 @@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color: var(--fc-amber);">
         <MudIcon Icon="@Icons.Material.Filled.SwapVert" Class="mr-2" Style="vertical-align:middle;" />
-        Consensus ADP
+        Consensus Rookie ADP
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Upload a consensus ADP CSV. Source label is stored alongside the data.
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Source &amp; Navigation</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        <a href="https://www.fantasypros.com/nfl/adp/dynasty-rookies.php" target="_blank" style="color:var(--fc-cyan);">FantasyPros → Dynasty → Rookie ADP</a>
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">Click <strong>Export</strong> → CSV. Set Source label to <strong>FantasyPros</strong>.</MudText>
+                    <MudText Typo="Typo.caption" Class="mt-2" Style="color:var(--mud-palette-text-secondary);">Note: FFC ADP (redraft) is separate — use the Sync button below. This import is for dynasty rookie ADP only.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">When to Run</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Post-draft (late April) then weekly through August as ADP stabilizes. Feeds Consensus ADP signal (15% weight) in Dynasty Score breakdown for rookies.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Required CSV Format</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Exact header required (case-insensitive):</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">The standard FP ADP export works directly — no header renaming needed. Importer accepts both <code>"Player"/"AVG"</code> (FP format) and <code>PlayerName/ADP</code> (custom). AVG is the consensus pick number (1.0 = first overall). Position suffix (RB1, WR2) stripped automatically.</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="5">
             <MudFileUpload T="IBrowserFile" FilesChanged="@(f => _adpFile = f)" Accept=".csv">
@@ -291,10 +403,20 @@
         <MudIcon Icon="@Icons.Material.Filled.Analytics" Class="mr-2" Style="vertical-align:middle;" />
         Dynasty Ranking Calibration
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Compares our dynasty rankings against FantasyPros top-200. Run after any DFV pipeline execution.
-        Targets: Spearman ρ ≥ 0.85 · Avg delta ≤ 8.0 · Top-10 overlap ≥ 7/10.
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">What It Does</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Compares our dynasty rankings against the FantasyPros Dynasty Overall benchmark. Computes Spearman ρ (rank correlation), average rank delta, and top-10 overlap. Requires FP Dynasty Rankings to be imported first.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Targets</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Spearman ρ ≥ 0.85 · Avg |Δ rank| ≤ 8.0 · Top-10 overlap ≥ 7/10. Run after any DFV pipeline execution to measure calibration drift. Current best: ρ = -10.02 (needs improvement).</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="6" md="3">
             <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
@@ -366,9 +488,11 @@
         <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" Style="vertical-align:middle;" />
         Writers' Room
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Generate articles for all active writer personas using current season/week context.
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Generates articles for all active writer personas using current season/week context. No file needed — runs against current DB state. Automated weekly via Hangfire. Trigger manually after a major roster transaction or to refresh content mid-week.</MudText>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudItem xs="12" sm="6" md="4">
         <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                    StartIcon="@Icons.Material.Filled.AutoStories"
@@ -385,10 +509,11 @@
         <MudIcon Icon="@Icons.Material.Filled.MilitaryTech" Class="mr-2" Style="vertical-align:middle;" />
         War Room Briefs
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Generate War Room Briefs for all users with active league memberships.
-        Uses the season and week set above. Mirrors what the Sunday 3am job does.
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Generates personalized War Room Briefs for all users with active league memberships. Mirrors what the Sunday 3am Hangfire job does. No file needed. Trigger manually to test brief generation or to push a mid-week brief. Uses the season and week shown at the top of this page.</MudText>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="6" md="4">
             <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
@@ -416,13 +541,29 @@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudText Typo="Typo.h6" Class="mb-1" Style="color:var(--fc-amber);">
         <MudIcon Icon="@Icons.Material.Filled.BarChart" Class="mr-2" Style="vertical-align:middle;" />
-        FFC Consensus ADP
+        FFC Consensus ADP (Redraft)
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-        Pull consensus ADP from Fantasy Football Calculator (free API). Runs weekly automatically.
-        Trigger manually after NFL Draft or if ADP shifts significantly.
-        <em>Attribution: ADP data provided by FantasyFootballCalculator.com</em>
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Source</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        <a href="https://fantasyfootballcalculator.com/api/v2/adp/ppr?teams=12&year=2026" target="_blank" style="color:var(--fc-cyan);">Fantasy Football Calculator API</a> — free, no key required.
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1"><em>Attribution: ADP data provided by FantasyFootballCalculator.com</em></MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">When to Run</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Runs automatically weekly via Hangfire. Trigger manually after the NFL Draft or major ADP shifts. Writes to <code>redraftAdpCache</code> (152 records). Used by Redraft Rankings — separate from Dynasty Rookie ADP above.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">No File Needed</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Fully automated API pull. No CSV required. Scores K and DST positions are excluded automatically.</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudItem xs="12" sm="6" md="4">
         <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                    StartIcon="@Icons.Material.Filled.Sync"
@@ -443,10 +584,25 @@
         <MudIcon Icon="@Icons.Material.Filled.PlayCircle" Class="mr-2" Style="vertical-align:middle;" />
         Post-Draft Data Jobs
     </MudText>
-    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
-        Run these in order after the draft. Each job reads the season set above.
-        Combine Sync → Draft Picks Sync → Career Sims → DFV Calculation.
-    </MudText>
+    <MudExpansionPanels Class="mb-3" Elevation="0">
+        <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Run Order — Post-Draft Checklist</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Run these in order after the NFL Draft (late April). Each step feeds the next.</MudText>
+                    <ol style="margin-top:8px; margin-left:16px; color:var(--mud-palette-text-secondary); font-size:.875rem; line-height:1.8;">
+                        <li><strong>Import FP Rookie Rankings</strong> (section above) — rookie floor data</li>
+                        <li><strong>Import PFF Draft Grades</strong> (section above) — PFF signal</li>
+                        <li><strong>Import Consensus ADP</strong> (section above) — dynasty rookie ADP</li>
+                        <li><strong>Combine Sync</strong> — pulls nflverse <code>combine.csv</code>, updates athleticism scores. Source: <a href="https://github.com/nflverse/nflverse-data/releases/tag/combine" target="_blank" style="color:var(--fc-cyan);">nflverse combine release</a>. Updated annually in March.</li>
+                        <li><strong>Draft Picks Sync</strong> — pulls nflverse <code>draft_picks.csv</code>, stamps DraftRound + DraftPick on Player records. Source: <a href="https://github.com/nflverse/nflverse-data/releases/tag/draft_picks" target="_blank" style="color:var(--fc-cyan);">nflverse draft_picks release</a>. Available 24–48h post-draft.</li>
+                        <li><strong>Career Sims</strong> — runs Monte Carlo career projections for all players. Prerequisite: Season averages seeded (step above or nflverse seed button).</li>
+                        <li><strong>DFV Calculation</strong> — computes Discounted Future Value and normalizes to Trade Value. Select Superflex format. Runs breakout detection → DFV in one chain.</li>
+                    </ol>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
     <MudGrid Spacing="3">
         <MudItem xs="12" sm="6" md="3">
             <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
@@ -542,10 +698,13 @@
             _seasonStatsStatus = $"Error: {ex.Message}";
             _seasonStatsSeverity = Severity.Error;
         }
-        finally
-        {
-            _seasonStatsBusy = false;
-        }
+        finally { _seasonStatsBusy = false; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_season, _week) = await NflContext.GetContextAsync();
+        _seasonStatsSeason = _season;
     }
 
     // ── Articles ───────────────────────────────────────────────────────────
@@ -554,19 +713,6 @@
     private bool _articlesOk;
     private string ArticlesStatusStyle => string.IsNullOrEmpty(_articlesStatus) ? "display:none"
         : _articlesOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
-
-    // ── Seed Season Averages (nflverse download) ───────────────────────────
-    private bool _seedBusy;
-    private string _seedStatus = string.Empty;
-    private bool _seedOk;
-    private string SeedStatusStyle => string.IsNullOrEmpty(_seedStatus) ? "display:none"
-        : _seedOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
-
-    protected override async Task OnInitializedAsync()
-    {
-        (_season, _week) = await NflContext.GetContextAsync();
-        _seasonStatsSeason = _season;
-    }
 
     private async Task RunArticleGeneration()
     {
@@ -582,6 +728,13 @@
         catch (Exception ex) { _articlesOk = false; _articlesStatus = ex.Message; }
         finally { _articlesBusy = false; }
     }
+
+    // ── Seed Season Averages ──────────────────────────────────────────────
+    private bool _seedBusy;
+    private string _seedStatus = string.Empty;
+    private bool _seedOk;
+    private string SeedStatusStyle => string.IsNullOrEmpty(_seedStatus) ? "display:none"
+        : _seedOk ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
 
     private async Task RunSeedSeasonAverages()
     {
@@ -886,9 +1039,9 @@
     private Severity _calibSeverity = Severity.Info;
     private CalibrationResultDto? _calibResult;
 
-    private string RhoColor => _calibResult?.SpearmanRho >= 0.85 ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
-    private string DeltaColor => _calibResult?.AvgAbsDelta <= 8.0 ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
-    private string OverlapColor => _calibResult?.Top10Overlap >= 7 ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string RhoColor   => _calibResult?.SpearmanRho   >= 0.85 ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string DeltaColor => _calibResult?.AvgAbsDelta   <= 8.0  ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
+    private string OverlapColor => _calibResult?.Top10Overlap >= 7   ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
     private static string DeltaRowColor(int delta) => Math.Abs(delta) <= 5 ? "color: inherit"
         : Math.Abs(delta) <= 15 ? "color: var(--mud-palette-warning)" : "color: var(--mud-palette-error)";
 

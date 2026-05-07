@@ -107,10 +107,10 @@
                             @{
                                 var rp = context;
                             }
-                            <MudTd>
+                            <MudTd DataLabel="Player">
                                 <MudButton Variant="Variant.Text"
-                                Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
-                                OnClick="@(() => _ = OpenPlayerCardAsync(rp))">
+                                           Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                           OnClick="@(() => _ = OpenPlayerCardAsync(context))">
                                     @context.PlayerName
                                 </MudButton>
                             </MudTd>
@@ -345,7 +345,11 @@
                             <div class="flex-grow-1 mx-3">
                                 <div class="d-flex align-center gap-2">
                                     <MudText Typo="Typo.body1" Style="font-weight:700;">
-                                        @opt.PlayerName
+                                        <MudButton Variant="Variant.Text"
+                                                   Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                                   OnClick="@(() => _ = OpenPlayerCardFromStartSitAsync(opt))">
+                                            @opt.PlayerName
+                                        </MudButton>
                                     </MudText>
                                     <MudChip T="string" Size="Size.Small"
                                              Class="@PositionClass(opt.Position)"
@@ -626,6 +630,11 @@
                         <MudTh Style="width:8%">Pos</MudTh>
                         <MudTh Style="width:12%">Team</MudTh>
                         <MudTh Style="width:10%">Tier</MudTh>
+                        <MudTh>
+                            <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => (object)(x.ConsensusAdp ?? 999.0))">
+                                ADP
+                            </MudTableSortLabel>
+                        </MudTh>
                         <MudTh Style="width:12%">Fit</MudTh>
                     </HeaderContent>
                     <RowTemplate>
@@ -638,10 +647,12 @@
                                 #@context.FantasyProsRank
                             </MudText>
                         </MudTd>
-                        <MudTd>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; color: var(--fc-cyan);">
+                        <MudTd DataLabel="Player">
+                            <MudButton Variant="Variant.Text"
+                                       Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                       OnClick="@(() => _ = OpenPlayerCardFromRookieAsync(context))">
                                 @context.PlayerName
-                            </MudText>
+                            </MudButton>
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small" Style="@GetDraftPositionStyle(context.Position)">
@@ -651,6 +662,12 @@
                         <MudTd>@(context.NflTeam ?? "—")</MudTd>
                         <MudTd>
                             <MudText Typo="Typo.body2">@(context.Tier ?? "—")</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="ADP">
+                            <MudText Typo="Typo.body2" Class="fc-stat"
+                                     Style="font-family:'JetBrains Mono',monospace;">
+                                @(context.ConsensusAdp.HasValue ? context.ConsensusAdp.Value.ToString("F1") : "—")
+                            </MudText>
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small" Style="@GetFitStyle(context.NeedLevel)">
@@ -1158,9 +1175,10 @@ else if (_roster is null)
 
     private record DraftPrepDto(List<PositionNeedDto> PositionNeeds, List<RookieTargetDto> RookieTargets);
     private record PositionNeedDto(string Position, string Grade, int GradeScore, string NeedLevel, string Summary);
-    private record RookieTargetDto(
-        string SleeperPlayerId, string PlayerName, string Position, string? NflTeam,
-        int FantasyProsRank, int PositionRank, string? Tier, string NeedLevel, string FitLabel);
+    record RookieTargetDto(
+            string SleeperPlayerId, string PlayerName, string Position, string? NflTeam,
+            int FantasyProsRank, int PositionRank, string? Tier, string NeedLevel, string FitLabel,
+            double? ConsensusAdp = null);
 
     private async Task OpenPlayerCardAsync(MyRosterPlayerDto player)
     {
@@ -1190,7 +1208,60 @@ else if (_roster is null)
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
     }
+    private async Task OpenPlayerCardFromRookieAsync(RookieTargetDto r)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: r.SleeperPlayerId,
+            FullName: r.PlayerName,
+            Position: r.Position,
+            NflTeam: r.NflTeam,
+            Age: null,
+            DraftRound: null, DraftPick: null, CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{r.SleeperPlayerId}.jpg",
+            FantasyProsRank: r.FantasyProsRank,
+            FantasyProsTier: r.Tier,
+            PffGrade: null, PffRank: null,
+            ConsensusAdp: r.ConsensusAdp,
+            DynastyScore: 0, DraftCapitalScore: 0, PositionalScore: 0,
+            ValuationBlendScore: 0, FantasyProsScore: 0, PffGradeScore: 0,
+            ConsensusAdpScore: 0, AgeMultiplier: 0, AthleticismSignalScore: 0,
+            AthleticismScore: null, SpeedScore: null, FortyYard: null,
+            YearsExperience: 0);
 
+        var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, data },
+        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
+    };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(r.PlayerName, parameters, options);
+    }
+
+    private async Task OpenPlayerCardFromStartSitAsync(StartSitOptionDto opt)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: opt.SleeperPlayerId,
+            FullName: opt.PlayerName,
+            Position: opt.Position,
+            NflTeam: opt.NflTeam,
+            Age: null,
+            DraftRound: null, DraftPick: null, CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{opt.SleeperPlayerId}.jpg",
+            FantasyProsRank: null, FantasyProsTier: null,
+            PffGrade: null, PffRank: null, ConsensusAdp: null,
+            DynastyScore: 0, DraftCapitalScore: 0, PositionalScore: 0,
+            ValuationBlendScore: 0, FantasyProsScore: 0, PffGradeScore: 0,
+            ConsensusAdpScore: 0, AgeMultiplier: 0, AthleticismSignalScore: 0,
+            AthleticismScore: null, SpeedScore: null, FortyYard: null);
+
+        var parameters = new DialogParameters<PlayerCardDialog>
+    {
+        { x => x.Player, data },
+        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Stats }
+    };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(opt.PlayerName, parameters, options);
+    }
     private static string PickChipStyle(int round) => round switch
     {
         1 => "border-color:#22C55E; color:#22C55E;",   // green — 1st rounders
