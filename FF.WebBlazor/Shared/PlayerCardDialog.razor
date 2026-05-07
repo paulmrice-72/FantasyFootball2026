@@ -1,533 +1,556 @@
-﻿@* FF.WebBlazor/Shared/PlayerCardDialog.razor *@
+@* FF.WebBlazor/Shared/PlayerCardDialog.razor *@
 @using System.Net.Http.Json
 @inject IHttpClientFactory HttpFactory
 @inject ISnackbar Snackbar
 
 <MudDialog Style="background:#0f1923; border:1px solid rgba(99,179,237,0.25); border-radius:12px;">
-    <TitleContent>
-        <div class="d-flex align-center gap-3">
-            @if (!string.IsNullOrEmpty(Player.HeadshotUrl))
+<TitleContent>
+    <div class="d-flex align-center gap-3">
+        @if (!string.IsNullOrEmpty(Player.HeadshotUrl))
+        {
+            <img src="@Player.HeadshotUrl" alt="@Player.FullName"
+                 style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
+                 onerror="this.style.display='none'" />
+        }
+        else
+        {
+            <MudAvatar Style="width:56px;height:56px;border-radius:8px;">
+                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
+            </MudAvatar>
+        }
+        <div>
+            <div class="d-flex align-center gap-2">
+                <MudText Typo="Typo.h6" Style="font-weight:700;line-height:1.2;">
+                    @Player.FullName
+                </MudText>
+                @if (!string.IsNullOrEmpty(Player.RosteredByTeamName))
+                {
+                    <MudChip T="string" Size="Size.Small"
+                             Style="background:#2a1a00; color:#F59E0B; font-size:.7rem; height:20px;">
+                        Rostered · @Player.RosteredByTeamName
+                    </MudChip>
+                }
+                else if (Player.LeagueContextAvailable)
+                {
+                    <MudChip T="string" Size="Size.Small"
+                             Style="background:#0f2a1a; color:#34D399; font-size:.7rem; height:20px;">
+                        Available
+                    </MudChip>
+                }
+            </div>
+            <div class="d-flex align-center gap-2 mt-1">
+                <MudChip T="string" Size="Size.Small"
+                         Color="@GetPositionColor(Player.Position)" Variant="Variant.Filled">
+                    @Player.Position
+                </MudChip>
+                @if (!string.IsNullOrEmpty(Player.NflTeam))
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@Player.NflTeam</MudText>
+                }
+                @if (Player.Age.HasValue)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Age @Player.Age</MudText>
+                    @if (!Player.IsRedraftContext && IsRookie && Player.Age >= 23)
+                    {
+                        <MudTooltip Text="Age 23+ prospects carry additional dynasty risk">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning"
+                                     Style="color:#F59E0B; font-size:1rem; vertical-align:middle;" />
+                        </MudTooltip>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</TitleContent>
+
+<DialogContent>
+    <MudTabs ActivePanelIndex="_activeTab" ActivePanelIndexChanged="OnTabChanged"
+             Elevation="0" Rounded="true" Class="mt-1" PanelClass="pt-3">
+
+    @* ══════════════════════════════════════════════════════════
+       TAB 0 — OVERVIEW
+       ══════════════════════════════════════════════════════════ *@
+    <MudTabPanel Text="Overview">
+
+        @* ── Bio strip ── *@
+        <div class="d-flex flex-wrap mb-4" style="gap:24px 32px;">
+            @if (!string.IsNullOrEmpty(Player.CollegeTeam))
             {
-                <img src="@Player.HeadshotUrl" alt="@Player.FullName"
-                     style="width:56px;height:56px;border-radius:8px;object-fit:cover;"
-                     onerror="this.style.display='none'" />
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">College</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.CollegeTeam</MudText>
+                </div>
+            }
+            @* Draft Capital — prefer API-loaded values, fallback to callsite *@
+            @{
+                var draftRound = _rookieScores?.DraftRound ?? Player.DraftRound;
+                var draftPick  = _rookieScores?.DraftPick  ?? Player.DraftPick;
+            }
+            @if (draftRound.HasValue && draftPick.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">NFL Draft</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
+                        R@(draftRound) P@(draftPick)
+                    </MudText>
+                </div>
+            }
+            @if (Player.FantasyProsRank.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">FP Rank</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">#@Player.FantasyProsRank</MudText>
+                </div>
+            }
+            @* PFF Grade — prefer API-loaded *@
+            @{
+                var pffGrade = _rookieScores?.PffGrade ?? Player.PffGrade;
+            }
+            @if (pffGrade.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">PFF Grade</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
+                        @pffGrade.Value.ToString("F1")
+                    </MudText>
+                </div>
+            }
+            @* Consensus ADP — prefer API-loaded *@
+            @{
+                var consensusAdp = _rookieScores?.ConsensusAdp ?? Player.ConsensusAdp;
+            }
+            @if (consensusAdp.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Consensus ADP</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
+                        @consensusAdp.Value.ToString("F1")
+                    </MudText>
+                </div>
+            }
+            @if (Player.FortyYard.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">40-Yard</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
+                        @Player.FortyYard.Value.ToString("F2")s
+                    </MudText>
+                </div>
+            }
+            @if (Player.AthleticismScore.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Athleticism</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
+                        @Player.AthleticismScore.Value.ToString("F1")
+                    </MudText>
+                </div>
+            }
+            @if (Player.SpeedScore.HasValue && Player.Position == "RB")
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Speed Score</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
+                        @Player.SpeedScore.Value.ToString("F1")
+                    </MudText>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Player.FantasyProsTier))
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Tier</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.FantasyProsTier</MudText>
+                </div>
+            }
+            @if (Player.YearsExperience.HasValue)
+            {
+                <div style="min-width:80px;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Experience</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
+                        @(Player.YearsExperience.Value == 0 ? "Rookie" : $"Yr {Player.YearsExperience.Value + 1}")
+                    </MudText>
+                </div>
+            }
+        </div>
+
+        <MudDivider Class="mb-4" />
+
+        @* ── Score breakdown — gated on rookie vs veteran ── *@
+        @if (IsRookie)
+        {
+            @* ROOKIE: Draft-signal composite breakdown *@
+            <MudText Typo="Typo.subtitle2" Class="mb-3"
+                     Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
+                Dynasty Score Breakdown
+            </MudText>
+            @if (!_rookieScoresLoaded)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
             }
             else
             {
-                <MudAvatar Style="width:56px;height:56px;border-radius:8px;">
-                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
-                </MudAvatar>
-            }
-            <div>
-                <div class="d-flex align-center gap-2">
-                    <MudText Typo="Typo.h6" Style="font-weight:700;line-height:1.2;">
-                        @Player.FullName
-                    </MudText>
-                    @if (!string.IsNullOrEmpty(Player.RosteredByTeamName))
-                    {
-                        <MudChip T="string" Size="Size.Small"
-                                 Style="background:#2a1a00; color:#F59E0B; font-size:.7rem; height:20px;">
-                            Rostered · @Player.RosteredByTeamName
-                        </MudChip>
-                    }
-                    else if (Player.LeagueContextAvailable)
-                    {
-                        <MudChip T="string" Size="Size.Small"
-                                 Style="background:#0f2a1a; color:#34D399; font-size:.7rem; height:20px;">
-                            Available
-                        </MudChip>
-                    }
-                </div>
-                <div class="d-flex align-center gap-2 mt-1">
-                    <MudChip T="string" Size="Size.Small"
-                             Color="@GetPositionColor(Player.Position)" Variant="Variant.Filled">
-                        @Player.Position
-                    </MudChip>
-                    @if (!string.IsNullOrEmpty(Player.NflTeam))
-                    {
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@Player.NflTeam</MudText>
-                    }
-                    @if (Player.Age.HasValue)
-                    {
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Age @Player.Age</MudText>
-                        @if (!Player.IsRedraftContext && IsRookie && Player.Age >= 23)
-                        {
-                            <MudTooltip Text="Age 23+ prospects carry additional dynasty risk">
-                                <MudIcon Icon="@Icons.Material.Filled.Warning"
-                                         Style="color:#F59E0B; font-size:1rem; vertical-align:middle;" />
-                            </MudTooltip>
-                        }
-                    }
-                </div>
-            </div>
-        </div>
-    </TitleContent>
-
-    <DialogContent>
-        <MudTabs ActivePanelIndex="_activeTab" ActivePanelIndexChanged="OnTabChanged"
-                 Elevation="0" Rounded="true" Class="mt-1" PanelClass="pt-3">
-
-            @* ══════════════════════════════════════════════════════════
-               TAB 0 — OVERVIEW
-               ══════════════════════════════════════════════════════════ *@
-            <MudTabPanel Text="Overview">
-
-                @* ── Bio strip ── *@
-                <div class="d-flex flex-wrap mb-4" style="gap:24px 32px;">
-                    @if (!string.IsNullOrEmpty(Player.CollegeTeam))
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">College</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.CollegeTeam</MudText>
-                        </div>
-                    }
-                    @if (Player.DraftRound.HasValue && Player.DraftPick.HasValue)
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">NFL Draft</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
-                                R@(Player.DraftRound) P@(Player.DraftPick)
-                            </MudText>
-                        </div>
-                    }
-                    @if (Player.FantasyProsRank.HasValue)
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">FP Rank</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">#@Player.FantasyProsRank</MudText>
-                        </div>
-                    }
-                    @if (Player.PffGrade.HasValue)
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">PFF Grade</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
-                                @Player.PffGrade.Value.ToString("F1")
-                            </MudText>
-                        </div>
-                    }
-                    @if (Player.ConsensusAdp.HasValue)
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Consensus ADP</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
-                                @Player.ConsensusAdp.Value.ToString("F1")
-                            </MudText>
-                        </div>
-                    }
-                    @if (Player.FortyYard.HasValue)
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">40-Yard</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
-                                @Player.FortyYard.Value.ToString("F2")s
-                            </MudText>
-                        </div>
-                    }
-                    @if (Player.AthleticismScore.HasValue)
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Athleticism</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
-                                @Player.AthleticismScore.Value.ToString("F1")
-                            </MudText>
-                        </div>
-                    }
-                    @if (Player.SpeedScore.HasValue && Player.Position == "RB")
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Speed Score</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
-                                @Player.SpeedScore.Value.ToString("F1")
-                            </MudText>
-                        </div>
-                    }
-                    @if (!string.IsNullOrEmpty(Player.FantasyProsTier))
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Tier</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">@Player.FantasyProsTier</MudText>
-                        </div>
-                    }
-                    @if (Player.YearsExperience.HasValue)
-                    {
-                        <div style="min-width:80px;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="letter-spacing:.06em; text-transform:uppercase; font-size:.65rem;">Experience</MudText>
-                            <MudText Typo="Typo.body2" Style="font-weight:600; margin-top:2px;">
-                                @(Player.YearsExperience.Value == 0 ? "Rookie" : $"Yr {Player.YearsExperience.Value + 1}")
-                            </MudText>
-                        </div>
-                    }
-                </div>
-
-                <MudDivider Class="mb-4" />
-
-                @* ── Score breakdown — gated on rookie vs veteran ── *@
-                @if (IsRookie)
-                {
-                    @* ROOKIE: Draft-signal composite breakdown *@
-                    <MudText Typo="Typo.subtitle2" Class="mb-3"
-                             Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
-                        Dynasty Score Breakdown
-                    </MudText>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 32px;">
-                        @ScoreRow("Dynasty Score", Player.DynastyScore, "Signal-normalized composite — active signals fill 90% of the pool; positional value is a 10% additive floor")
-                        @ScoreRow("Draft Capital", Player.DraftCapitalScore, "Log-scaled NFL pick slot — earlier picks score higher; max weight 25%")
-                        @ScoreRow("FP Score", Player.FantasyProsScore, "FantasyPros dynasty rookie rank — rank 1 = 100, rank 100+ = 0; max weight 20%")
-                        @ScoreRow("PFF Grade", Player.PffGradeScore, "PFF pre-draft grade (0–100); max weight 20%")
-                        @ScoreRow("Consensus ADP", Player.ConsensusAdpScore, "Consensus ADP pick number — earlier ADP scores higher; max weight 15%")
-                        @ScoreRow("Positional Value", ResolvedPositionalScore, "Dynasty positional scarcity floor — WR 90, QB 85, TE 75, RB 55; always 10% of composite")
-                        @ScoreRow("Valuation Blend", Player.ValuationBlendScore, "Blend of Career Value, Trade Value, and DFV — available Week 1 in-season; max weight 10%")
-                        @if (Player.AgeMultiplier != 0)
-                        {
-                            @AgeRow()
-                        }
-                    </div>
-                }
-                else
-                {
-                    @* VETERAN: Valuation-based breakdown — loaded lazily from /dynasty-value *@
-                    <MudText Typo="Typo.subtitle2" Class="mb-3"
-                             Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
-                        Dynasty Value Breakdown
-                    </MudText>
-                    @if (!_dynastyValueLoaded)
-                    {
-                        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
-                    }
-                    else
-                    {
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 32px;">
-                            @ScoreRow("Trade Value", ResolvedTradeValue, "Discounted Future Value normalized 0–100 — primary dynasty trade currency")
-                            @ScoreRow("Breakout Score", ResolvedBreakoutScore, "Breakout signal composite — measures momentum vs. aging curve expectation")
-                            @ScoreRow("Career Value", ResolvedCareerValue, "Projected cumulative career output from career simulation — higher = more total value remaining")                            
-                            @ScoreRow("Positional Value", ResolvedPositionalScore, "Dynasty positional scarcity — WR 90, QB 85, TE 75, RB 55")
-                            @if (Player.AgeMultiplier != 0)
-                            {
-                                @AgeRow()
-                            }
-                        </div>
-                        @if (_dynastyValue?.IsDepthPenalised == true)
-                        {
-                            var pct = (int)Math.Round(_dynastyValue.DepthPenaltyMultiplier * 100);
-                            var rawVal = _dynastyValue.TradeValue.ToString("F1");
-                            var adjVal = _dynastyValue.AdjustedTradeValue.ToString("F1");
-                            var slot = _dynastyValue.DepthSlot;
-                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
-                                <strong>Depth penalty applied (@(pct)% of raw value).</strong>
-                                Depth slot @slot — trade value adjusted from @rawVal → @adjVal.
-                            </MudAlert>
-                        }
-                        @if (_dynastyValue?.Found != true)
-                        {
-                            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
-                                Full dynasty valuations are computed by the weekly pipeline (career sim → breakout → DFV).
-                                Values populate at Week 1 of the 2026 season.
-                            </MudAlert>
-                        }
-                    }
-                }
-
-                <MudDivider Class="my-4" />
-
-                @* ── AI Scout Report ── *@
-                <div class="d-flex align-center justify-space-between mb-2">
-                    <MudText Typo="Typo.subtitle2"
-                             Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
-                        🤖 AI Scout Report
-                    </MudText>
-                    @if (!_narrativeLoaded)
-                    {
-                        <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary"
-                                   OnClick="GenerateNarrative" Disabled="@_narrativeLoading">
-                            @if (_narrativeLoading)
-                            {
-                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
-                                <span>Generating...</span>
-                            }
-                            else
-                            {
-
-                                <span>Generate</span>
-                            }
-                        </MudButton>
-                    }
-                </div>
-                @if (_narrativeLoaded)
-                {
-                    <MudPaper Class="pa-3" Elevation="0"
-                              Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;">
-                        <MudText Typo="Typo.body2" Style="line-height:1.7;white-space:pre-wrap;">@_narrative</MudText>
-                    </MudPaper>
-                }
-                else if (!_narrativeLoading)
-                {
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                        Click Generate for an AI-powered scouting summary.
-                    </MudText>
-                }
-            </MudTabPanel>
-
-            @* ══════════════════════════════════════════════════════════
-               TAB 1 — STATS
-               ══════════════════════════════════════════════════════════ *@
-            <MudTabPanel Text="Stats">
-                <MudAlert Severity="Severity.Info" Class="mb-4">
-                    In-season stats and weekly projections are available once Week 1 projections
-                    are calculated. Check back during the 2026 season.
-                </MudAlert>
-                <div class="d-flex flex-wrap gap-4">
-                    @if (Player.FantasyProsRank.HasValue)
-                    {
-                        <MudPaper Class="pa-3" Elevation="0"
-                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:120px;text-align:center;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">FP Rank</MudText>
-                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">#@Player.FantasyProsRank</MudText>
-                        </MudPaper>
-                    }
-                    @if (Player.ConsensusAdp.HasValue)
-                    {
-                        <MudPaper Class="pa-3" Elevation="0"
-                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:120px;text-align:center;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Consensus ADP</MudText>
-                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                @Player.ConsensusAdp.Value.ToString("F1")
-                            </MudText>
-                        </MudPaper>
-                    }
-                    @if (!string.IsNullOrEmpty(Player.FantasyProsTier))
-                    {
-                        <MudPaper Class="pa-3" Elevation="0"
-                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:120px;text-align:center;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Tier</MudText>
-                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">@Player.FantasyProsTier</MudText>
-                        </MudPaper>
-                    }
-                </div>
-            </MudTabPanel>
-
-            @* ══════════════════════════════════════════════════════════
-               TAB 2 — DYNASTY
-               ══════════════════════════════════════════════════════════ *@
-            <MudTabPanel Text="Dynasty">
-                @* ── Career phase pill ── *@
-                @if (!string.IsNullOrEmpty(ResolvedCareerPhase))
-                {
-                    <div class="d-flex align-center gap-3 mb-4">
-                        <MudText Typo="Typo.subtitle2"
-                                 Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
-                            Career Phase
-                        </MudText>
-                        <MudChip T="string" Size="Size.Small" Style="@GetPhaseStyle(ResolvedCareerPhase)">
-                            @ResolvedCareerPhase
-                        </MudChip>
-                    </div>
-                }
-
-                @* ── Dynasty value cards ── *@
-                @if (!_dynastyValueLoaded && !IsRookie)
-                {
-                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
-                }
-                else
-                {
-                    @* Dynasty tab value cards — veterans *@
-                    <div class="d-flex flex-wrap gap-3 mb-4">
-                        @if (ResolvedTradeValue > 0)
-                        {
-                            <MudPaper Class="pa-3" Elevation="0"
-                                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                         Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Trade Value</MudText>
-                                <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                    @ResolvedTradeValue.ToString("F1")
-                                </MudText>
-                            </MudPaper>
-                        }
-                        @if (ResolvedCareerValue > 0)
-                        {
-                            <MudPaper Class="pa-3" Elevation="0"
-                                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                         Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Career Value</MudText>
-                                <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                    @ResolvedCareerValue.ToString("F0")
-                                </MudText>
-                            </MudPaper>
-                        }
-                        @if (ResolvedPrimeYears > 0)
-                        {
-                            <MudPaper Class="pa-3" Elevation="0"
-                                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                         Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Prime Yrs Left</MudText>
-                                <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                    @ResolvedPrimeYears.ToString("F0")
-                                </MudText>
-                            </MudPaper>
-                        }
-                    </div>
-                }
-
-                <MudDivider Class="mb-4" />
-
-                @* Signal Breakdown *@
-                <MudText Typo="Typo.subtitle2" Class="mb-3"
-                         Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
-                    Signal Breakdown
-                </MudText>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 32px;">
-                    @if (IsRookie)
+                    @ScoreRow("Dynasty Score",   ResolvedDynastyScore,        "Signal-normalized composite — active signals fill 90% of the pool; positional value is a 10% additive floor")
+                    @ScoreRow("Draft Capital",   ResolvedDraftCapitalScore,   "Log-scaled NFL pick slot — earlier picks score higher; max weight 25%")
+                    @ScoreRow("FP Score",        ResolvedFantasyProsScore,    "FantasyPros dynasty rookie rank — rank 1 = 100, rank 100+ = 0; max weight 20%")
+                    @ScoreRow("PFF Grade",       ResolvedPffGradeScore,       "PFF pre-draft grade (0–100); max weight 20%")
+                    @ScoreRow("Consensus ADP",   ResolvedConsensusAdpScore,   "Consensus ADP pick number — earlier ADP scores higher; max weight 15%")
+                    @ScoreRow("Positional Value",ResolvedPositionalScore,     "Dynasty positional scarcity floor — WR 90, QB 85, TE 75, RB 55; always 10% of composite")
+                    @ScoreRow("Valuation Blend", ResolvedValuationBlendScore, "Blend of Career Value, Trade Value, and DFV — available Week 1 in-season; max weight 10%")
+                    @if (ResolvedAgeMultiplier != 0)
                     {
-                        @ScoreRow("Valuation Blend", Player.ValuationBlendScore, "Blend of Career Value, Trade Value, and DFV — available Week 1 in-season; max weight 10%")
+                        @AgeRow()
                     }
-                    @ScoreRow("Positional Value", ResolvedPositionalScore, "Dynasty positional scarcity floor — WR 90, QB 85, TE 75, RB 55")
+                </div>
+            }
+        }
+        else
+        {
+            @* VETERAN: Valuation-based breakdown — loaded lazily from /dynasty-value *@
+            <MudText Typo="Typo.subtitle2" Class="mb-3"
+                     Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
+                Dynasty Value Breakdown
+            </MudText>
+            @if (!_dynastyValueLoaded)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
+            }
+            else
+            {
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 32px;">
+                    @ScoreRow("Trade Value",     ResolvedTradeValue,      "Discounted Future Value normalized 0–100 — primary dynasty trade currency")
+                    @ScoreRow("Breakout Score",  ResolvedBreakoutScore,   "Breakout signal composite — measures momentum vs. aging curve expectation")
+                    @ScoreRow("Career Value",    ResolvedCareerValue,     "Projected cumulative career output from career simulation — higher = more total value remaining")
+                    @ScoreRow("Positional Value",ResolvedPositionalScore, "Dynasty positional scarcity — WR 90, QB 85, TE 75, RB 55")
                     @if (Player.AgeMultiplier != 0)
                     {
                         @AgeRow()
                     }
                 </div>
-            </MudTabPanel>
-
-            @* ══════════════════════════════════════════════════════════
-               TAB 3 — DEPTH CHART
-               ══════════════════════════════════════════════════════════ *@
-            <MudTabPanel Text="Depth Chart">
-                @if (_depthLoading)
+                @if (_dynastyValue?.IsDepthPenalised == true)
                 {
-                    <div class="d-flex justify-center pa-6">
-                        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
-                    </div>
-                }
-                else if (_depthData is null)
-                {
-                    <MudAlert Severity="Severity.Info">
-                        No depth chart data is available for this player yet.
+                    var pct    = (int)Math.Round(_dynastyValue.DepthPenaltyMultiplier * 100);
+                    var rawVal = _dynastyValue.TradeValue.ToString("F1");
+                    var adjVal = _dynastyValue.AdjustedTradeValue.ToString("F1");
+                    var slot   = _dynastyValue.DepthSlot;
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                        <strong>Depth penalty applied (@(pct)% of raw value).</strong>
+                        Depth slot @slot — trade value adjusted from @rawVal → @adjVal.
                     </MudAlert>
-                    @if (!string.IsNullOrEmpty(Player.NflTeam))
+                }
+                @if (_dynastyValue?.Found != true)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                        Full dynasty valuations are computed by the weekly pipeline (career sim → breakout → DFV).
+                        Values populate at Week 1 of the 2026 season.
+                    </MudAlert>
+                }
+            }
+        }
+
+        <MudDivider Class="my-4" />
+
+        @* ── AI Scout Report ── *@
+        <div class="d-flex align-center justify-space-between mb-2">
+            <MudText Typo="Typo.subtitle2"
+                     Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
+                🤖 AI Scout Report
+            </MudText>
+            @if (!_narrativeLoaded)
+            {
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Primary"
+                           OnClick="GenerateNarrative" Disabled="@_narrativeLoading">
+                    @if (_narrativeLoading)
                     {
-                        <div class="d-flex align-center gap-3 mt-3">
-                            <MudIcon Icon="@Icons.Material.Filled.Groups"
-                                     Style="color:var(--fc-cyan); font-size:2rem;" />
-                            <div>
-                                <MudText Typo="Typo.subtitle1" Style="font-weight:700;">@Player.NflTeam</MudText>
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                    @Player.Position depth chart — not yet available
-                                </MudText>
-                            </div>
-                        </div>
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        <span>Generating...</span>
                     }
-                }
-                else if (!_depthData.Available)
-                {
-                    <MudAlert Severity="Severity.Info">@_depthData.Message</MudAlert>
-                }
-                else
-                {
-                    <div class="d-flex flex-wrap gap-3 mb-4">
-                        <MudPaper Class="pa-3" Elevation="0"
-                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Depth Position</MudText>
-                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                @_depthData.DepthPosition
-                            </MudText>
-                        </MudPaper>
-                        <MudPaper Class="pa-3" Elevation="0"
-                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Depth</MudText>
-                            <MudText Typo="Typo.h5"
-                                     Style="@($"font-weight:700; color:{GetDepthColor(_depthData.DepthTeam)};")">
-                                @GetDepthLabel(_depthData.DepthTeam)
-                            </MudText>
-                        </MudPaper>
-                        <MudPaper Class="pa-3" Elevation="0"
-                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">NFL Team</MudText>
-                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                @_depthData.NflTeam
-                            </MudText>
-                        </MudPaper>
-                        @if (!string.IsNullOrEmpty(_depthData.FormationPosition))
-                        {
-                            <MudPaper Class="pa-3" Elevation="0"
-                                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                         Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Formation</MudText>
-                                <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                    @_depthData.FormationPosition
-                                </MudText>
-                            </MudPaper>
-                        }
-                    </div>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                        Week @_depthData.Week · Updated via nflverse
+                    else
+                    {
+                        <span>Generate</span>
+                    }
+                </MudButton>
+            }
+        </div>
+        @if (_narrativeLoaded)
+        {
+            <MudPaper Class="pa-3" Elevation="0"
+                      Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;">
+                <MudText Typo="Typo.body2" Style="line-height:1.7;white-space:pre-wrap;">@_narrative</MudText>
+            </MudPaper>
+        }
+        else if (!_narrativeLoading)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Click Generate for an AI-powered scouting summary.
+            </MudText>
+        }
+    </MudTabPanel>
+
+    @* ══════════════════════════════════════════════════════════
+       TAB 1 — STATS
+       ══════════════════════════════════════════════════════════ *@
+    <MudTabPanel Text="Stats">
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            In-season stats and weekly projections are available once Week 1 projections
+            are calculated. Check back during the 2026 season.
+        </MudAlert>
+        <div class="d-flex flex-wrap gap-4">
+            @if (Player.FantasyProsRank.HasValue)
+            {
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:120px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">FP Rank</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">#@Player.FantasyProsRank</MudText>
+                </MudPaper>
+            }
+            @{
+                var adpDisplay = _rookieScores?.ConsensusAdp ?? Player.ConsensusAdp;
+            }
+            @if (adpDisplay.HasValue)
+            {
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:120px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Consensus ADP</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                        @adpDisplay.Value.ToString("F1")
                     </MudText>
-                }
-            </MudTabPanel>
+                </MudPaper>
+            }
+            @if (!string.IsNullOrEmpty(Player.FantasyProsTier))
+            {
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:120px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Tier</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">@Player.FantasyProsTier</MudText>
+                </MudPaper>
+            }
+        </div>
+    </MudTabPanel>
 
-            @* ══════════════════════════════════════════════════════════
-               TAB 4 — TRADE
-               ══════════════════════════════════════════════════════════ *@
-            @* TAB 4 — TRADE *@
-            <MudTabPanel Text="Trade">
-                <MudText Typo="Typo.subtitle2" Class="mb-3"
+    @* ══════════════════════════════════════════════════════════
+       TAB 2 — DYNASTY
+       ══════════════════════════════════════════════════════════ *@
+    <MudTabPanel Text="Dynasty">
+        @* ── Career phase pill ── *@
+        @if (!string.IsNullOrEmpty(ResolvedCareerPhase))
+        {
+            <div class="d-flex align-center gap-3 mb-4">
+                <MudText Typo="Typo.subtitle2"
                          Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
-                    Trade Value Reference
+                    Career Phase
                 </MudText>
-                <div class="d-flex flex-wrap gap-3 mb-4">
-                    @if (ResolvedTradeValue > 0)
-                    {
-                        <MudPaper Class="pa-3" Elevation="0"
-                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Trade Value</MudText>
-                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                @ResolvedTradeValue.ToString("F1")
-                            </MudText>
-                        </MudPaper>
-                    }
-                    @if (Player.ConsensusAdp.HasValue)
-                    {
-                        <MudPaper Class="pa-3" Elevation="0"
-                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Consensus ADP</MudText>
-                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                                @Player.ConsensusAdp.Value.ToString("F1")
-                            </MudText>
-                        </MudPaper>
-                    }
+                <MudChip T="string" Size="Size.Small" Style="@GetPhaseStyle(ResolvedCareerPhase)">
+                    @ResolvedCareerPhase
+                </MudChip>
+            </div>
+        }
+
+        @* ── Dynasty value cards ── *@
+        @if (!_dynastyValueLoaded && !IsRookie)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-3 mb-4">
+                @if (ResolvedTradeValue > 0)
+                {
+                    <MudPaper Class="pa-3" Elevation="0"
+                              Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                 Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Trade Value</MudText>
+                        <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                            @ResolvedTradeValue.ToString("F1")
+                        </MudText>
+                    </MudPaper>
+                }
+                @if (ResolvedCareerValue > 0)
+                {
+                    <MudPaper Class="pa-3" Elevation="0"
+                              Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                 Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Career Value</MudText>
+                        <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                            @ResolvedCareerValue.ToString("F0")
+                        </MudText>
+                    </MudPaper>
+                }
+                @if (ResolvedPrimeYears > 0)
+                {
+                    <MudPaper Class="pa-3" Elevation="0"
+                              Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                 Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Prime Yrs Left</MudText>
+                        <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                            @ResolvedPrimeYears.ToString("F0")
+                        </MudText>
+                    </MudPaper>
+                }
+            </div>
+        }
+
+        <MudDivider Class="mb-4" />
+
+        @* Signal Breakdown *@
+        <MudText Typo="Typo.subtitle2" Class="mb-3"
+                 Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
+            Signal Breakdown
+        </MudText>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 32px;">
+            @if (IsRookie)
+            {
+                @ScoreRow("Valuation Blend", ResolvedValuationBlendScore, "Blend of Career Value, Trade Value, and DFV — available Week 1 in-season; max weight 10%")
+            }
+            @ScoreRow("Positional Value", ResolvedPositionalScore, "Dynasty positional scarcity floor — WR 90, QB 85, TE 75, RB 55")
+            @if (ResolvedAgeMultiplier != 0)
+            {
+                @AgeRow()
+            }
+        </div>
+    </MudTabPanel>
+
+    @* ══════════════════════════════════════════════════════════
+       TAB 3 — DEPTH CHART
+       ══════════════════════════════════════════════════════════ *@
+    <MudTabPanel Text="Depth Chart">
+        @if (_depthLoading)
+        {
+            <div class="d-flex justify-center pa-6">
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            </div>
+        }
+        else if (_depthData is null)
+        {
+            <MudAlert Severity="Severity.Info">
+                No depth chart data is available for this player yet.
+            </MudAlert>
+            @if (!string.IsNullOrEmpty(Player.NflTeam))
+            {
+                <div class="d-flex align-center gap-3 mt-3">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups"
+                             Style="color:var(--fc-cyan); font-size:2rem;" />
+                    <div>
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:700;">@Player.NflTeam</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            @Player.Position depth chart — not yet available
+                        </MudText>
+                    </div>
                 </div>
-                <MudAlert Severity="Severity.Info">
-                    Navigate to the <strong>Trade Analyzer</strong> for full side-by-side trade
-                    evaluation, draft pick values, and fairness scoring.
-                    <MudLink Href="@(Player.LeagueId != null ? $"/league/{Player.LeagueId}/trade" : "/trade")"
-                             Style="color:var(--fc-cyan); margin-left:6px;">Open Trade Analyzer →</MudLink>
-                </MudAlert>
-            </MudTabPanel>
+            }
+        }
+        else if (!_depthData.Available)
+        {
+            <MudAlert Severity="Severity.Info">@_depthData.Message</MudAlert>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-3 mb-4">
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Depth Position</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                        @_depthData.DepthPosition
+                    </MudText>
+                </MudPaper>
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Depth</MudText>
+                    <MudText Typo="Typo.h5"
+                             Style="@($"font-weight:700; color:{GetDepthColor(_depthData.DepthTeam)};")">
+                        @GetDepthLabel(_depthData.DepthTeam)
+                    </MudText>
+                </MudPaper>
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">NFL Team</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                        @_depthData.NflTeam
+                    </MudText>
+                </MudPaper>
+                @if (!string.IsNullOrEmpty(_depthData.FormationPosition))
+                {
+                    <MudPaper Class="pa-3" Elevation="0"
+                              Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                 Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Formation</MudText>
+                        <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                            @_depthData.FormationPosition
+                        </MudText>
+                    </MudPaper>
+                }
+            </div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Week @_depthData.Week · Updated via nflverse
+            </MudText>
+        }
+    </MudTabPanel>
 
-        </MudTabs>
-    </DialogContent>
+    @* ══════════════════════════════════════════════════════════
+       TAB 4 — TRADE
+       ══════════════════════════════════════════════════════════ *@
+    <MudTabPanel Text="Trade">
+        <MudText Typo="Typo.subtitle2" Class="mb-3"
+                 Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
+            Trade Value Reference
+        </MudText>
+        <div class="d-flex flex-wrap gap-3 mb-4">
+            @if (ResolvedTradeValue > 0)
+            {
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Trade Value</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                        @ResolvedTradeValue.ToString("F1")
+                    </MudText>
+                </MudPaper>
+            }
+            @{
+                var adpTrade = _rookieScores?.ConsensusAdp ?? Player.ConsensusAdp;
+            }
+            @if (adpTrade.HasValue)
+            {
+                <MudPaper Class="pa-3" Elevation="0"
+                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Consensus ADP</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                        @adpTrade.Value.ToString("F1")
+                    </MudText>
+                </MudPaper>
+            }
+        </div>
+        <MudAlert Severity="Severity.Info">
+            Navigate to the <strong>Trade Analyzer</strong> for full side-by-side trade
+            evaluation, draft pick values, and fairness scoring.
+            <MudLink Href="@(Player.LeagueId != null ? $"/league/{Player.LeagueId}/trade" : "/trade")"
+                     Style="color:var(--fc-cyan); margin-left:6px;">Open Trade Analyzer →</MudLink>
+        </MudAlert>
+    </MudTabPanel>
 
-    <DialogActions>
-        <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
-    </DialogActions>
+    </MudTabs>
+</DialogContent>
+
+<DialogActions>
+    <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
+</DialogActions>
 </MudDialog>
 
 @code {
@@ -543,17 +566,30 @@
     private bool _depthLoading;
 
     // ── Rookie detection ─────────────────────────────────────────────────────
-    // YearsExperience == 0 = explicit rookie
-    // YearsExperience null + DraftRound present = current-year rookie pre-sync
     private bool IsRookie =>
         Player.YearsExperience == 0 ||
         (Player.YearsExperience is null && Player.DraftRound.HasValue);
 
-    // ── Dynasty value lazy load (veterans) ──────────────────────────────────
+    // ── Rookie scores lazy load ───────────────────────────────────────────────
+    private RookieScoresResponse? _rookieScores;
+    private bool _rookieScoresLoaded = false;
+
+    // ── Dynasty value lazy load (veterans) ───────────────────────────────────
     private DynastyValueResponse? _dynastyValue;
     private bool _dynastyValueLoaded = false;
 
-    // Resolved helpers — prefer API-loaded data over callsite-passed values
+    // ── Resolved helpers — API-loaded data wins over callsite-passed values ──
+
+    // Rookie score resolvers
+    private double ResolvedDynastyScore       => _rookieScores?.DynastyScore       ?? Player.DynastyScore;
+    private double ResolvedDraftCapitalScore  => _rookieScores?.DraftCapitalScore  ?? Player.DraftCapitalScore;
+    private double ResolvedPffGradeScore      => _rookieScores?.PffGradeScore      ?? Player.PffGradeScore;
+    private double ResolvedConsensusAdpScore  => _rookieScores?.ConsensusAdpScore  ?? Player.ConsensusAdpScore;
+    private double ResolvedValuationBlendScore=> _rookieScores?.ValuationBlendScore?? Player.ValuationBlendScore;
+    private double ResolvedFantasyProsScore => _rookieScores?.FantasyProsScore ?? Player.FantasyProsScore;
+    private double ResolvedAgeMultiplier      => _rookieScores?.AgeMultiplier      ?? Player.AgeMultiplier;
+
+    // Veteran resolvers
     private double ResolvedTradeValue =>
         _dynastyValue?.Found == true
             ? (_dynastyValue.IsDepthPenalised
@@ -561,9 +597,15 @@
                 : _dynastyValue.TradeValue)
             : (Player.DynastyTradeValue ?? 0);
     private double ResolvedBreakoutScore => _dynastyValue?.Found == true ? _dynastyValue.BreakoutScore : Player.FantasyProsScore;
-    private double ResolvedCareerValue => _dynastyValue?.Found == true ? _dynastyValue.CareerValueScore : (Player.CareerValueScore ?? 0);
-    private double ResolvedPrimeYears => _dynastyValue?.Found == true ? _dynastyValue.YearsOfPrimeRemaining : (Player.YearsOfPrimeRemaining ?? 0);
-    private string? ResolvedCareerPhase => _dynastyValue?.Found == true ? _dynastyValue.CareerPhase : Player.CareerPhase;
+    private double ResolvedCareerValue   => _dynastyValue?.Found == true ? _dynastyValue.CareerValueScore : (Player.CareerValueScore ?? 0);
+    private double ResolvedPrimeYears    => _dynastyValue?.Found == true ? _dynastyValue.YearsOfPrimeRemaining : (Player.YearsOfPrimeRemaining ?? 0);
+    private string? ResolvedCareerPhase  => _dynastyValue?.Found == true ? _dynastyValue.CareerPhase : Player.CareerPhase;
+
+    // Shared positional score
+    private double ResolvedPositionalScore =>
+        Player.PositionalScore > 0
+            ? Player.PositionalScore
+            : GetPositionalScore(Player.Position);
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
     protected override async Task OnParametersSetAsync()
@@ -573,8 +615,10 @@
         if (DefaultTab == PlayerCardTab.DepthChart)
             await LoadDepthChartAsync();
 
-        // Veterans: load dynasty value immediately so Overview tab is populated
-        if (!IsRookie)
+        // Rookies: load signal scores immediately so Overview tab is populated
+        if (IsRookie)
+            await LoadRookieScoresAsync();
+        else
             await LoadDynastyValueAsync();
     }
 
@@ -586,6 +630,29 @@
     }
 
     // ── Data loaders ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Loads PFF grade, draft capital, consensus ADP, and pre-computed score
+    /// components from the /rookie-scores endpoint. Non-fatal — card degrades
+    /// gracefully to callsite-passed values if the call fails.
+    /// </summary>
+    private async Task LoadRookieScoresAsync()
+    {
+        if (_rookieScoresLoaded) return;
+        try
+        {
+            var http = HttpFactory.CreateClient("AuthAPI");
+            _rookieScores = await http.GetFromJsonAsync<RookieScoresResponse>(
+                $"api/v1/players/{Player.SleeperPlayerId}/rookie-scores");
+        }
+        catch { /* non-fatal — falls back to callsite values */ }
+        finally
+        {
+            _rookieScoresLoaded = true;
+            StateHasChanged();
+        }
+    }
+
     private async Task LoadDynastyValueAsync()
     {
         if (_dynastyValueLoaded) return;
@@ -595,7 +662,7 @@
             _dynastyValue = await http.GetFromJsonAsync<DynastyValueResponse>(
                 $"api/v1/players/{Player.SleeperPlayerId}/dynasty-value");
         }
-        catch { /* non-fatal — card renders with passed-in values */ }
+        catch { /* non-fatal */ }
         finally
         {
             _dynastyValueLoaded = true;
@@ -666,9 +733,9 @@
 
     private RenderFragment AgeRow() => __builder =>
     {
-        var multiplier = Player.AgeMultiplier;
-        var label = multiplier switch { > 0 => $"+{multiplier:F1}%", < 0 => $"{multiplier:F1}%", _ => "—" };
-        var color = multiplier switch { > 0 => "color:#34D399;", < 0 => "color:#F59E0B;", _ => "color:var(--mud-palette-text-secondary);" };
+        var multiplier = ResolvedAgeMultiplier;
+        var label   = multiplier switch { > 0 => $"+{multiplier:F1}%", < 0 => $"{multiplier:F1}%", _ => "—" };
+        var color   = multiplier switch { > 0 => "color:#34D399;", < 0 => "color:#F59E0B;", _ => "color:var(--mud-palette-text-secondary);" };
         var tooltip = Player.Age.HasValue
             ? $"Age {Player.Age} — post-composite adjustment. RBs have steepest curve; QBs flattest."
             : "Age unknown — no adjustment applied.";
@@ -702,7 +769,7 @@
         "WR" => Color.Primary,
         "TE" => Color.Secondary,
         "RB" => Color.Success,
-        _ => Color.Default
+        _    => Color.Default
     };
 
     private static Color GetScoreColor(double score) => score switch
@@ -710,15 +777,24 @@
         >= 75 => Color.Success,
         >= 50 => Color.Primary,
         >= 25 => Color.Warning,
-        _ => Color.Default
+        _     => Color.Default
     };
 
     private static string GetPhaseStyle(string phase) => phase switch
     {
-        "Ascending" => "background:#0f2a1a; color:#34D399;",
-        "Prime" => "background:#1a2a0f; color:#a3e635;",
-        "Declining" => "background:#2a1a00; color:#F59E0B;",
-        _ => "background:#1a1a2a; color:#94a3b8;"
+        "Ascending"  => "background:#0f2a1a; color:#34D399;",
+        "Prime"      => "background:#1a2a0f; color:#a3e635;",
+        "Declining"  => "background:#2a1a00; color:#F59E0B;",
+        _            => "background:#1a1a2a; color:#94a3b8;"
+    };
+
+    private static double GetPositionalScore(string position) => position switch
+    {
+        "QB" => 85.0,
+        "WR" => 90.0,
+        "TE" => 75.0,
+        "RB" => 55.0,
+        _    => 0.0
     };
 
     // ── Enums & DTOs ─────────────────────────────────────────────────────────
@@ -767,6 +843,24 @@
         // PLAYER-CARD-004
         int? YearsExperience = null);
 
+    private record RookieScoresResponse(
+            bool Found,
+            int? DraftRound,
+            int? DraftPick,
+            int? OverallPick,
+            double? PffGrade,
+            int? PffRank,
+            double? ConsensusAdp,
+            double DynastyScore,
+            double DraftCapitalScore,
+            double FantasyProsScore,
+            double PffGradeScore,
+            double ConsensusAdpScore,
+            double ValuationBlendScore,
+            double PositionalScore,
+            double AgeMultiplier,
+            List<string> ActiveSignals);
+
     private record DynastyValueResponse(
         bool Found,
         double TradeValue,
@@ -786,19 +880,4 @@
         int DepthTeam, string? FormationPosition);
 
     private record NarrativeResponse(string Narrative);
-
-    private static double GetPositionalScore(string position) => position switch
-    {
-        "QB" => 85.0,
-        "WR" => 90.0,
-        "TE" => 75.0,
-        "RB" => 55.0,
-        _ => 0.0
-    };
-
-    // Override PositionalScore for veterans — callsites pass 0, so compute it here
-    private double ResolvedPositionalScore =>
-        Player.PositionalScore > 0
-            ? Player.PositionalScore
-            : GetPositionalScore(Player.Position);
 }

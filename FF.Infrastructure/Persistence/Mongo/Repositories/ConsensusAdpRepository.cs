@@ -11,6 +11,18 @@ public class ConsensusAdpRepository(MongoDbContext context) : IConsensusAdpRepos
     private readonly IMongoCollection<ConsensusAdpDocument> _collection =
         context.GetCollection<ConsensusAdpDocument>("consensus_adp");
 
+    public async Task<ConsensusAdpDocument?> GetBySleeperPlayerIdAsync(
+        string sleeperPlayerId,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<ConsensusAdpDocument>.Filter
+            .Eq(d => d.SleeperPlayerId, sleeperPlayerId);
+
+        return await _collection
+            .Find(filter)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<List<ConsensusAdpDocument>> GetBySleeperPlayerIdsAsync(
         List<string> sleeperPlayerIds,
         CancellationToken cancellationToken = default)

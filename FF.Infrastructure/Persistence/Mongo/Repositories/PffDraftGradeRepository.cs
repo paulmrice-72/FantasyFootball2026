@@ -11,6 +11,18 @@ public class PffDraftGradeRepository(MongoDbContext context) : IPffDraftGradeRep
     private readonly IMongoCollection<PffDraftGradeDocument> _collection =
         context.GetCollection<PffDraftGradeDocument>("pff_draft_grades");
 
+    public async Task<PffDraftGradeDocument?> GetBySleeperPlayerIdAsync(
+        string sleeperPlayerId,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<PffDraftGradeDocument>.Filter
+            .Eq(d => d.SleeperPlayerId, sleeperPlayerId);
+
+        return await _collection
+            .Find(filter)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<List<PffDraftGradeDocument>> GetBySleeperPlayerIdsAsync(
         List<string> sleeperPlayerIds,
         CancellationToken cancellationToken = default)

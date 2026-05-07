@@ -10,12 +10,17 @@ public class GetDraftPrepQueryHandler(
     IMediator mediator,
     IFantasyProsRookieRankingRepository rookieRankingRepository,
     IRosterPlayerRepository rosterPlayerRepository,
+    IConsensusAdpRepository consensusAdpRepository,
     ILogger<GetDraftPrepQueryHandler> logger)
     : IRequestHandler<GetDraftPrepQuery, DraftPrepDto?>
 {
     // Grade scores at or below this threshold = a positional Need
-    private const int NeedThreshold = 40;    // C+ or worse
+    private const int NeedThreshold = 40; // C+ or worse
     private const int StrengthThreshold = 65; // B+ or better
+
+    // Only dynasty-relevant skill positions — excludes K, DST, OL, DL, LB, DB, etc.
+    private static readonly HashSet<string> SkillPositions =
+        new(StringComparer.OrdinalIgnoreCase) { "QB", "RB", "WR", "TE" };
 
     public async Task<DraftPrepDto?> Handle(
         GetDraftPrepQuery request,
@@ -64,15 +69,29 @@ public class GetDraftPrepQueryHandler(
         var rookies = await rookieRankingRepository
             .GetAllBySeasonAsync(request.RookieSeason, cancellationToken);
 
-        // 5 — Build a need lookup keyed by position
+        // 5 — Bulk-load consensus ADP for all rookie Sleeper IDs in one query
+        var rookieIds = rookies
+            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId))
+            .Select(r => r.SleeperPlayerId!)
+            .ToList();
+
+        var adpDocs = await consensusAdpRepository
+            .GetBySleeperPlayerIdsAsync(rookieIds, cancellationToken);
+
+        var adpMap = adpDocs
+            .Where(a => !string.IsNullOrEmpty(a.SleeperPlayerId))
+            .GroupBy(a => a.SleeperPlayerId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Adp).First().Adp);
+
+        // 6 — Build a need lookup keyed by position
         var needLookup = positionNeeds
             .ToDictionary(n => n.Position, n => n.NeedLevel);
 
-        // 6 — Join: exclude rostered, tag with need level, sort
-        //     Sort: Need positions first, then by FantasyProsRank
+        // 7 — Join: skill positions only, exclude rostered, tag with need level and ADP, sort
         var targets = rookies
             .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId)
-                        && !rosteredIds.Contains(r.SleeperPlayerId))
+                     && !rosteredIds.Contains(r.SleeperPlayerId)
+                     && SkillPositions.Contains(r.Position))
             .Select(r =>
             {
                 var needLevel = needLookup.TryGetValue(r.Position, out var nl)
@@ -81,8 +100,10 @@ public class GetDraftPrepQueryHandler(
                     : needLevel == "Strength" ? "Depth Only"
                     : "Good Value";
 
+                adpMap.TryGetValue(r.SleeperPlayerId!, out var adp);
+
                 return new RookieTargetDto(
-                    SleeperPlayerId: r.SleeperPlayerId,
+                    SleeperPlayerId: r.SleeperPlayerId!,
                     PlayerName: r.PlayerName,
                     Position: r.Position,
                     NflTeam: r.NflTeam,
@@ -90,7 +111,8 @@ public class GetDraftPrepQueryHandler(
                     PositionRank: r.PositionRank,
                     Tier: r.Tier,
                     NeedLevel: needLevel,
-                    FitLabel: fitLabel);
+                    FitLabel: fitLabel,
+                    ConsensusAdp: adp > 0 ? adp : null);
             })
             .OrderBy(r => r.NeedLevel == "Need" ? 0
                 : r.NeedLevel == "Neutral" ? 1 : 2)
