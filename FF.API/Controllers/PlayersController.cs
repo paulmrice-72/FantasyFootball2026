@@ -17,12 +17,15 @@ namespace FF.API.Controllers;
 [Route("api/v1/[controller]")]
 public class PlayersController(
     IMediator mediator,
-    IPlayerRepository playerRepository,          // ← already used in /bio, just confirm it's there
+    IPlayerRepository playerRepository,
     ISimulationResultRepository simulationRepo,
     IPlayerProjectionRepository projectionRepo,
     IPlayerUsageMetricsRepository usageMetricsRepo,
     IDepthChartRepository depthChartRepository,
-    IDynastyValuationRepository dynastyValuationRepo) : ControllerBase
+    IDynastyValuationRepository dynastyValuationRepo,
+    IPffDraftGradeRepository pffDraftGradeRepo,
+    IConsensusAdpRepository consensusAdpRepo,
+    IFantasyProsRookieRankingRepository fpRookieRepo) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
@@ -70,6 +73,80 @@ public class PlayersController(
     }
 
     /// <summary>
+    /// Returns the full rookie signal breakdown for the player card Dynasty Score panel.
+    /// Joins: Player (DraftRound/DraftPick), PFF grade, FP rookie rank, Consensus ADP,
+    /// and dynasty valuation — feeds directly into RookieDynastyScoreCalculator.
+    /// Called lazily by PlayerCardDialog when IsRookie == true.
+    /// </summary>
+    [HttpGet("{sleeperPlayerId}/rookie-scores")]
+    public async Task<IActionResult> GetRookieScores(
+        string sleeperPlayerId,
+        [FromQuery] int season = 2026,
+        CancellationToken ct = default)
+    {
+        // Load all signals in parallel — FP rank uses bulk method with single-element list
+        var playerTask = playerRepository.GetBySleeperIdAsync(sleeperPlayerId, ct);
+        var pffTask = pffDraftGradeRepo.GetBySleeperPlayerIdAsync(sleeperPlayerId, ct);
+        var adpTask = consensusAdpRepo.GetBySleeperPlayerIdAsync(sleeperPlayerId, ct);
+        var valTask = dynastyValuationRepo.GetBySleeperIdAsync(sleeperPlayerId, ct);
+        var fpTask = fpRookieRepo.GetBySleeperPlayerIdsAsync([sleeperPlayerId], ct);
+
+        await Task.WhenAll(playerTask, pffTask, adpTask, valTask, fpTask);
+
+        var player = playerTask.Result;
+        var pff = pffTask.Result;
+        var adp = adpTask.Result;
+        var val = valTask.Result;
+        var fpDocs = fpTask.Result;
+
+        if (player is null) return NotFound($"Player {sleeperPlayerId} not found.");
+
+        // Compute overall pick from round + pick-in-round (NFL draft: 32 picks/round)
+        int? overallPick = null;
+        if (player.DraftRound.HasValue && player.DraftPick.HasValue)
+            overallPick = (player.DraftRound.Value - 1) * 32 + player.DraftPick.Value;
+
+        // FP rank — prefer Rookie ranking type; fall back to any record for this player
+        int? fpRank = fpDocs
+            .OrderBy(f => f.RankingType == "Rookie" ? 0 : 1)
+            .ThenBy(f => f.FantasyProsRank)
+            .FirstOrDefault()?.FantasyProsRank;
+
+        var breakdown = RookieDynastyScoreCalculator.CalculateWithBreakdown(
+            overallPick: overallPick,
+            position: player.Position.ToString(),
+            valuation: val,
+            fantasyProsRank: fpRank,
+            pffGrade: pff?.PffGrade,
+            consensusAdp: adp?.Adp,
+            age: player.ComputedAge ?? player.Age,
+            athleticismScore: null);   // athleticism handled separately via combine endpoint
+
+        return Ok(new
+        {
+            found = true,
+            sleeperPlayerId = player.SleeperPlayerId,
+            // Raw signal values (for display in bio strip)
+            draftRound = player.DraftRound,
+            draftPick = player.DraftPick,
+            overallPick,
+            pffGrade = pff?.PffGrade,
+            pffRank = pff?.PffRank,
+            consensusAdp = adp?.Adp,
+            // Pre-computed score components (for the breakdown bars)
+            dynastyScore = breakdown.DynastyScore,
+            draftCapitalScore = breakdown.DraftCapitalScore,
+            fantasyProsScore = breakdown.FantasyProsScore,
+            pffGradeScore = breakdown.PffGradeScore,
+            consensusAdpScore = breakdown.ConsensusAdpScore,
+            valuationBlendScore = breakdown.ValuationBlendScore,
+            positionalScore = breakdown.PositionalScore,
+            ageMultiplier = breakdown.AgeMultiplier,
+            activeSignals = breakdown.ActiveSignals
+        });
+    }
+
+    /// <summary>
     /// Returns dynasty valuation (TradeValue, BreakoutScore, CareerValue, phase)
     /// for a single player. Used by PlayerCardDialog veteran breakdown.
     /// </summary>
@@ -91,11 +168,9 @@ public class PlayersController(
 
         if (depthDoc is not null && (val.Position == "TE" || val.Position == "RB"))
         {
-            // Build minimal lookups for the penalty helper
             var singleDepthLookup = new Dictionary<string, DepthChartDocument>
             { [sleeperPlayerId] = depthDoc };
 
-            // Age gate: look up the TE1 for this team
             var te1AgeByTeam = new Dictionary<string, int?>();
             if (val.Position == "TE" && depthSlot >= 2)
             {

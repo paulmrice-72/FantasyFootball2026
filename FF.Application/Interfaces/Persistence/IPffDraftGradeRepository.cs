@@ -5,6 +5,10 @@ namespace FF.Application.Interfaces.Persistence;
 
 public interface IPffDraftGradeRepository
 {
+    Task<PffDraftGradeDocument?> GetBySleeperPlayerIdAsync(
+        string sleeperPlayerId,
+        CancellationToken cancellationToken = default);
+
     Task<List<PffDraftGradeDocument>> GetBySleeperPlayerIdsAsync(
         List<string> sleeperPlayerIds,
         CancellationToken cancellationToken = default);
