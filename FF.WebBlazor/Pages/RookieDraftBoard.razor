@@ -184,24 +184,46 @@
                       Class="fc-table"
                       RowClassFunc="@RowClass">
                 <HeaderContent>
-                    <MudTh>Rank</MudTh>
-                    <MudTh>Player</MudTh>
+                    <MudTh>
+                        <MudTableSortLabel SortBy="new Func<RookiePlayerDto, object>(x => x.ScoreRank)">
+                            <MudTooltip Text="Rank by composite DynastyScore (descending). Stable across re-sorts.">
+                                Score Rank ⓘ
+                            </MudTooltip>
+                        </MudTableSortLabel>
+                    </MudTh>
+                    <MudTh>
+                        <MudTableSortLabel SortBy="new Func<RookiePlayerDto, object>(x => x.FullName)">
+                            Player
+                        </MudTableSortLabel>
+                    </MudTh>
                     <MudTh>Pos</MudTh>
                     <MudTh>Team</MudTh>
-                    <MudTh>Age</MudTh>
+                    <MudTh>
+                        <MudTableSortLabel SortBy="new Func<RookiePlayerDto, object>(x => (object)(x.Age ?? 99))">
+                            Age
+                        </MudTableSortLabel>
+                    </MudTh>
                     <MudTh>Pick</MudTh>
                     <MudTh>
-                        <MudTooltip Text="Composite dynasty score — draft capital 35%, positional value 25%, dynasty valuation 30%, FP rank 10%">
-                            Score ⓘ
-                        </MudTooltip>
+                        <MudTableSortLabel SortBy="new Func<RookiePlayerDto, object>(x => x.DynastyScore)">
+                            <MudTooltip Text="Composite dynasty score — draft capital 35%, positional value 25%, dynasty valuation 30%, FP rank 10%. Click to sort.">
+                                Score ⓘ
+                            </MudTooltip>
+                        </MudTableSortLabel>
                     </MudTh>
-                    <MudTh>FP Rank</MudTh>
+                    <MudTh>
+                        <MudTableSortLabel SortBy="new Func<RookiePlayerDto, object>(x => (object)(x.FantasyProsRank ?? 999))"
+                                           InitialDirection="SortDirection.Ascending">
+                            FP Rank
+                        </MudTableSortLabel>
+                    </MudTh>
                     <MudTh>Action</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="Rank">
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                            @(_filtered.IndexOf(context) + 1)
+                    <MudTd DataLabel="Score Rank">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary"
+                                 Style="font-family:'JetBrains Mono',monospace;">
+                            #@context.ScoreRank
                         </MudText>
                     </MudTd>
                     <MudTd DataLabel="Player">
@@ -681,6 +703,7 @@
         int? ConsensusAdpRank,
         string? AdpSource,
         double DynastyScore,
+        int ScoreRank,
         double DraftCapitalScore,
         double PositionalScore,
         double ValuationBlendScore,
