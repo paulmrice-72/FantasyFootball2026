@@ -50,8 +50,8 @@ public class GetRookiePoolQueryHandler(
         var adpData = await adpTask;
         var combineData = await combineTask;
 
-        // 3 — Join, score, project
-        var result = rookies.Select(player =>
+        // 3 — Join, score, project (ScoreRank stamped in step 4)
+        var projected = rookies.Select(player =>
         {
             var val = valuations.FirstOrDefault(v => v.SleeperPlayerId == player.SleeperPlayerId);
             var fp = fpRankings.FirstOrDefault(r => r.SleeperPlayerId == player.SleeperPlayerId);
@@ -100,6 +100,7 @@ public class GetRookiePoolQueryHandler(
                 ConsensusAdpRank: adp?.AdpRank,
                 AdpSource: adp?.Source,
                 DynastyScore: breakdown.DynastyScore,
+                ScoreRank: 0,                        // ← stamped in step 4
                 DraftCapitalScore: breakdown.DraftCapitalScore,
                 FantasyProsScore: breakdown.FantasyProsScore,
                 PffGradeScore: breakdown.PffGradeScore,
@@ -119,6 +120,13 @@ public class GetRookiePoolQueryHandler(
         .OrderByDescending(r => r.DynastyScore)
         .ThenBy(r => r.FantasyProsRank ?? 999)
         .ToList();
+
+        // 4 — Stamp ScoreRank (1-based) AFTER ordering by DynastyScore desc.
+        //     This is the canonical Score Rank both Draft Board and Draft Prep render.
+        //     DRAFT-PARITY-001 (2026-05-07).
+        var result = projected
+            .Select((dto, idx) => dto with { ScoreRank = idx + 1 })
+            .ToList();
 
         return Result<List<RookiePlayerDto>>.Success(result);
     }

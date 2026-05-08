@@ -16,7 +16,8 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
         CancellationToken cancellationToken = default)
         => await DbSet.AsNoTracking()
             .Where(p => p.Position == position)
-            .Where(p => p.FirstName != "Player" || p.LastName != "Invalid")
+            .Where(p => !(p.FirstName == "Player" && p.LastName == "Invalid"))
+            .Where(p => !(p.FirstName == "Duplicate" && p.LastName == "Player"))
             .OrderBy(p => p.LastName)
             .ToListAsync(cancellationToken);
 
@@ -31,9 +32,18 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
         string? position,
         CancellationToken cancellationToken = default)
     {
+        // DRAFT-PARITY-001 (2026-05-07):
+        // Stronger placeholder + status filter. Production data has 4 rows with
+        // FullName = "Duplicate Player" and Status = "Injured" that the original
+        // (FirstName != "Player" && LastName != "Invalid") check failed to catch
+        // because of the AND logic — neither half matched "Duplicate Player".
+        // Now explicitly excludes both known placeholder name patterns AND any
+        // Status = "Injured" rookies (fallback for any future placeholder data).
         var query = DbSet.AsNoTracking()
             .Where(p => p.YearsExperience == 0)
-            .Where(p => p.FirstName != "Player" && p.LastName != "Invalid");  // ← add this
+            .Where(p => p.Status != PlayerStatus.Injured)
+            .Where(p => !(p.FirstName == "Player" && p.LastName == "Invalid"))
+            .Where(p => !(p.FirstName == "Duplicate" && p.LastName == "Player"));
 
         if (!string.IsNullOrWhiteSpace(position))
         {
@@ -66,7 +76,6 @@ public class PlayerRepository(FFDbContext context) : BaseRepository<Player>(cont
     }
 
     public async new Task<IReadOnlyList<Player>> GetAllAsync(
-    CancellationToken cancellationToken = default) =>
-    await DbSet.AsNoTracking().ToListAsync(cancellationToken);
-
+        CancellationToken cancellationToken = default) =>
+        await DbSet.AsNoTracking().ToListAsync(cancellationToken);
 }
