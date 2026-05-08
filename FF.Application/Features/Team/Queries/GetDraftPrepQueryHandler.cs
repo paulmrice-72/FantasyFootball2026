@@ -1,16 +1,18 @@
 ﻿// FF.Application/Features/Team/Queries/GetDraftPrepQueryHandler.cs
 using FF.Application.Interfaces.Persistence;
-using FF.Application.Interfaces.Repositories;
+using FF.Application.Players.Queries.GetRookiePool;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
 namespace FF.Application.Features.Team.Queries;
 
+// DRAFT-PARITY-001 (2026-05-07):
+// Rewritten to consume GetRookiePoolQuery so Draft Prep and Draft Board
+// share an identical rookie list, identical scoring, identical ordering.
+// Position-need overlay (NeedLevel + FitLabel) is the only divergence.
 public class GetDraftPrepQueryHandler(
     IMediator mediator,
-    IFantasyProsRookieRankingRepository rookieRankingRepository,
     IRosterPlayerRepository rosterPlayerRepository,
-    IConsensusAdpRepository consensusAdpRepository,
     ILogger<GetDraftPrepQueryHandler> logger)
     : IRequestHandler<GetDraftPrepQuery, DraftPrepDto?>
 {
@@ -30,7 +32,7 @@ public class GetDraftPrepQueryHandler(
             "Computing draft prep for user {UserId} league {LeagueId}",
             request.SleeperUserId, request.SleeperLeagueId);
 
-        // 1 — Get depth grades using sim season
+        // 1 — Get depth grades using sim season (drives Need/Strength/Neutral overlay)
         var depthGrades = await mediator.Send(
             new GetPositionalDepthGradesQuery(
                 request.SleeperUserId,
@@ -46,8 +48,8 @@ public class GetDraftPrepQueryHandler(
             foreach (var g in depthGrades.Grades)
             {
                 var needLevel = g.GradeScore <= NeedThreshold ? "Need"
-                    : g.GradeScore >= StrengthThreshold ? "Strength"
-                    : "Neutral";
+                              : g.GradeScore >= StrengthThreshold ? "Strength"
+                              : "Neutral";
 
                 positionNeeds.Add(new PositionNeedDto(
                     Position: g.Position,
@@ -58,65 +60,77 @@ public class GetDraftPrepQueryHandler(
             }
         }
 
-        // 3 — Load all league rosters to exclude already-rostered players
+        // 3 — Pull the canonical rookie pool (same source the Draft Board uses).
+        //     This guarantees ordering / scoring parity between the two pages.
+        var poolResult = await mediator.Send(
+            new GetRookiePoolQuery(Position: null),
+            cancellationToken);
+
+        if (!poolResult.IsSuccess || poolResult.Value is null)
+        {
+            logger.LogWarning("Rookie pool query failed: {Error}", poolResult.Error);
+            return new DraftPrepDto(
+                PositionNeeds: positionNeeds,
+                RookieTargets: []);
+        }
+
+        var pool = poolResult.Value;
+
+        // 4 — Exclude already-rostered rookies (league-scoped — keep this filter)
         var leagueRosters = await rosterPlayerRepository
             .GetByLeagueAsync(request.SleeperLeagueId, cancellationToken);
+
         var rosteredIds = leagueRosters
             .SelectMany(r => r.PlayerIds ?? [])
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // 4 — Load rookie rankings using rookie season
-        var rookies = await rookieRankingRepository
-            .GetAllBySeasonAsync(request.RookieSeason, cancellationToken);
-
-        // 5 — Bulk-load consensus ADP for all rookie Sleeper IDs in one query
-        var rookieIds = rookies
-            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId))
-            .Select(r => r.SleeperPlayerId!)
-            .ToList();
-
-        var adpDocs = await consensusAdpRepository
-            .GetBySleeperPlayerIdsAsync(rookieIds, cancellationToken);
-
-        var adpMap = adpDocs
-            .Where(a => !string.IsNullOrEmpty(a.SleeperPlayerId))
-            .GroupBy(a => a.SleeperPlayerId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Adp).First().Adp);
-
-        // 6 — Build a need lookup keyed by position
+        // 5 — Need lookup keyed by position
         var needLookup = positionNeeds
             .ToDictionary(n => n.Position, n => n.NeedLevel);
 
-        // 7 — Join: skill positions only, exclude rostered, tag with need level and ADP, sort
-        var targets = rookies
+        // 6 — Project pool → RookieTargetDto, applying need overlay
+        var targets = pool
             .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId)
-                     && !rosteredIds.Contains(r.SleeperPlayerId)
-                     && SkillPositions.Contains(r.Position))
+                        && !rosteredIds.Contains(r.SleeperPlayerId)
+                        && SkillPositions.Contains(r.Position))
             .Select(r =>
             {
                 var needLevel = needLookup.TryGetValue(r.Position, out var nl)
                     ? nl : "Neutral";
-                var fitLabel = needLevel == "Need" ? "Priority Pick"
-                    : needLevel == "Strength" ? "Depth Only"
-                    : "Good Value";
 
-                adpMap.TryGetValue(r.SleeperPlayerId!, out var adp);
+                var fitLabel = needLevel == "Need" ? "Priority Pick"
+                             : needLevel == "Strength" ? "Depth Only"
+                             : "Good Value";
 
                 return new RookieTargetDto(
-                    SleeperPlayerId: r.SleeperPlayerId!,
-                    PlayerName: r.PlayerName,
+                    SleeperPlayerId: r.SleeperPlayerId,
+                    PlayerName: r.FullName,
                     Position: r.Position,
                     NflTeam: r.NflTeam,
                     FantasyProsRank: r.FantasyProsRank,
-                    PositionRank: r.PositionRank,
-                    Tier: r.Tier,
+                    PositionRank: r.FantasyProsPositionRank,
+                    Tier: r.FantasyProsTier,
                     NeedLevel: needLevel,
                     FitLabel: fitLabel,
-                    ConsensusAdp: adp > 0 ? adp : null);
+                    ConsensusAdp: r.ConsensusAdp,
+                    Age: r.Age,
+                    DraftRound: r.DraftRound,
+                    DraftPick: r.DraftPick,
+                    CollegeTeam: r.CollegeTeam,
+                    HeadshotUrl: r.HeadshotUrl,
+                    DynastyScore: r.DynastyScore,
+                    ScoreRank: r.ScoreRank,
+                    PffGrade: r.PffGrade,
+                    PffRank: r.PffRank);
             })
+            // Need-tier first (Priority Picks float up), then FantasyPros rank asc.
+            // FP rank is the trusted signal today; DynastyScore is a tiebreaker
+            // until composite calibration converges (ρ ≥ 0.85 target).
+            // Both columns are sortable client-side so the user can override.
             .OrderBy(r => r.NeedLevel == "Need" ? 0
-                : r.NeedLevel == "Neutral" ? 1 : 2)
-            .ThenBy(r => r.FantasyProsRank)
+                       : r.NeedLevel == "Neutral" ? 1 : 2)
+            .ThenBy(r => r.FantasyProsRank ?? 999)
+            .ThenByDescending(r => r.DynastyScore)
             .ToList();
 
         return new DraftPrepDto(

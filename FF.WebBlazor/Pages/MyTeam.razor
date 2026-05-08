@@ -625,26 +625,60 @@
                 <MudTable Items="@FilteredRookieTargets" Dense="true" Hover="true" Striped="true"
                           Style="background: var(--fc-navy-card); table-layout:fixed; width:100%">
                     <HeaderContent>
-                        <MudTh Style="width:7%">Rank</MudTh>
-                        <MudTh Style="width:28%">Player</MudTh>
-                        <MudTh Style="width:8%">Pos</MudTh>
-                        <MudTh Style="width:12%">Team</MudTh>
-                        <MudTh Style="width:10%">Tier</MudTh>
+                        <MudTh Style="width:7%">
+                            <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => x.ScoreRank)">
+                                <MudTooltip Text="Rank by composite DynastyScore (descending)">
+                                    Score Rank ⓘ
+                                </MudTooltip>
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh Style="width:7%">
+                            <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => (object)(x.FantasyProsRank ?? 999))"
+                                               InitialDirection="SortDirection.Ascending">
+                                FP Rank
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh Style="width:21%">
+                            <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => x.PlayerName)">
+                                Player
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh Style="width:6%">Pos</MudTh>
+                        <MudTh Style="width:8%">Team</MudTh>
+                        <MudTh Style="width:5%">
+                            <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => (object)(x.Age ?? 99))">
+                                Age
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh Style="width:7%">Tier</MudTh>
                         <MudTh>
                             <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => (object)(x.ConsensusAdp ?? 999.0))">
                                 ADP
                             </MudTableSortLabel>
                         </MudTh>
-                        <MudTh Style="width:12%">Fit</MudTh>
+                        <MudTh Style="width:13%">
+                            <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => x.DynastyScore)">
+                                <MudTooltip Text="Composite dynasty score — same calculation as Draft Board. Click to sort by this column.">
+                                    Score ⓘ
+                                </MudTooltip>
+                            </MudTableSortLabel>
+                        </MudTh>
+                        <MudTh Style="width:11%">Fit</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         @{
                             var rc = context;
                         }
-                        <MudTd>
+                        <MudTd DataLabel="Score Rank">
                             <MudText Typo="Typo.body2"
                                      Style="font-family:'JetBrains Mono',monospace; color: var(--mud-palette-text-secondary);">
-                                #@context.FantasyProsRank
+                                #@context.ScoreRank
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="FP Rank">
+                            <MudText Typo="Typo.body2"
+                                     Style="font-family:'JetBrains Mono',monospace; color: var(--mud-palette-text-secondary);">
+                                @(context.FantasyProsRank.HasValue ? $"#{context.FantasyProsRank}" : "—")
                             </MudText>
                         </MudTd>
                         <MudTd DataLabel="Player">
@@ -653,6 +687,10 @@
                                        OnClick="@(() => _ = OpenPlayerCardFromRookieAsync(context))">
                                 @context.PlayerName
                             </MudButton>
+                            @if (!string.IsNullOrEmpty(context.CollegeTeam))
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.CollegeTeam</MudText>
+                            }
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small" Style="@GetDraftPositionStyle(context.Position)">
@@ -661,6 +699,9 @@
                         </MudTd>
                         <MudTd>@(context.NflTeam ?? "—")</MudTd>
                         <MudTd>
+                            <MudText Typo="Typo.body2">@(context.Age?.ToString() ?? "—")</MudText>
+                        </MudTd>
+                        <MudTd>
                             <MudText Typo="Typo.body2">@(context.Tier ?? "—")</MudText>
                         </MudTd>
                         <MudTd DataLabel="ADP">
@@ -668,6 +709,17 @@
                                      Style="font-family:'JetBrains Mono',monospace;">
                                 @(context.ConsensusAdp.HasValue ? context.ConsensusAdp.Value.ToString("F1") : "—")
                             </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Score">
+                            <div class="d-flex align-center gap-2">
+                                <MudProgressLinear Value="@context.DynastyScore"
+                                                   Max="100"
+                                                   Color="@GetScoreColor(context.DynastyScore)"
+                                                   Style="width:50px; height:6px; border-radius:3px;" />
+                                <MudText Typo="Typo.body2" Style="font-weight:600; min-width:32px;">
+                                    @context.DynastyScore.ToString("F1")
+                                </MudText>
+                            </div>
                         </MudTd>
                         <MudTd>
                             <MudChip T="string" Size="Size.Small" Style="@GetFitStyle(context.NeedLevel)">
@@ -1119,6 +1171,16 @@ else if (_roster is null)
         _     => Color.Error
     };
 
+    // Mirrors Draft Board (RookieDraftBoard.razor) so the same DynastyScore
+    // renders with identical color treatment on both pages. (DRAFT-PARITY-001)
+    private static Color GetScoreColor(double score) => score switch
+    {
+        >= 75 => Color.Success,
+        >= 50 => Color.Primary,
+        >= 25 => Color.Warning,
+        _     => Color.Default
+    };
+
     private static string GetNeedChipStyle(string needLevel) => needLevel switch
     {
         "Need"     => "background:#1a3a2a; color:#4ade80;",
@@ -1177,8 +1239,11 @@ else if (_roster is null)
     private record PositionNeedDto(string Position, string Grade, int GradeScore, string NeedLevel, string Summary);
     record RookieTargetDto(
             string SleeperPlayerId, string PlayerName, string Position, string? NflTeam,
-            int FantasyProsRank, int PositionRank, string? Tier, string NeedLevel, string FitLabel,
-            double? ConsensusAdp = null);
+            int? FantasyProsRank, int? PositionRank, string? Tier, string NeedLevel, string FitLabel,
+            double? ConsensusAdp,
+            // Parity fields with Draft Board (DRAFT-PARITY-001)
+            int? Age, int? DraftRound, int? DraftPick, string? CollegeTeam, string? HeadshotUrl,
+            double DynastyScore, int ScoreRank, double? PffGrade, int? PffRank);
 
     private async Task OpenPlayerCardAsync(MyRosterPlayerDto player)
     {
@@ -1215,14 +1280,15 @@ else if (_roster is null)
             FullName: r.PlayerName,
             Position: r.Position,
             NflTeam: r.NflTeam,
-            Age: null,
-            DraftRound: null, DraftPick: null, CollegeTeam: null,
-            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{r.SleeperPlayerId}.jpg",
+            Age: r.Age,
+            DraftRound: r.DraftRound, DraftPick: r.DraftPick, CollegeTeam: r.CollegeTeam,
+            HeadshotUrl: r.HeadshotUrl
+                ?? $"https://sleepercdn.com/content/nfl/players/thumb/{r.SleeperPlayerId}.jpg",
             FantasyProsRank: r.FantasyProsRank,
             FantasyProsTier: r.Tier,
-            PffGrade: null, PffRank: null,
+            PffGrade: r.PffGrade, PffRank: r.PffRank,
             ConsensusAdp: r.ConsensusAdp,
-            DynastyScore: 0, DraftCapitalScore: 0, PositionalScore: 0,
+            DynastyScore: r.DynastyScore, DraftCapitalScore: 0, PositionalScore: 0,
             ValuationBlendScore: 0, FantasyProsScore: 0, PffGradeScore: 0,
             ConsensusAdpScore: 0, AgeMultiplier: 0, AthleticismSignalScore: 0,
             AthleticismScore: null, SpeedScore: null, FortyYard: null,

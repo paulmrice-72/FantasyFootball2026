@@ -29,14 +29,18 @@ public record RookiePlayerDto(
     string? AdpSource,
     // Composite score + per-signal breakdown
     double DynastyScore,
+    // DRAFT-PARITY-001 (2026-05-07): server-stamped rank by DynastyScore desc.
+    // Stable across both Draft Board and Draft Prep so the same player has the
+    // same Score Rank regardless of how the user re-sorts the table client-side.
+    int ScoreRank,
     double DraftCapitalScore,
     double FantasyProsScore,
     double PffGradeScore,
     double ConsensusAdpScore,
-    double AthleticismSignalScore,   // ← normalized signal score (0-100)
+    double AthleticismSignalScore, // ← normalized signal score (0-100)
     double ValuationBlendScore,
     double PositionalScore,
-    double AgeMultiplier,       // percentage points e.g. +3.0 or -4.0
+    double AgeMultiplier,          // percentage points e.g. +3.0 or -4.0
     List<string> ActiveSignals,
     double? AthleticismScore,
     double? SpeedScore,
