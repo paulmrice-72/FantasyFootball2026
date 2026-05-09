@@ -9,6 +9,7 @@ public record RecordDraftPickCommand(
     string SleeperPlayerId,
     string PlayerName,
     string Position,
+    string? NflTeam,        // ← NEW
     int Round,
     int Slot,
     string? PickedByTeamName,

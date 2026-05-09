@@ -71,6 +71,13 @@ public interface ISleeperApiClient
         string leagueId,
         CancellationToken cancellationToken = default);
 
+    // ── Single draft ─────────────────────────────────────────────────────
+    // Returns metadata for a specific draft including status and settings.
+    [Get("/v1/draft/{draftId}")]
+    Task<SleeperLeagueDraftDto> GetDraftAsync(
+        string draftId,
+        CancellationToken cancellationToken = default);
+
     // ── Draft picks ──────────────────────────────────────────────────────
     // Returns all picks in a specific draft with actual pick_no and draft_slot.
     // Used to get the real slot number (e.g. 1.07) once draft order is set.

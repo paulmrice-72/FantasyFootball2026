@@ -23,7 +23,17 @@ public interface ISleeperDraftService
     /// Returns all picks that have been made in the given draft (player_id is non-null).
     /// </summary>
     Task<List<SleeperMadePickDto>> GetMadePicksAsync(string draftId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns draft status ("pre_draft", "drafting", "complete") and total expected picks
+    /// (rounds × teams) so the sync handler can stop polling when Sleeper says it's done.
+    /// </summary>
+    Task<SleeperDraftStatusDto> GetDraftStatusAsync(string draftId, CancellationToken ct = default);
 }
+
+public record SleeperDraftStatusDto(
+    string Status,          // "pre_draft" | "drafting" | "complete"
+    int TotalPicks);        // rounds × teams — 0 if settings unavailable
 
 public record SleeperMadePickDto(
     string PlayerId,

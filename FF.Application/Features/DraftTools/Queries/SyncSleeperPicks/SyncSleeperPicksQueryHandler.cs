@@ -1,5 +1,6 @@
 // FF.Application/Features/DraftTools/Queries/SyncSleeperPicks/SyncSleeperPicksQueryHandler.cs
 using FF.Application.Features.DraftTools.Commands.RecordDraftPick;
+using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.SharedKernel.Common;
@@ -11,6 +12,7 @@ namespace FF.Application.Features.DraftTools.Queries.SyncSleeperPicks;
 public class SyncSleeperPicksQueryHandler(
     IDraftSessionRepository sessionRepository,
     ISleeperDraftService sleeperDraftService,
+    IPlayerRepository playerRepository,
     IMediator mediator,
     ILogger<SyncSleeperPicksQueryHandler> logger)
     : IRequestHandler<SyncSleeperPicksQuery, Result<SyncSleeperPicksResult>>
@@ -61,10 +63,11 @@ public class SyncSleeperPicksQueryHandler(
         // Build set of already-recorded SleeperPlayerIds for fast diff
         var recordedIds = session.Picks.Select(p => p.SleeperPlayerId).ToHashSet();
 
-        // Draft is complete when every pick has a player_id — compare total slots
-        // We can't know total slots here easily, so treat "no new picks AND > 0 picks exist" as possible complete;
-        // the DraftComplete flag is best-effort — the timer will just stop returning new picks naturally
-        bool draftComplete = sleeperPicks.Count > 0 && sleeperPicks.All(p => recordedIds.Contains(p.PlayerId));
+        // Ask Sleeper directly whether the draft is complete — don't guess from pick counts.
+        // "caught up" != "finished"; guessing caused the timer to stop after the first sync.
+        var draftStatus = await sleeperDraftService.GetDraftStatusAsync(
+            session.SleeperDraftId, cancellationToken);
+        bool draftComplete = draftStatus.Status == "complete";
 
         var newPicks = new List<SyncedPickDto>();
 
@@ -76,6 +79,9 @@ public class SyncSleeperPicksQueryHandler(
             bool isMyPick = session.MyRosterId.HasValue
                 && pick.RosterId == session.MyRosterId.Value.ToString();
 
+            // Look up NflTeam from Postgres — Sleeper pick event doesn't include it
+            var player = await playerRepository.GetBySleeperIdAsync(pick.PlayerId, cancellationToken);
+
             // Record via existing command (idempotent)
             var recordResult = await mediator.Send(
                 new RecordDraftPickCommand(
@@ -84,6 +90,7 @@ public class SyncSleeperPicksQueryHandler(
                     SleeperPlayerId: pick.PlayerId,
                     PlayerName: pick.PlayerName,
                     Position: pick.Position,
+                    NflTeam: player?.NflTeam,
                     Round: pick.Round,
                     Slot: pick.DraftSlot,
                     PickedByTeamName: null,
