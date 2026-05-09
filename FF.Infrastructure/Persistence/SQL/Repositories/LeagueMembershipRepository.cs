@@ -26,7 +26,8 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
                     m.Role,
                     m.IsActive,
                     l.LeagueType,
-                    l.Avatar))          // ← NEW
+                    l.Avatar,
+                    l.TotalTeams))   // ← NEW: map from League entity
             .ToListAsync(cancellationToken);
     }
 
