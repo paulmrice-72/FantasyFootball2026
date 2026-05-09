@@ -175,6 +175,7 @@ public static class DependencyInjection
         services.AddScoped<RosterProfileService>();
         services.AddScoped<IFantasyProsRookieRankingRepository, FantasyProsRookieRankingRepository>();
         services.AddScoped<IDraftSessionRepository, DraftSessionRepository>();
+        services.AddScoped<ISleeperDraftService, SleeperDraftService>();
         services.AddScoped<IPlayerNarrativeRepository, PlayerNarrativeRepository>();
         services.AddHttpClient<IPlayerScoutService, PlayerScoutService>(client =>
         {

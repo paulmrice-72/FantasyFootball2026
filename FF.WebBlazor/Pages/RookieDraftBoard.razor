@@ -26,7 +26,7 @@
 @* ── SESSION BAR ─────────────────────────────────────────────────────── *@
 <MudPaper Class="fc-card pa-3 mb-4" Elevation="0">
     <div class="d-flex align-center gap-3 flex-wrap">
-        @* Mode badge — shows current mode, not a toggle (auto-set by league type) *@
+        @* Mode badge *@
         <MudChip T="string"
                  Color="@(_isRedraftMode ? Color.Warning : Color.Primary)"
                  Size="Size.Small"
@@ -58,6 +58,14 @@
                     <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Style="color:#34D399; font-size:0.9rem;" />
                     <MudText Typo="Typo.body2" Style="color:#34D399; font-weight:600;">Session Active</MudText>
                     <MudText Typo="Typo.caption" Class="mud-text-secondary ml-2">@_picks.Count picked</MudText>
+                    @if (_autoSyncEnabled)
+                    {
+                        <MudTooltip Text="Auto-syncing picks from Sleeper every 30s">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Sync">
+                                Live
+                            </MudChip>
+                        </MudTooltip>
+                    }
                 </div>
             }
         }
@@ -213,7 +221,7 @@
                     </MudTh>
                     <MudTh>
                         <MudTableSortLabel SortBy="new Func<RookiePlayerDto, object>(x => (object)(x.FantasyProsRank ?? 999))"
-                                           InitialDirection="SortDirection.Ascending">
+                                          InitialDirection="SortDirection.Ascending">
                             FP Rank
                         </MudTableSortLabel>
                     </MudTh>
@@ -262,9 +270,9 @@
                     <MudTd DataLabel="Score">
                         <div class="d-flex align-center gap-2">
                             <MudProgressLinear Value="@context.DynastyScore"
-                                               Max="100"
-                                               Color="@GetScoreColor(context.DynastyScore)"
-                                               Style="width:60px; height:6px; border-radius:3px;" />
+                                              Max="100"
+                                              Color="@GetScoreColor(context.DynastyScore)"
+                                              Style="width:60px; height:6px; border-radius:3px;" />
                             <MudText Typo="Typo.body2" Style="font-weight:600; min-width:36px;">
                                 @context.DynastyScore.ToString("F1")
                             </MudText>
@@ -278,15 +286,19 @@
                     <MudTd DataLabel="Action">
                         @if (IsDrafted(context.SleeperPlayerId))
                         {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">Drafted</MudChip>
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(IsMyPick(context.SleeperPlayerId) ? Color.Success : Color.Default)"
+                                     Variant="Variant.Outlined">
+                                @(IsMyPick(context.SleeperPlayerId) ? "My Pick" : "Drafted")
+                            </MudChip>
                         }
                         else if (_sessionId is not null)
                         {
                             <MudTooltip Text="Mark as drafted">
                                 <MudIconButton Icon="@Icons.Material.Filled.HowToVote"
-                                               Size="Size.Small"
-                                               Color="Color.Primary"
-                                               OnClick="@(() => MarkDrafted(context))" />
+                                              Size="Size.Small"
+                                              Color="Color.Primary"
+                                              OnClick="@(() => MarkDrafted(context))" />
                             </MudTooltip>
                         }
                         else
@@ -341,29 +353,37 @@
 
 @code {
     // ── State ───────────────────────────────────────────────────────────
-    private List<RookiePlayerDto> _allRookies   = [];
-    private List<RookiePlayerDto> _filtered     = [];
-    private List<OffSeasonPlayerDto> _redraftPlayers  = [];
+    private List<RookiePlayerDto> _allRookies = [];
+    private List<RookiePlayerDto> _filtered = [];
+    private List<OffSeasonPlayerDto> _redraftPlayers = [];
     private List<OffSeasonPlayerDto> _filteredRedraft = [];
-    private List<LeagueItem> _leagues           = [];
-    private HashSet<string> _picks              = [];
+    private List<LeagueItem> _leagues = [];
+
+    // _picks = all drafted player IDs; _myPickIds = subset that are mine
+    private HashSet<string> _picks = [];
+    private HashSet<string> _myPickIds = [];
 
     private string? _selectedLeagueId;
     private string? _selectedLeagueName;
     private string? _sessionId;
     private string? _selectedPosition;
-    private string  _searchText    = string.Empty;
-    private bool    _loading       = true;
-    private bool    _isRedraftMode = false;
+    private string _searchText = string.Empty;
+    private bool _loading = true;
+    private bool _isRedraftMode = false;
+    private bool _autoSyncEnabled = false;
 
     // Session dialog state
     private bool _startingSession = false;
-    private bool _recordingPick   = false;
-    private bool _showPickDialog  = false;
+    private bool _recordingPick = false;
+    private bool _showPickDialog = false;
     private RookiePlayerDto? _pendingPick;
-    private int  _pickRound = 1;
-    private int  _pickSlot  = 1;
-    private bool _isMyPick  = true;
+    private int _pickRound = 1;
+    private int _pickSlot = 1;
+    private bool _isMyPick = true;
+
+    // Polling timer
+    private Timer? _syncTimer;
+    private bool _syncing = false;
 
     // ── Lifecycle ───────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
@@ -371,10 +391,9 @@
         LeagueState.OnLeagueChanged += OnLeagueChangedHandler;
         await LoadLeagues();
 
-        // Sync local selector to global LeagueState
         if (!string.IsNullOrEmpty(LeagueState.ActiveLeagueId))
         {
-            _selectedLeagueId   = LeagueState.ActiveLeagueId;
+            _selectedLeagueId = LeagueState.ActiveLeagueId;
             _selectedLeagueName = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId)?.LeagueName;
         }
 
@@ -382,6 +401,10 @@
         _isRedraftMode = league?.LeagueType != "Dynasty";
 
         await LoadCurrentMode();
+
+        // Auto-resume any active session for this league
+        if (!_isRedraftMode && !string.IsNullOrEmpty(_selectedLeagueId))
+            await TryResumeSession();
     }
 
     private void OnLeagueChangedHandler()
@@ -389,20 +412,24 @@
         var league = _leagues.FirstOrDefault(l => l.LeagueId == LeagueState.ActiveLeagueId);
         if (league is null) return;
 
-        _selectedLeagueId   = league.LeagueId;
+        _selectedLeagueId = league.LeagueId;
         _selectedLeagueName = league.LeagueName;
-        _isRedraftMode      = league.LeagueType != "Dynasty";
-        _sessionId          = null;
-        _picks              = [];
-        // Clear cached data so switching leagues forces a fresh load
-        _allRookies      = [];
-        _filtered        = [];
-        _redraftPlayers  = [];
+        _isRedraftMode = league.LeagueType != "Dynasty";
+        _sessionId = null;
+        _picks = [];
+        _myPickIds = [];
+        _allRookies = [];
+        _filtered = [];
+        _redraftPlayers = [];
         _filteredRedraft = [];
+
+        StopSyncTimer();
 
         _ = InvokeAsync(async () =>
         {
             await LoadCurrentMode();
+            if (!_isRedraftMode && !string.IsNullOrEmpty(_selectedLeagueId))
+                await TryResumeSession();
             StateHasChanged();
         });
     }
@@ -410,6 +437,136 @@
     public void Dispose()
     {
         LeagueState.OnLeagueChanged -= OnLeagueChangedHandler;
+        StopSyncTimer();
+    }
+
+    // ── Auto-resume ─────────────────────────────────────────────────────
+    /// <summary>
+    /// On page load (or league switch), check if there's an active session.
+    /// If so, restore state and start the polling timer.
+    /// </summary>
+    private async Task TryResumeSession()
+    {
+        try
+        {
+            var response = await Http.GetAsync(
+                $"api/v1/drafttools/sessions/active?leagueId={_selectedLeagueId}");
+
+            if (!response.IsSuccessStatusCode) return; // 404 = no active session, that's fine
+
+            var session = await response.Content.ReadFromJsonAsync<DraftSessionDto>();
+            if (session is null) return;
+
+            _sessionId = session.Id;
+
+            // Restore existing picks into local state
+            foreach (var pick in session.Picks)
+            {
+                _picks.Add(pick.SleeperPlayerId);
+                if (pick.IsMyPick) _myPickIds.Add(pick.SleeperPlayerId);
+            }
+
+            // Start auto-sync if draft is linked
+            if (!string.IsNullOrEmpty(session.SleeperDraftId))
+            {
+                StartSyncTimer();
+                Snackbar.Add($"Draft session resumed · {_picks.Count} picks so far", Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add("Draft session resumed (manual mode — no Sleeper draft linked)", Severity.Info);
+            }
+
+            StateHasChanged();
+        }
+        catch
+        {
+            // Non-fatal — just means no active session
+        }
+    }
+
+    // ── Polling timer ────────────────────────────────────────────────────
+    private void StartSyncTimer()
+    {
+        _autoSyncEnabled = true;
+        _syncTimer?.Dispose();
+        // Fire immediately then every 30s
+        _syncTimer = new Timer(
+            async _ => await SyncFromSleeper(),
+            null,
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(30));
+    }
+
+    private void StopSyncTimer()
+    {
+        _autoSyncEnabled = false;
+        _syncTimer?.Dispose();
+        _syncTimer = null;
+    }
+
+    private async Task SyncFromSleeper()
+    {
+        if (_sessionId is null || _syncing) return;
+        _syncing = true;
+        try
+        {
+            var response = await Http.GetFromJsonAsync<SyncResult>(
+                $"api/v1/drafttools/sessions/{_sessionId}/sync-sleeper");
+
+            if (response is null) return;
+
+            bool changed = false;
+            foreach (var pick in response.NewPicks)
+            {
+                if (_picks.Add(pick.SleeperPlayerId))
+                {
+                    if (pick.IsMyPick) _myPickIds.Add(pick.SleeperPlayerId);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                await InvokeAsync(() =>
+                {
+                    StateHasChanged();
+                    // Show a quiet snackbar only for new picks, not every poll
+                    if (response.NewPicks.Count > 0)
+                    {
+                        var myNew = response.NewPicks.Where(p => p.IsMyPick).ToList();
+                        var otherNew = response.NewPicks.Where(p => !p.IsMyPick).ToList();
+
+                        foreach (var pick in myNew)
+                            Snackbar.Add($"Your pick: {pick.PlayerName} ({pick.Position}) — R{pick.Round} S{pick.Slot}", Severity.Success);
+
+                        if (otherNew.Count == 1)
+                            Snackbar.Add($"Picked: {otherNew[0].PlayerName} ({otherNew[0].Position})", Severity.Normal);
+                        else if (otherNew.Count > 1)
+                            Snackbar.Add($"{otherNew.Count} picks synced from Sleeper", Severity.Normal);
+                    }
+                });
+            }
+
+            // If draft is complete, stop polling
+            if (response.DraftComplete)
+            {
+                StopSyncTimer();
+                await InvokeAsync(() =>
+                {
+                    Snackbar.Add("Draft complete! All picks have been recorded.", Severity.Success);
+                    StateHasChanged();
+                });
+            }
+        }
+        catch
+        {
+            // Transient — ignore, will retry next tick
+        }
+        finally
+        {
+            _syncing = false;
+        }
     }
 
     // ── Data loading ────────────────────────────────────────────────────
@@ -431,7 +588,7 @@
                 _leagues = ctx.Leagues ?? [];
                 if (_leagues.Count > 0 && string.IsNullOrEmpty(_selectedLeagueId))
                 {
-                    _selectedLeagueId   = _leagues[0].LeagueId;
+                    _selectedLeagueId = _leagues[0].LeagueId;
                     _selectedLeagueName = _leagues[0].LeagueName;
                 }
             }
@@ -458,7 +615,7 @@
         {
             Snackbar.Add("Failed to load rookie pool.", Severity.Error);
             _allRookies = [];
-            _filtered   = [];
+            _filtered = [];
         }
         finally
         {
@@ -480,7 +637,7 @@
         catch
         {
             Snackbar.Add("Failed to load redraft rankings.", Severity.Error);
-            _redraftPlayers  = [];
+            _redraftPlayers = [];
             _filteredRedraft = [];
         }
         finally
@@ -517,7 +674,6 @@
         await LoadCurrentMode();
     }
 
-    // SearchText property — client-side filter, no re-fetch
     private string SearchText
     {
         get => _searchText;
@@ -540,11 +696,27 @@
             var response = await Http.PostAsJsonAsync(
                 "api/v1/drafttools/sessions",
                 new { leagueId = _selectedLeagueId, leagueName = _selectedLeagueName ?? _selectedLeagueId, season = 2026 });
+
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<SessionStartResponse>();
                 _sessionId = result?.SessionId;
-                Snackbar.Add("Draft session started!", Severity.Success);
+                _picks = [];
+                _myPickIds = [];
+
+                // Load the session back to check if a draft_id was found
+                var session = await Http.GetFromJsonAsync<DraftSessionDto>(
+                    $"api/v1/drafttools/sessions/{_sessionId}");
+
+                if (session is not null && !string.IsNullOrEmpty(session.SleeperDraftId))
+                {
+                    StartSyncTimer();
+                    Snackbar.Add("Draft session started — auto-syncing picks from Sleeper!", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Draft session started (manual mode — no active Sleeper draft found)", Severity.Info);
+                }
             }
             else
             {
@@ -561,14 +733,14 @@
         }
     }
 
-    // ── Pick management ─────────────────────────────────────────────────
+    // ── Manual pick fallback ────────────────────────────────────────────
     private void MarkDrafted(RookiePlayerDto player)
     {
-        _pendingPick     = player;
-        _pickRound       = 1;
-        _pickSlot        = _picks.Count + 1;
-        _isMyPick        = true;
-        _showPickDialog  = true;
+        _pendingPick = player;
+        _pickRound = 1;
+        _pickSlot = _picks.Count + 1;
+        _isMyPick = true;
+        _showPickDialog = true;
     }
 
     private async Task ConfirmPick()
@@ -581,17 +753,19 @@
                 $"api/v1/drafttools/sessions/{_sessionId}/picks",
                 new
                 {
-                    sleeperPlayerId  = _pendingPick.SleeperPlayerId,
-                    playerName       = _pendingPick.FullName,
-                    position         = _pendingPick.Position,
-                    round            = _pickRound,
-                    slot             = _pickSlot,
+                    sleeperPlayerId = _pendingPick.SleeperPlayerId,
+                    playerName = _pendingPick.FullName,
+                    position = _pendingPick.Position,
+                    round = _pickRound,
+                    slot = _pickSlot,
                     pickedByTeamName = (string?)null,
-                    isMyPick         = _isMyPick
+                    isMyPick = _isMyPick
                 });
+
             if (response.IsSuccessStatusCode)
             {
                 _picks.Add(_pendingPick.SleeperPlayerId);
+                if (_isMyPick) _myPickIds.Add(_pendingPick.SleeperPlayerId);
                 _showPickDialog = false;
                 Snackbar.Add($"{_pendingPick.FullName} marked as drafted.", Severity.Success);
             }
@@ -611,6 +785,7 @@
     }
 
     private bool IsDrafted(string sleeperPlayerId) => _picks.Contains(sleeperPlayerId);
+    private bool IsMyPick(string sleeperPlayerId) => _myPickIds.Contains(sleeperPlayerId);
 
     private async Task OpenPlayerCard(RookiePlayerDto player)
     {
@@ -668,7 +843,7 @@
         "WR" => Color.Primary,
         "TE" => Color.Secondary,
         "RB" => Color.Success,
-        _    => Color.Default
+        _ => Color.Default
     };
 
     private static Color GetScoreColor(double score) => score switch
@@ -676,7 +851,7 @@
         >= 75 => Color.Success,
         >= 50 => Color.Primary,
         >= 25 => Color.Warning,
-        _     => Color.Default
+        _ => Color.Default
     };
 
     // ── DTOs ────────────────────────────────────────────────────────────
@@ -719,27 +894,57 @@
         string? CombineSchool);
 
     private record OffSeasonPlayerDto(
-        string  SleeperPlayerId,
-        string  PlayerName,
-        string  Position,
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
         string? NflTeam,
-        int     Age,
-        double  TradeValue,
-        int     Rank,
+        int Age,
+        double TradeValue,
+        int Rank,
         string? CollegeTeam);
 
     private record LeagueItem(
         string LeagueId,
         string LeagueName,
-        int    Season,
+        int Season,
         string Role,
-        bool   IsActive   = false,
+        bool IsActive = false,
         string LeagueType = "Redraft");
 
     private record UserContextResponse(
-        bool             IsSleeperLinked,
+        bool IsSleeperLinked,
         List<LeagueItem>? Leagues,
-        string?          ActiveLeagueId);
+        string? ActiveLeagueId);
 
     private record SessionStartResponse(string SessionId);
+
+    // Minimal DTO for reading back a session from the API
+    private record DraftSessionDto(
+        string Id,
+        string LeagueId,
+        bool IsActive,
+        string? SleeperDraftId,
+        List<DraftPickDto> Picks);
+
+    private record DraftPickDto(
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        int Round,
+        int Slot,
+        bool IsMyPick);
+
+    // Sync response from /sync-sleeper
+    private record SyncResult(
+        List<SyncedPickDto> NewPicks,
+        int TotalPicksInSession,
+        bool DraftComplete);
+
+    private record SyncedPickDto(
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        int Round,
+        int Slot,
+        bool IsMyPick);
 }
