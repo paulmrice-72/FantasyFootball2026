@@ -1,7 +1,6 @@
 ﻿// FF.Infrastructure/Persistence/Mongo/Repositories/DraftSessionRepository.cs
 using FF.Application.Interfaces.Repositories;
 using FF.Domain.Documents;
-using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace FF.Infrastructure.Persistence.Mongo.Repositories;
@@ -43,8 +42,9 @@ public class DraftSessionRepository(MongoDbContext context) : IDraftSessionRepos
     public async Task InsertAsync(
         DraftSessionDocument document, CancellationToken ct = default)
     {
+        // Use Guid so the Id is a plain string — no ObjectId type ambiguity
         if (string.IsNullOrEmpty(document.Id))
-            document.Id = ObjectId.GenerateNewId().ToString();
+            document.Id = Guid.NewGuid().ToString();
         await _collection.InsertOneAsync(document, cancellationToken: ct);
     }
 

@@ -5,6 +5,7 @@
 // They are infrastructure concerns - they never leave FF.Infrastructure.
 // Mapping to domain entities happens in the command/query handlers.
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace FF.Infrastructure.ExternalApis.Sleeper.Dtos;
@@ -435,6 +436,7 @@ public class SleeperDraftPickDetailDto
 
     // roster_id of who will make/receive this pick (current owner)
     [JsonPropertyName("roster_id")]
+    [JsonConverter(typeof(JsonStringOrNumberConverter))]
     public string? RosterId { get; set; }
 
     // picked_by = user_id (empty string if slot has no user)
@@ -471,4 +473,21 @@ public class SleeperDraftPickMetadataDto
 
     [JsonPropertyName("status")]
     public string? Status { get; set; }
+}
+
+public class JsonStringOrNumberConverter : JsonConverter<string?>
+{
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return reader.TokenType switch
+        {
+            JsonTokenType.Number => reader.GetInt64().ToString(),
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Null => null,
+            _ => reader.GetString()
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value);
 }

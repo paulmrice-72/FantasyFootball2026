@@ -19,6 +19,7 @@
     <ProjectReference Include="..\FF.Domain\FF.Domain.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="Features\DraftTools\Queries\SyncSleeperPicks\" />
     <Folder Include="Features\EmergenceAlert\Queries\" />
   </ItemGroup>
 </Project>
