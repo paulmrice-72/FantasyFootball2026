@@ -36,6 +36,7 @@ public class DraftPick
     public string SleeperPlayerId { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;
     public string Position { get; set; } = string.Empty;
+    public string? NflTeam { get; set; }               // ← NEW
     public int Round { get; set; }
     public int Slot { get; set; }
     public string? PickedByTeamName { get; set; }

@@ -49,6 +49,24 @@ public class SleeperDraftService(
         }
     }
 
+    public async Task<SleeperDraftStatusDto> GetDraftStatusAsync(string draftId, CancellationToken ct = default)
+    {
+        try
+        {
+            var draft = await sleeperApiClient.GetDraftAsync(draftId, ct);
+            var rounds = draft.Settings?.Rounds ?? 0;
+            var teams = draft.Settings?.Teams ?? 0;
+            return new SleeperDraftStatusDto(
+                Status: draft.Status ?? "unknown",
+                TotalPicks: rounds * teams);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not retrieve draft status for draft {DraftId}", draftId);
+            return new SleeperDraftStatusDto(Status: "unknown", TotalPicks: 0);
+        }
+    }
+
     public async Task<List<SleeperMadePickDto>> GetMadePicksAsync(string draftId, CancellationToken ct = default)
     {
         var picks = await sleeperApiClient.GetDraftPicksAsync(draftId, ct);
@@ -64,7 +82,7 @@ public class SleeperDraftService(
                 Round: p.Round,
                 DraftSlot: p.DraftSlot,
                 RosterId: p.RosterId?.ToString() ?? string.Empty
-            ))  
+            ))
             .ToList();
     }
 }

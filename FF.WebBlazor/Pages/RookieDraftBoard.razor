@@ -70,6 +70,17 @@
             }
         }
 
+        @* Hide Drafted — only when session active *@
+        @if (_sessionId is not null && !_isRedraftMode)
+        {
+            <MudCheckBox Value="_hideDrafted"
+                         ValueChanged="@((bool v) => { _hideDrafted = v; ApplyRookieFilter(); })"
+                         Label="Hide Drafted"
+                         Size="Size.Small"
+                         Color="Color.Primary"
+                         Class="ml-2" />
+        }
+
         <MudSpacer />
 
         <MudTextField Value="@SearchText"
@@ -96,7 +107,9 @@
     </MudChipSet>
 </MudPaper>
 
-@* ── BOARD ───────────────────────────────────────────────────────────── *@
+@* ── BOARD + MY PICKS LAYOUT ────────────────────────────────────────── *@
+<MudGrid Spacing="3">
+<MudItem xs="12" md="@(_sessionId is not null && !_isRedraftMode ? 9 : 12)">
 <MudPaper Class="fc-card" Elevation="0">
     @if (_loading)
     {
@@ -311,6 +324,69 @@
         }
     }
 </MudPaper>
+</MudItem>
+
+    @* ── MY PICKS PANEL ─────────────────────────────────────────────── *@
+    @if (_sessionId is not null && !_isRedraftMode)
+    {
+        <MudItem xs="12" md="3">
+            <MudPaper Class="fc-card pa-3" Elevation="0" Style="position:sticky; top:80px;">
+                <div class="d-flex align-center justify-space-between mb-3">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--fc-cyan);">
+                        My Picks
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @_myPicksList.Count of @_picks.Count
+                    </MudText>
+                </div>
+
+                @if (_myPicksList.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">No picks recorded yet.</MudText>
+                }
+                else
+                {
+                    @foreach (var pick in _myPicksList)
+                    {
+                        <div class="d-flex align-center gap-2 mb-2">
+                            <MudText Typo="Typo.caption"
+                                     Style="font-family:'JetBrains Mono',monospace; color:var(--fc-cyan); min-width:36px; font-weight:600;">
+                                @($"{pick.Round}.{pick.Slot:D2}")
+                            </MudText>
+                            <div style="flex:1; min-width:0;">
+                                @{
+                                    var cardPlayer = _allRookies.FirstOrDefault(r => r.SleeperPlayerId == pick.SleeperPlayerId);
+                                }
+                                @if (cardPlayer is not null)
+                                {
+                                    <MudButton Variant="Variant.Text"
+                                               Class="pa-0"
+                                               Style="font-weight:600; text-transform:none; min-width:0; height:auto; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;"
+                                               OnClick="@(() => OpenPlayerCard(cardPlayer))">
+                                        @pick.PlayerName
+                                    </MudButton>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                        @pick.PlayerName
+                                    </MudText>
+                                }
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@(pick.NflTeam ?? "FA")</MudText>
+                            </div>
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@GetPositionColor(pick.Position)"
+                                     Variant="Variant.Filled"
+                                     Style="min-width:32px;">
+                                @pick.Position
+                            </MudChip>
+                        </div>
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
 
 @* ── MARK DRAFTED DIALOG ─────────────────────────────────────────────── *@
 <MudDialog @bind-Visible="_showPickDialog">
@@ -362,6 +438,10 @@
     // _picks = all drafted player IDs; _myPickIds = subset that are mine
     private HashSet<string> _picks = [];
     private HashSet<string> _myPickIds = [];
+    private List<MyPickEntry> _myPicksList = [];   // ordered list for My Picks panel
+
+    // Draft board filter
+    private bool _hideDrafted = false;
 
     private string? _selectedLeagueId;
     private string? _selectedLeagueName;
@@ -379,7 +459,7 @@
     private RookiePlayerDto? _pendingPick;
     private int _pickRound = 1;
     private int _pickSlot = 1;
-    private bool _isMyPick = true;
+    private bool _isMyPick = false;
 
     // Polling timer
     private Timer? _syncTimer;
@@ -418,6 +498,8 @@
         _sessionId = null;
         _picks = [];
         _myPickIds = [];
+        _myPicksList = [];
+        _hideDrafted = false;
         _allRookies = [];
         _filtered = [];
         _redraftPlayers = [];
@@ -463,7 +545,17 @@
             foreach (var pick in session.Picks)
             {
                 _picks.Add(pick.SleeperPlayerId);
-                if (pick.IsMyPick) _myPickIds.Add(pick.SleeperPlayerId);
+                if (pick.IsMyPick)
+                {
+                    _myPickIds.Add(pick.SleeperPlayerId);
+                    _myPicksList.Add(new MyPickEntry(
+                        pick.SleeperPlayerId,
+                        pick.PlayerName,
+                        pick.Position,
+                        pick.NflTeam,
+                        pick.Round,
+                        pick.Slot));
+                }
             }
 
             // Start auto-sync if draft is linked
@@ -521,7 +613,17 @@
             {
                 if (_picks.Add(pick.SleeperPlayerId))
                 {
-                    if (pick.IsMyPick) _myPickIds.Add(pick.SleeperPlayerId);
+                    if (pick.IsMyPick)
+                    {
+                        _myPickIds.Add(pick.SleeperPlayerId);
+                        _myPicksList.Add(new MyPickEntry(
+                            pick.SleeperPlayerId,
+                            pick.PlayerName,
+                            pick.Position,
+                            null,
+                            pick.Round,
+                            pick.Slot));
+                    }
                     changed = true;
                 }
             }
@@ -650,6 +752,8 @@
     private void ApplyRookieFilter()
     {
         var query = _allRookies.AsEnumerable();
+        if (_hideDrafted)
+            query = query.Where(r => !_picks.Contains(r.SleeperPlayerId));
         if (!string.IsNullOrWhiteSpace(_searchText))
             query = query.Where(r =>
                 r.FullName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
@@ -737,9 +841,12 @@
     private void MarkDrafted(RookiePlayerDto player)
     {
         _pendingPick = player;
-        _pickRound = 1;
-        _pickSlot = _picks.Count + 1;
-        _isMyPick = true;
+        var league = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId);
+        var teamCount = league?.TotalTeams > 0 ? league.TotalTeams : 12;
+        var pickNumber = _picks.Count + 1;                          // 1-based absolute pick number
+        _pickRound = (int)Math.Ceiling((double)pickNumber / teamCount);
+        _pickSlot  = ((pickNumber - 1) % teamCount) + 1;
+        _isMyPick = false;
         _showPickDialog = true;
     }
 
@@ -756,6 +863,7 @@
                     sleeperPlayerId = _pendingPick.SleeperPlayerId,
                     playerName = _pendingPick.FullName,
                     position = _pendingPick.Position,
+                    nflTeam = _pendingPick.NflTeam,
                     round = _pickRound,
                     slot = _pickSlot,
                     pickedByTeamName = (string?)null,
@@ -765,7 +873,18 @@
             if (response.IsSuccessStatusCode)
             {
                 _picks.Add(_pendingPick.SleeperPlayerId);
-                if (_isMyPick) _myPickIds.Add(_pendingPick.SleeperPlayerId);
+                if (_isMyPick)
+                {
+                    _myPickIds.Add(_pendingPick.SleeperPlayerId);
+                    _myPicksList.Add(new MyPickEntry(
+                        _pendingPick.SleeperPlayerId,
+                        _pendingPick.FullName,
+                        _pendingPick.Position,
+                        _pendingPick.NflTeam,
+                        _pickRound,
+                        _pickSlot));
+                }
+                ApplyRookieFilter();
                 _showPickDialog = false;
                 Snackbar.Add($"{_pendingPick.FullName} marked as drafted.", Severity.Success);
             }
@@ -903,13 +1022,22 @@
         int Rank,
         string? CollegeTeam);
 
+    private record MyPickEntry(
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        string? NflTeam,
+        int Round,
+        int Slot);
+
     private record LeagueItem(
         string LeagueId,
         string LeagueName,
         int Season,
         string Role,
         bool IsActive = false,
-        string LeagueType = "Redraft");
+        string LeagueType = "Redraft",
+        int TotalTeams = 12);
 
     private record UserContextResponse(
         bool IsSleeperLinked,
@@ -930,6 +1058,7 @@
         string SleeperPlayerId,
         string PlayerName,
         string Position,
+        string? NflTeam,
         int Round,
         int Slot,
         bool IsMyPick);

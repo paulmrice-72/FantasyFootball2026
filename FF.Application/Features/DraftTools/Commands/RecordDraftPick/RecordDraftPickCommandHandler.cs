@@ -45,6 +45,7 @@ public class RecordDraftPickCommandHandler(
             SleeperPlayerId = request.SleeperPlayerId,
             PlayerName = request.PlayerName,
             Position = request.Position,
+            NflTeam = request.NflTeam,           // ← NEW
             Round = request.Round,
             Slot = request.Slot,
             PickedByTeamName = request.PickedByTeamName,
