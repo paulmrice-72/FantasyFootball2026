@@ -502,48 +502,60 @@
         }
     </MudTabPanel>
 
-    @* ══════════════════════════════════════════════════════════
-       TAB 4 — TRADE
-       ══════════════════════════════════════════════════════════ *@
-    <MudTabPanel Text="Trade">
-        <MudText Typo="Typo.subtitle2" Class="mb-3"
-                 Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
-            Trade Value Reference
-        </MudText>
-        <div class="d-flex flex-wrap gap-3 mb-4">
-            @if (ResolvedTradeValue > 0)
-            {
-                <MudPaper Class="pa-3" Elevation="0"
-                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Trade Value</MudText>
-                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                        @ResolvedTradeValue.ToString("F1")
-                    </MudText>
-                </MudPaper>
-            }
-            @{
-                var adpTrade = _rookieScores?.ConsensusAdp ?? Player.ConsensusAdp;
-            }
-            @if (adpTrade.HasValue)
-            {
-                <MudPaper Class="pa-3" Elevation="0"
-                          Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
-                             Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Consensus ADP</MudText>
-                    <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
-                        @adpTrade.Value.ToString("F1")
-                    </MudText>
-                </MudPaper>
-            }
-        </div>
-        <MudAlert Severity="Severity.Info">
-            Navigate to the <strong>Trade Analyzer</strong> for full side-by-side trade
-            evaluation, draft pick values, and fairness scoring.
-            <MudLink Href="@(Player.LeagueId != null ? $"/league/{Player.LeagueId}/trade" : "/trade")"
-                     Style="color:var(--fc-cyan); margin-left:6px;">Open Trade Analyzer →</MudLink>
-        </MudAlert>
-    </MudTabPanel>
+            @* ══════════════════════════════════════════════════════════
+   TAB 4 — TRADE
+══════════════════════════════════════════════════════════ *@
+            <MudTabPanel Text="Trade">
+                <MudText Typo="Typo.subtitle2" Class="mb-3"
+                         Style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:.7rem;color:var(--fc-cyan);">
+                    Trade Value Reference
+                </MudText>
+                <div class="d-flex flex-wrap gap-3 mb-4">
+                    @if (ResolvedTradeValue > 0)
+                    {
+                        <MudPaper Class="pa-3" Elevation="0"
+                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Trade Value</MudText>
+                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                                @ResolvedTradeValue.ToString("F1")
+                            </MudText>
+                        </MudPaper>
+                    }
+                    @{
+                        var adpTrade = _rookieScores?.ConsensusAdp ?? Player.ConsensusAdp;
+                    }
+                    @if (adpTrade.HasValue)
+                    {
+                        <MudPaper Class="pa-3" Elevation="0"
+                                  Style="background:rgba(99,179,237,.06);border:1px solid rgba(99,179,237,.15);border-radius:8px;min-width:130px;text-align:center;">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                     Style="text-transform:uppercase; letter-spacing:.06em; font-size:.65rem;">Consensus ADP</MudText>
+                            <MudText Typo="Typo.h5" Style="font-weight:700; color:var(--fc-cyan);">
+                                @adpTrade.Value.ToString("F1")
+                            </MudText>
+                        </MudPaper>
+                    }
+                </div>
+                @if (!string.IsNullOrEmpty(Player.LeagueId))
+                {
+                    <MudAlert Severity="Severity.Info">
+                        Navigate to the <strong>Trade Analyzer</strong> for full side-by-side trade
+                        evaluation, draft pick values, and fairness scoring.
+                        <MudLink Href="@($"/league/{Player.LeagueId}/trade")"
+                                 Style="color:var(--fc-cyan); margin-left:6px;">
+                            Open @(Player.IsRedraftContext ? "Redraft" : "Dynasty") Trade Analyzer →
+                        </MudLink>
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">
+                        Open this player from within a league to access the Trade Analyzer with
+                        full context — pick values, roster fit, and fairness scoring.
+                    </MudAlert>
+                }
+            </MudTabPanel>
 
     </MudTabs>
 </DialogContent>

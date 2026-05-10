@@ -12,6 +12,10 @@ public class InjuryAlertSyncJob(
     IInjuryAlertRepository injuryAlertRepository,
     ILogger<InjuryAlertSyncJob> logger)
 {
+    // Sleeper placeholder names to exclude — same pattern as PlayerRepository
+    private static readonly HashSet<string> InvalidPlayerNames =
+        ["Player Invalid", "Duplicate Player", "Deprecated Player", "Test Player"];
+
     public async Task RunAsync(CancellationToken ct = default)
     {
         logger.LogInformation("InjuryAlertSyncJob starting");
@@ -36,6 +40,8 @@ public class InjuryAlertSyncJob(
                 SyncedAt = DateTime.UtcNow
             })
             .Where(a => !string.IsNullOrEmpty(a.SleeperPlayerId))
+            .Where(a => !InvalidPlayerNames.Contains(a.PlayerName))   // ← NEW
+            .Where(a => !string.IsNullOrWhiteSpace(a.PlayerName))     // ← NEW: catches empty name fallback
             .ToList();
 
         // Replace the entire collection on each sync — injury reports change week to week
