@@ -42,7 +42,6 @@ public class DraftSessionRepository(MongoDbContext context) : IDraftSessionRepos
     public async Task InsertAsync(
         DraftSessionDocument document, CancellationToken ct = default)
     {
-        // Use Guid so the Id is a plain string — no ObjectId type ambiguity
         if (string.IsNullOrEmpty(document.Id))
             document.Id = Guid.NewGuid().ToString();
         await _collection.InsertOneAsync(document, cancellationToken: ct);
@@ -57,8 +56,21 @@ public class DraftSessionRepository(MongoDbContext context) : IDraftSessionRepos
         var update = Builders<DraftSessionDocument>.Update
             .Set(x => x.IsActive, document.IsActive)
             .Set(x => x.Picks, document.Picks)
+            .Set(x => x.CachedMyPlayerIds, document.CachedMyPlayerIds)
             .Set(x => x.UpdatedAt, document.UpdatedAt);
 
+        await _collection.UpdateOneAsync(filter, update, cancellationToken: CancellationToken.None);
+    }
+
+    public async Task UpdateRosterCacheAsync(
+        string sessionId, List<string> playerIds, CancellationToken ct = default)
+    {
+        var filter = Builders<DraftSessionDocument>.Filter.Eq(x => x.Id, sessionId);
+        var update = Builders<DraftSessionDocument>.Update
+            .Set(x => x.CachedMyPlayerIds, playerIds)
+            .Set(x => x.UpdatedAt, DateTime.UtcNow);
+
+        // Does NOT set Picks — won't clobber picks saved by RecordDraftPickCommand
         await _collection.UpdateOneAsync(filter, update, cancellationToken: CancellationToken.None);
     }
 }

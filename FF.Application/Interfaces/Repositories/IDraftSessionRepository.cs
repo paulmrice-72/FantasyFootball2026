@@ -12,4 +12,10 @@ public interface IDraftSessionRepository
         string userId, CancellationToken ct = default);
     Task InsertAsync(DraftSessionDocument document, CancellationToken ct = default);
     Task UpdateAsync(DraftSessionDocument document, CancellationToken ct = default);
+
+    /// <summary>
+    /// Targeted update — only writes CachedMyPlayerIds and UpdatedAt.
+    /// Does NOT touch Picks, so it won't clobber picks saved by RecordDraftPickCommand.
+    /// </summary>
+    Task UpdateRosterCacheAsync(string sessionId, List<string> playerIds, CancellationToken ct = default);
 }
