@@ -1,30 +1,22 @@
 // FF.Domain/Documents/DraftSessionDocument.cs
 namespace FF.Domain.Documents;
 
-/// <summary>
-/// Tracks draft picks made during a user's dynasty rookie draft session.
-/// Collection: draft_sessions
-/// </summary>
 public class DraftSessionDocument
 {
-    public string Id { get; set; } = string.Empty; // Guid string
+    public string Id { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
     public string LeagueId { get; set; } = string.Empty;
     public string LeagueName { get; set; } = string.Empty;
     public int Season { get; set; }
     public bool IsActive { get; set; } = true;
-
-    /// <summary>
-    /// Sleeper draft_id for the active rookie draft in this league.
-    /// Populated at session start. Null if no active draft found.
-    /// Used by the auto-sync polling endpoint.
-    /// </summary>
     public string? SleeperDraftId { get; set; }
+    public int? MyRosterId { get; set; }
 
     /// <summary>
-    /// The user's roster_id in this league, used to determine IsMyPick during auto-sync.
+    /// Snapshot of the user's Sleeper player_ids at last sync.
+    /// Persisted to Mongo — used to detect mid-draft roster trades.
     /// </summary>
-    public int? MyRosterId { get; set; }
+    public List<string> CachedMyPlayerIds { get; set; } = [];
 
     public List<DraftPick> Picks { get; set; } = [];
     public DateTime CreatedAt { get; set; }
@@ -36,7 +28,7 @@ public class DraftPick
     public string SleeperPlayerId { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;
     public string Position { get; set; } = string.Empty;
-    public string? NflTeam { get; set; }               // ← NEW
+    public string? NflTeam { get; set; }
     public int Round { get; set; }
     public int Slot { get; set; }
     public string? PickedByTeamName { get; set; }

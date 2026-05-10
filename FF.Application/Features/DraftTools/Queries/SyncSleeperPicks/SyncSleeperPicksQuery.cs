@@ -4,10 +4,6 @@ using MediatR;
 
 namespace FF.Application.Features.DraftTools.Queries.SyncSleeperPicks;
 
-/// <summary>
-/// Polls Sleeper for new picks in the active draft, diffs against the stored session,
-/// records any new picks, and returns the newly added picks for the UI to update.
-/// </summary>
 public record SyncSleeperPicksQuery(
     string SessionId,
     string UserId) : IRequest<Result<SyncSleeperPicksResult>>;
@@ -15,7 +11,17 @@ public record SyncSleeperPicksQuery(
 public record SyncSleeperPicksResult(
     List<SyncedPickDto> NewPicks,
     int TotalPicksInSession,
-    bool DraftComplete);
+    bool DraftComplete,
+    int TotalPicksInDraft,
+    List<SyncedRemainingPickDto> RemainingPicks,
+
+    /// <summary>
+    /// Only sent on first sync or when a roster trade is detected.
+    /// Null on subsequent polls with no change — Blazor retains its prior value.
+    /// </summary>
+    Dictionary<string, int>? LiveRosterPositionCounts,
+
+    bool MyRosterChanged);
 
 public record SyncedPickDto(
     string SleeperPlayerId,
@@ -23,4 +29,12 @@ public record SyncedPickDto(
     string Position,
     int Round,
     int Slot,
+    bool IsMyPick);
+
+public record SyncedRemainingPickDto(
+    int PickNo,
+    int Round,
+    int Slot,
+    string TeamName,
+    string SleeperRosterId,
     bool IsMyPick);

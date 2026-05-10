@@ -34,55 +34,91 @@ public class SyncSleeperPicksQueryHandler(
             return Result.Failure<SyncSleeperPicksResult>(
                 Error.Validation("Draft.SessionClosed", "This draft session is no longer active."));
 
-        // No draft linked — nothing to sync (manual mode)
+        // Manual mode — no Sleeper draft linked
         if (string.IsNullOrEmpty(session.SleeperDraftId))
         {
+            session.Picks ??= [];
             return Result<SyncSleeperPicksResult>.Success(new SyncSleeperPicksResult(
                 NewPicks: [],
                 TotalPicksInSession: session.Picks.Count,
-                DraftComplete: false));
+                DraftComplete: false,
+                TotalPicksInDraft: 0,
+                RemainingPicks: [],
+                LiveRosterPositionCounts: null,
+                MyRosterChanged: false));
         }
 
+        // ── Parallel fetch ────────────────────────────────────────────────
+        // 1. Made picks (diff to find new ones)
+        // 2. Draft status (total picks, completion)
+        // 3. Team info map (roster_id → name, used by remaining picks + attribution)
+        // 4. Live roster player ids (trade detection) — only if roster_id known
+
         List<SleeperMadePickDto> sleeperPicks;
+        SleeperDraftStatusDto draftStatus;
+        Dictionary<int, SleeperTeamInfoDto> teamInfoMap;
+        List<string> liveMyPlayerIds;
+
         try
         {
-            sleeperPicks = await sleeperDraftService.GetMadePicksAsync(
+            var madeTask = sleeperDraftService.GetMadePicksAsync(
                 session.SleeperDraftId, cancellationToken);
+            var statusTask = sleeperDraftService.GetDraftStatusAsync(
+                session.SleeperDraftId, cancellationToken);
+            var teamInfoTask = sleeperDraftService.GetTeamInfoByRosterIdAsync(
+                session.LeagueId, cancellationToken);
+            var rosterTask = session.MyRosterId.HasValue
+                ? sleeperDraftService.GetMyRosterPlayerIdsAsync(
+                    session.LeagueId, session.MyRosterId.Value, cancellationToken)
+                : Task.FromResult<List<string>>([]);
+
+            await Task.WhenAll(madeTask, statusTask, teamInfoTask, rosterTask);
+
+            sleeperPicks = madeTask.Result;
+            draftStatus = statusTask.Result;
+            teamInfoMap = teamInfoTask.Result;
+            liveMyPlayerIds = rosterTask.Result;
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex,
-                "Failed to fetch Sleeper picks for draft {DraftId}", session.SleeperDraftId);
-            // Return empty — transient failure, client will retry in 30s
+                "Transient Sleeper fetch failure for draft {DraftId}", session.SleeperDraftId);
             return Result<SyncSleeperPicksResult>.Success(new SyncSleeperPicksResult(
                 NewPicks: [],
                 TotalPicksInSession: session.Picks.Count,
-                DraftComplete: false));
+                DraftComplete: false,
+                TotalPicksInDraft: 0,
+                RemainingPicks: [],
+                LiveRosterPositionCounts: null,
+                MyRosterChanged: false));
         }
 
-        // Build set of already-recorded SleeperPlayerIds for fast diff
-        var recordedIds = session.Picks.Select(p => p.SleeperPlayerId).ToHashSet();
-
-        // Ask Sleeper directly whether the draft is complete — don't guess from pick counts.
-        // "caught up" != "finished"; guessing caused the timer to stop after the first sync.
-        var draftStatus = await sleeperDraftService.GetDraftStatusAsync(
-            session.SleeperDraftId, cancellationToken);
         bool draftComplete = draftStatus.Status == "complete";
 
+        // ── Diff made picks ───────────────────────────────────────────────
+        // recordedIds comes from the persisted session — already includes picks
+        // recorded in previous syncs, so pre-session picks are not re-reported.
+        // Guard against null on old Mongo documents
+        session.Picks ??= [];
+        session.CachedMyPlayerIds ??= [];
+
+        var recordedIds = session.Picks.Select(p => p.SleeperPlayerId).ToHashSet();
         var newPicks = new List<SyncedPickDto>();
 
         foreach (var pick in sleeperPicks)
         {
             if (recordedIds.Contains(pick.PlayerId)) continue;
 
-            // Determine if this is the user's pick
             bool isMyPick = session.MyRosterId.HasValue
                 && pick.RosterId == session.MyRosterId.Value.ToString();
 
-            // Look up NflTeam from Postgres — Sleeper pick event doesn't include it
             var player = await playerRepository.GetBySleeperIdAsync(pick.PlayerId, cancellationToken);
 
-            // Record via existing command (idempotent)
+            string? pickedByTeamName = null;
+            if (int.TryParse(pick.RosterId, out var pickRosterId)
+                && teamInfoMap.TryGetValue(pickRosterId, out var teamInfo))
+                pickedByTeamName = teamInfo.TeamName;
+
             var recordResult = await mediator.Send(
                 new RecordDraftPickCommand(
                     SessionId: request.SessionId,
@@ -93,7 +129,7 @@ public class SyncSleeperPicksQueryHandler(
                     NflTeam: player?.NflTeam,
                     Round: pick.Round,
                     Slot: pick.DraftSlot,
-                    PickedByTeamName: null,
+                    PickedByTeamName: pickedByTeamName,
                     IsMyPick: isMyPick),
                 cancellationToken);
 
@@ -108,17 +144,90 @@ public class SyncSleeperPicksQueryHandler(
                     IsMyPick: isMyPick));
 
                 logger.LogInformation(
-                    "Auto-synced pick: {Player} R{Round} S{Slot} isMyPick={IsMyPick} in session {Id}",
-                    pick.PlayerName, pick.Round, pick.DraftSlot, isMyPick, request.SessionId);
+                    "Auto-synced pick: {Player} R{Round}S{Slot} isMyPick={IsMyPick} pickedBy={Team}",
+                    pick.PlayerName, pick.Round, pick.DraftSlot, isMyPick,
+                    pickedByTeamName ?? "unknown");
             }
         }
 
-        // Reload to get accurate total
+        // ── Remaining picks — correct implementation ───────────────────────
+        // Built from slot_to_roster_id + draft traded picks + made pick subtraction.
+        // NOT from GetDraftPicksAsync (that only returns made picks).
+        var remaining = session.MyRosterId.HasValue
+            ? await sleeperDraftService.GetRemainingPicksAsync(
+                session.SleeperDraftId,
+                session.MyRosterId.Value,
+                teamInfoMap,
+                cancellationToken)
+            : [];
+
+        var remainingDtos = remaining
+            .Select(r => new SyncedRemainingPickDto(
+                PickNo: r.PickNo,
+                Round: r.Round,
+                Slot: r.Slot,
+                TeamName: r.TeamName,
+                SleeperRosterId: r.SleeperRosterId,
+                IsMyPick: r.IsMyPick))
+            .ToList();
+
+        // ── Roster position counts — always computed and returned ─────────────
+        // Blazor needs these on every sync to correctly merge live roster + draft picks.
+        // Building from the already-fetched liveMyPlayerIds is cheap.
+        bool myRosterChanged = false;
+        Dictionary<string, int>? livePositionCounts = null;
+
+        if (liveMyPlayerIds.Count > 0)
+        {
+            var cachedSet = session.CachedMyPlayerIds.ToHashSet();
+            var liveSet = liveMyPlayerIds.ToHashSet();
+
+            myRosterChanged = !cachedSet.SetEquals(liveSet);
+
+            if (myRosterChanged)
+                logger.LogInformation(
+                    "Roster trade detected for session {Id}: {Added} added, {Removed} removed",
+                    request.SessionId,
+                    liveSet.Except(cachedSet).Count(),
+                    cachedSet.Except(liveSet).Count());
+
+            // Always build position counts — Blazor merges these with draft picks each sync
+            livePositionCounts = await BuildPositionCountsAsync(
+                liveMyPlayerIds, playerRepository, cancellationToken);
+
+            // Persist cache update only when something changed or it was empty
+            if (myRosterChanged || session.CachedMyPlayerIds.Count == 0)
+                await sessionRepository.UpdateRosterCacheAsync(
+                    request.SessionId, liveMyPlayerIds, cancellationToken);
+        }
+
+        // Reload for accurate pick total (picks were added via RecordDraftPickCommand above)
         var updated = await sessionRepository.GetByIdAsync(request.SessionId, cancellationToken);
 
         return Result<SyncSleeperPicksResult>.Success(new SyncSleeperPicksResult(
             NewPicks: newPicks,
             TotalPicksInSession: updated?.Picks.Count ?? session.Picks.Count + newPicks.Count,
-            DraftComplete: draftComplete));
+            DraftComplete: draftComplete,
+            TotalPicksInDraft: draftStatus.TotalPicks,
+            RemainingPicks: remainingDtos,
+            LiveRosterPositionCounts: livePositionCounts,
+            MyRosterChanged: myRosterChanged));
+    }
+
+    private static async Task<Dictionary<string, int>> BuildPositionCountsAsync(
+        List<string> playerIds,
+        IPlayerRepository playerRepository,
+        CancellationToken ct)
+    {
+        // Single batch query instead of N individual lookups
+        var players = await playerRepository.GetBySleeperIdsAsync(playerIds, ct);
+
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var player in players)
+        {
+            var pos = player.Position.ToString();
+            counts[pos] = counts.TryGetValue(pos, out var c) ? c + 1 : 1;
+        }
+        return counts;
     }
 }

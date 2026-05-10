@@ -86,4 +86,14 @@ public interface ISleeperApiClient
     Task<List<SleeperDraftPickDetailDto>> GetDraftPicksAsync(
         string draftId,
         CancellationToken cancellationToken = default);
+
+    // ── Draft traded picks ───────────────────────────────────────────────
+    // Returns picks that have been traded within this specific draft.
+    // owner_id = current owner's roster_id (post-trade).
+    // This is the per-draft endpoint — distinct from /league/{id}/traded_picks
+    // which only covers future-season picks, not the current active draft.
+    [Get("/v1/draft/{draftId}/traded_picks")]
+    Task<List<SleeperDraftPickDto>> GetDraftTradedPicksAsync(
+        string draftId,
+        CancellationToken cancellationToken = default);
 }
