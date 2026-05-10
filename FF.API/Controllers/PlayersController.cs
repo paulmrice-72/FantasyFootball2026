@@ -10,6 +10,7 @@ using FF.Domain.Documents;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NSubstitute.Core;
 
 namespace FF.API.Controllers;
 
@@ -293,7 +294,7 @@ public class PlayersController(
     {
         var rows = await depthChartRepository.GetByPlayerAsync(sleeperPlayerId, season, ct);
         if (rows.Count == 0)
-            return Ok(new { available = false, message = "Depth chart sync has not run yet for this season." });
+            return Ok(new { available = false, message = "No depth chart data available for this player yet." });
 
         var latest = rows.First();
         return Ok(new

@@ -284,11 +284,16 @@
         <MudExpansionPanel Text="📖 Reference" Dense="true" Class="fc-ref-panel">
             <MudGrid Spacing="2">
                 <MudItem xs="12" sm="4">
-                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Source</MudText>
+                    <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Source &amp; How to Build the CSV</MudText>
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                        <a href="https://www.pff.com/news/nfl-2026-nfl-draft-grades" target="_blank" style="color:var(--fc-cyan);">PFF — NFL Draft Grades article</a>
+                        <a href="https://www.pff.com/news/nfl-2026-nfl-draft-grades" target="_blank" style="color:var(--fc-cyan);">PFF → NFL Draft Grades article</a> — free, no account required.
                     </MudText>
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">Free article published within 24h of draft end. No CSV download — copy grades into the format below manually or paste into a spreadsheet and export.</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                        Published within 24h of Day 3. The article lists each team's draft class with a letter grade and numeric score per player.
+                        <strong>To build the CSV:</strong> open the article, find the skill-position players (QB/RB/WR/TE), and copy each row into a spreadsheet with these exact columns:
+                        <code>Rank,PlayerName,Position,Team,Grade</code>.
+                        Grade is the 0–100 numeric (e.g. 93.5) — not the letter. Save as CSV and upload. Only skill positions matter; OL/DL/DB rows can be omitted.
+                    </MudText>
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">When to Run</MudText>
@@ -347,8 +352,14 @@
                     <MudText Typo="Typo.body2" Class="mud-text-secondary">
                         <a href="https://www.fantasypros.com/nfl/adp/dynasty-rookies.php" target="_blank" style="color:var(--fc-cyan);">FantasyPros → Dynasty → Rookie ADP</a>
                     </MudText>
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">Click <strong>Export</strong> → CSV. Set Source label to <strong>FantasyPros</strong>.</MudText>
-                    <MudText Typo="Typo.caption" Class="mt-2" Style="color:var(--mud-palette-text-secondary);">Note: FFC ADP (redraft) is separate — use the Sync button below. This import is for dynasty rookie ADP only.</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                        Click <strong>Export</strong> (top-right of the ADP table) → <strong>CSV</strong>. No login required.
+                        In the <em>Source label</em> field below, type <strong>FantasyPros</strong> before importing — this tags
+                        the records so they can be distinguished from other ADP sources in the future.
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mt-2" Style="color:var(--mud-palette-text-secondary);">
+                        Note: FFC ADP (redraft) is separate — use the Sync button in the FFC section below. This import is dynasty rookie ADP only.
+                    </MudText>
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">When to Run</MudText>
