@@ -90,15 +90,6 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
         return result is null ? NotFound("Matchup not found for this week.") : Ok(result);
     }
 
-    // ── Shared helper ────────────────────────────────────────────────────────
-    private async Task<ApplicationUser?> GetAppUserAsync()
-    {
-        var internalUserId = User
-            .FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-            ?? string.Empty;
-        return await userManager.FindByIdAsync(internalUserId);
-    }
-
     // TEAM-004: Start/Sit recommendations
     [HttpGet("start-sit")]
     public async Task<IActionResult> GetStartSitRecommendations(
@@ -119,6 +110,7 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             ? NotFound("No roster found or insufficient data for recommendations.")
             : Ok(result);
     }
+
     // TEAM-005: Positional depth grades
     [HttpGet("depth-grades")]
     public async Task<IActionResult> GetPositionalDepthGrades(
@@ -176,5 +168,38 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             new GetDraftPrepQuery(appUser.SleeperUserId, sleeperLeagueId, simSeason, rookieSeason), ct);
 
         return result is null ? NotFound() : Ok(result);
+    }
+
+    // FAN-66 / LINEUP-CARD-001: Full optimized lineup card
+    // Returns all starting slots (QB/RB1/RB2/WR1-3/TE/FLEX/SUPERFLEX) plus bench.
+    // Driven by LineupOptimizerService — same engine as optimize-lineup but
+    // returns a slot-labeled card rather than a raw optimizer result.
+    [HttpGet("lineup-card")]
+    public async Task<IActionResult> GetLineupCard(
+        [FromQuery] string sleeperLeagueId,
+        [FromQuery] int season,
+        [FromQuery] int week,
+        CancellationToken ct = default)
+    {
+        var appUser = await GetAppUserAsync();
+        if (appUser?.SleeperUserId is null) return BadRequest("Sleeper account not linked.");
+        if (string.IsNullOrEmpty(sleeperLeagueId)) return BadRequest("sleeperLeagueId is required.");
+
+        var result = await mediator.Send(
+            new GetLineupCardQuery(
+                appUser.SleeperUserId, sleeperLeagueId, season, week), ct);
+
+        return result is null
+            ? NotFound("No roster or simulation data found for lineup card.")
+            : Ok(result);
+    }
+
+    // ── Shared helper ────────────────────────────────────────────────────────
+    private async Task<ApplicationUser?> GetAppUserAsync()
+    {
+        var internalUserId = User
+            .FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? string.Empty;
+        return await userManager.FindByIdAsync(internalUserId);
     }
 }
