@@ -10,10 +10,10 @@ using MongoDB.Bson;
 namespace FF.Infrastructure.Services;
 
 public class CareerSimulationService(
-    IPlayerRepository playerRepository,
-    IAgingCurveRepository agingCurveRepository,
-    ISimulationResultRepository simulationResultRepository,
-    ILogger<CareerSimulationService> logger) : ICareerSimulationService
+IPlayerRepository playerRepository,
+IAgingCurveRepository agingCurveRepository,
+ISimulationResultRepository simulationResultRepository,
+ILogger<CareerSimulationService> logger) : ICareerSimulationService
 {
     private const int Iterations = 1000;
     private const int ProjectYears = 5;
@@ -21,17 +21,23 @@ public class CareerSimulationService(
 
     // ── Empirical Bayes shrinkage ─────────────────────────────────────────────
     // credibility = min(YearsExp, 5) / (min(YearsExp, 5) + K)
-    // blended     = credibility × raw + (1 - credibility) × prior
+    // blended = credibility × raw + (1 - credibility) × prior
     // K=3: rookie → 0% credibility (full prior), 5yr vet → 62.5% (cap)
     // Admin-configurable in a future sprint (ADMIN-WEIGHT-001).
     private const double ShrinkageK = 3.0;
 
+    // FAN-52: TE prior raised from 7.5 → 9.0.
+    // 7.5 was the TE2 average — it caused shrinkage to pull low-evidence TEs
+    // up to a CVS plateau of ~391-397, flooding the DFV normalization pool
+    // with phantom starters. 9.0 matches real TE1 production (Kelce/Waller era
+    // median); TE2s and depth players fall to GetDepthLevelFppg (3.5) via
+    // the StarterThreshold gate below.
     private static readonly Dictionary<string, double> PositionPriors = new()
     {
-        ["QB"] = 14.0,  // median starter, excludes top-tier inflation
-        ["RB"] = 9.5,   // accounts for committee backs
-        ["WR"] = 9.0,   // slot + role players drag median down
-        ["TE"] = 7.5,   // heavy TE2 population
+        ["QB"] = 14.0, // median starter, excludes top-tier inflation
+        ["RB"] = 9.5,  // accounts for committee backs
+        ["WR"] = 9.0,  // slot + role players drag median down
+        ["TE"] = 9.0,  // FAN-52: raised from 7.5 — real TE1 average
     };
 
     private static readonly Dictionary<string, double> BaseInjuryRisk = new()
@@ -58,12 +64,16 @@ public class CareerSimulationService(
         ["TE"] = 27
     };
 
+    // FAN-52: TE threshold raised from 6.0 → 8.5.
+    // 6.0 allowed any TE whose blended FPPG cleared a backup RB's average
+    // to be treated as a starter. At 8.5, only genuine TE1-caliber players
+    // (confirmed targets, inline starters) pass; TE2s fall to depth level (3.5).
     private static readonly Dictionary<string, double> StarterThreshold = new()
     {
         ["QB"] = 16.0,
         ["RB"] = 7.0,
         ["WR"] = 7.5,
-        ["TE"] = 6.0
+        ["TE"] = 8.5, // FAN-52: raised from 6.0
     };
 
     private static readonly Dictionary<string, double> PostPeakWindow = new()
@@ -96,7 +106,7 @@ public class CareerSimulationService(
         // an inflated 5-year projection. Uses best single season only as fallback.
         var simByPlayerId = allSimResults
             .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0
-                && r.Week == 0) // season-average sentinel only
+                     && r.Week == 0) // season-average sentinel only
             .GroupBy(r => r.SleeperPlayerId!)
             .ToDictionary(
                 g => g.Key,
@@ -129,7 +139,7 @@ public class CareerSimulationService(
 
         var simByNamePos = allSimResults
             .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0
-                && r.Week == 0)
+                     && r.Week == 0)
             .GroupBy(r => $"{r.PlayerName}|{r.Position}")
             .ToDictionary(
                 g => g.Key,
@@ -342,9 +352,9 @@ public class CareerSimulationService(
     /// weighted by evidence (years of experience).
     ///
     /// credibility = min(YearsExp, 5) / (min(YearsExp, 5) + K)
-    /// blended     = credibility × raw + (1 - credibility) × prior
+    /// blended = credibility × raw + (1 - credibility) × prior
     ///
-    /// K=3:  0 yrs → 0% (full prior)  1 yr → 25%  3 yrs → 50%  5+ yrs → 62.5%
+    /// K=3: 0 yrs → 0% (full prior)  1 yr → 25%  3 yrs → 50%  5+ yrs → 62.5%
     ///
     /// Journeyman cap: age 28+, exp 8+ QBs capped at 21.0 FPPG blended.
     /// Catches Mayfield/Darnold/Goff without affecting Allen/Burrow/Hurts.
@@ -369,8 +379,8 @@ public class CareerSimulationService(
             var pick = player.DraftPick ?? 999;
             // Only top-5 picks earn the starter prior; everyone else is depth
             return (round == 1 && pick <= 5)
-                ? prior          // 14.0 — high pick, legitimate prospect
-                : GetDepthLevelFppg(position);  // 6.0 — unknown/late round
+                ? prior                       // 14.0 — high pick, legitimate prospect
+                : GetDepthLevelFppg(position); // 6.0 — unknown/late round
         }
 
         // Standard shrinkage blend
@@ -389,6 +399,7 @@ public class CareerSimulationService(
 
         // Starter threshold gate — experienced depth players pulled UP toward
         // prior get floored to depth level instead.
+        // FAN-52: TE threshold is now 8.5 (was 6.0) — see StarterThreshold above.
         if ((player.YearsExperience ?? 0) >= 1)
         {
             var threshold = StarterThreshold.GetValueOrDefault(position, 7.0);
@@ -438,9 +449,9 @@ public class CareerSimulationService(
     {
         var peak = PeakAges.GetValueOrDefault(position, 26);
         return age < peak - 2 ? CareerPhase.Ascending
-            : age <= peak + 2 ? CareerPhase.Prime
-            : age <= peak + 5 ? CareerPhase.Declining
-            : CareerPhase.Unknown;
+             : age <= peak + 2 ? CareerPhase.Prime
+             : age <= peak + 5 ? CareerPhase.Declining
+             : CareerPhase.Unknown;
     }
 
     private static double GetPositionVariance(string position) => position switch

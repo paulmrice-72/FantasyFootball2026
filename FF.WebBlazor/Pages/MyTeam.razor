@@ -54,7 +54,7 @@
         </div>
     </div>
 }
-@* ── TABS ───────────────────────────────────────────── *@
+@* ── TABS ──────────────────────────────────────────── *@
 <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true"
          Class="fc-tabs mt-2"
          ActivePanelIndexChanged="OnTabChanged">
@@ -85,11 +85,11 @@
         else
         {
             @foreach (var group in _roster.Players
-                                                                .GroupBy(p => p.Position)
-                                                                .OrderBy(g => PositionOrder(g.Key)))
+                .GroupBy(p => p.Position)
+                .OrderBy(g => PositionOrder(g.Key)))
             {
                 <MudText Typo="Typo.subtitle1" Class="mb-2 mt-4"
-                Style="color:var(--fc-cyan);font-weight:600;">
+                         Style="color:var(--fc-cyan);font-weight:600;">
                     @group.Key
                 </MudText>
                 <MudPaper Elevation="0" Class="fc-table-paper mb-2">
@@ -120,8 +120,8 @@
                                 @if (!string.IsNullOrEmpty(context.InjuryDesignation))
                                 {
                                     <MudChip T="string" Size="Size.Small"
-                                    Color="@InjuryColor(context.InjuryDesignation)"
-                                    Variant="Variant.Filled">
+                                             Color="@InjuryColor(context.InjuryDesignation)"
+                                             Variant="Variant.Filled">
                                         @context.InjuryDesignation
                                     </MudChip>
                                 }
@@ -132,20 +132,20 @@
                             </MudTd>
                             <MudTd>
                                 <MudText Typo="Typo.body2" Class="fc-stat"
-                                Style="font-family:'JetBrains Mono',monospace;">
+                                         Style="font-family:'JetBrains Mono',monospace;">
                                     @(
-                                                        context.MedianProjectedPoints.HasValue
-                                                                                                        ? context.MedianProjectedPoints.Value.ToString("F1") : "—"
-                                                                )
-                                                            </MudText>
-                                                        </MudTd>
-                                                        <MudTd>
-                                                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                                                                @(context.ByeWeek ?? "—")
-                                                            </MudText>
-                                                        </MudTd>
-                                                        <MudTd>
-                                                            @if (context.IsStarter)
+                                        context.MedianProjectedPoints.HasValue
+                                            ? context.MedianProjectedPoints.Value.ToString("F1") : "—"
+                                    )
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    @(context.ByeWeek ?? "—")
+                                </MudText>
+                            </MudTd>
+                            <MudTd>
+                                @if (context.IsStarter)
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">Starter</MudChip>
                                 }
@@ -166,7 +166,7 @@
                     </MudTable>
                 </MudPaper>
             }
-            @* ── Draft Picks ─────────────────────────────────────────────────────── *@
+            @* ── Draft Picks ── *@
             @if (_roster.OwnedPicks.Count > 0)
             {
                 <MudPaper Class="pa-4 mt-4" Elevation="1">
@@ -309,48 +309,86 @@
         {
             <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4 mt-2" />
         }
-        else if (_startSitData is null)
+        else if (_startSitData is null && _lineupCard is null)
         {
             <MudAlert Severity="Severity.Info" Class="mt-2">
                 No start/sit decisions needed — your roster doesn't have contested positions,
                 or simulation data is unavailable.
             </MudAlert>
         }
-        else if (_startSitData.Decisions.Count == 0)
-        {
-            <MudAlert Severity="Severity.Success" Class="mt-2">
-                No tough decisions this week — your starters are clear.
-            </MudAlert>
-        }
         else
         {
-            @foreach (var decision in _startSitData.Decisions)
+            @* ── Build lookup sets once ──────────────────────────────────────────
+               lockedPlayerIds : SleeperPlayerIds of all locked starters — used to
+                                 remove those players from decision option lists so
+                                 they don't appear in both sections.
+               decisionSlotLabels : slot labels that have a genuine contest — used
+                                    to hide those slots from the Locked Slots section
+                                    (the decision card already covers them). *@
+            var lockedPlayerIds = _lineupCard?.Starters
+                .Select(s => s.SleeperPlayerId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                ?? new HashSet<string>();
+
+            var decisionsToShow = (_startSitData?.Decisions ?? [])
+                .Select(d => (
+                    Decision: d,
+                    FilteredOptions: d.Options
+                        .Where(o => !lockedPlayerIds.Contains(o.SleeperPlayerId))
+                        .ToList()
+                ))
+                .Where(x => x.FilteredOptions.Count >= 2)
+                .ToList();
+
+            var decisionSlotLabels = decisionsToShow
+                .Select(x => x.Decision.SlotLabel)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            @* ── Contested decisions ── *@
+            @if (!decisionsToShow.Any())
             {
-                <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-2 mt-4">
-                    @decision.SlotLabel DECISION
-                </MudText>
-                <MudPaper Elevation="0" Class="fc-card pa-3 mb-3">
-                    @foreach (var opt in decision.Options)
-                    {
-                        <div class="d-flex align-center pa-2 mb-1"
-                             style="border-radius:6px; background: var(--mud-palette-surface);">
-                            <div style="min-width:90px;">
-                                <MudChip T="string"
-                                         Color="@VerdictColor(opt.Verdict)"
-                                         Size="Size.Small"
-                                         Variant="Variant.Filled">
-                                    @VerdictLabel(opt.Verdict)
-                                </MudChip>
-                            </div>
-                            <div class="flex-grow-1 mx-3">
-                                <div class="d-flex align-center gap-2">
-                                    <MudText Typo="Typo.body1" Style="font-weight:700;">
-                                        <MudButton Variant="Variant.Text"
-                                                   Style="font-weight:600; color:var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
-                                                   OnClick="@(() => _ = OpenPlayerCardFromStartSitAsync(opt))">
-                                            @opt.PlayerName
-                                        </MudButton>
-                                    </MudText>
+                <MudAlert Severity="Severity.Success" Class="mt-2 mb-2">
+                    No tough decisions this week — your starters are clear.
+                </MudAlert>
+            }
+            else
+            {
+                @foreach (var item in decisionsToShow)
+                {
+                    var decision = item.Decision;
+                    var opts = item.FilteredOptions;
+
+                    <MudText Typo="Typo.subtitle2" Class="fc-section-label mb-1 mt-3">
+                        @decision.SlotLabel DECISION
+                    </MudText>
+                    <MudPaper Elevation="0" Class="fc-card pa-1 mb-2">
+                        @foreach (var opt in opts)
+                        {
+                            @* Single-line compact row: verdict chip | avatar | name + pos + injury + rationale | med/flr/ceil *@
+                            <div class="d-flex align-center px-2 mb-1"
+                                 style="min-height:36px; border-radius:6px; background: var(--mud-palette-surface);">
+                                @* Verdict chip *@
+                                <div style="width:96px; flex-shrink:0; display:flex; align-items:center; padding-right:10px;">
+                                    <MudChip T="string"
+                                             Color="@VerdictColor(opt.Verdict)"
+                                             Size="Size.Small"
+                                             Variant="Variant.Filled">
+                                        @VerdictLabel(opt.Verdict)
+                                    </MudChip>
+                                </div>
+                                @* Player headshot avatar *@
+                                <div style="width:28px; height:28px; flex-shrink:0; margin-right:8px; border-radius:50%; overflow:hidden; background:rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:center;">
+                                    <img src="@($"https://sleepercdn.com/content/nfl/players/thumb/{opt.SleeperPlayerId}.jpg")"
+                                         alt="@opt.PlayerName"
+                                         style="width:100%; height:100%; object-fit:cover;"
+                                         onerror="this.style.display='none'" />
+                                </div>
+                                @* Player name + pos chip + rationale — all on one line *@
+                                <div style="flex:1; min-width:0; max-width:600px; display:flex; align-items:center; gap:6px; overflow:hidden;">
+                                    <span style="font-size:0.82rem; font-weight:600; color:var(--fc-cyan); cursor:pointer; white-space:nowrap;"
+                                          @onclick="@(() => _ = OpenPlayerCardFromStartSitAsync(opt))">
+                                        @opt.PlayerName
+                                    </span>
                                     <MudChip T="string" Size="Size.Small"
                                              Class="@PositionClass(opt.Position)"
                                              Variant="Variant.Filled">
@@ -364,44 +402,120 @@
                                             @opt.InjuryDesignation
                                         </MudChip>
                                     }
+                                    <span style="font-size:0.7rem; color:#9CA3AF; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                        @opt.Rationale
+                                    </span>
                                 </div>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                    @opt.Rationale
-                                </MudText>
-                            </div>
-                            <div class="text-right" style="min-width:140px;">
-                                <div class="d-flex gap-3 justify-end">
-                                    <div class="text-center">
-                                        <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
-                                            @opt.Median.ToString("F1")
-                                        </MudText>
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">med</MudText>
+                                @* Stats — three numbers, no bar *@
+                                <div style="flex-shrink:0; display:flex; align-items:center; gap:8px; margin-left:8px;">
+                                    <div style="text-align:center; min-width:28px;">
+                                        <div style="font-weight:600; font-size:0.82rem; color:var(--fc-cyan);">@opt.Median.ToString("F1")</div>
+                                        <div style="font-size:0.6rem; color:#9CA3AF;">med</div>
                                     </div>
-                                    <div class="text-center">
-                                        <MudText Typo="Typo.body2" Class="fc-stat">
-                                            @opt.Floor.ToString("F1")
-                                        </MudText>
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">flr</MudText>
+                                    <div style="text-align:center; min-width:28px;">
+                                        <div style="font-weight:600; font-size:0.82rem;">@opt.Floor.ToString("F1")</div>
+                                        <div style="font-size:0.6rem; color:#9CA3AF;">flr</div>
                                     </div>
-                                    <div class="text-center">
-                                        <MudText Typo="Typo.body2" Class="fc-stat fc-ceiling">
-                                            @opt.Ceiling.ToString("F1")
-                                        </MudText>
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">ceil</MudText>
+                                    <div style="text-align:center; min-width:28px;">
+                                        <div style="font-weight:600; font-size:0.82rem; color:#4fc3f7;">@opt.Ceiling.ToString("F1")</div>
+                                        <div style="font-size:0.6rem; color:#9CA3AF;">ceil</div>
                                     </div>
-                                </div>
-                                <div class="mt-1">
-                                    <MudProgressLinear Value="@opt.ConfidenceScore"
-                                                       Color="@VerdictColor(opt.Verdict)"
-                                                       Size="Size.Small" Rounded="true" />
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                        @opt.ConfidenceLabel confidence
-                                    </MudText>
                                 </div>
                             </div>
+                        }
+                    </MudPaper>
+                }
+            }
+
+            @* ── FAN-66: Locked Slots ── *@
+            @if (_lineupCardLoading)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mt-4" />
+            }
+            else if (_lineupCard?.Starters is { Count: > 0 })
+            {
+                @* Only show slots not already covered by a decision card above *@
+                var lockedToShow = _lineupCard.Starters
+                    .Where(s => !decisionSlotLabels.Contains(s.SlotLabel))
+                    .ToList();
+
+                @if (lockedToShow.Any())
+                {
+                    <div class="mt-4">
+                        <div class="d-flex align-center justify-space-between mb-1">
+                            <MudText Typo="Typo.subtitle2"
+                                     Style="color: var(--mud-palette-text-secondary); letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.72rem;">
+                                LOCKED SLOTS
+                            </MudText>
+                            <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">
+                                @lockedToShow.Count POSITIONS · NO DECISION NEEDED
+                            </MudText>
                         </div>
-                    }
-                </MudPaper>
+
+                        @foreach (var slot in lockedToShow)
+                        {
+                            @* Single-line compact locked slot row *@
+                            <div class="d-flex align-center px-2 mb-1"
+                                 style="min-height:34px; border-radius:4px; background: rgba(255,255,255,0.03); border-left: 3px solid @GetSlotAccentColor(slot.Position);">
+
+                                @* Slot label — wide enough for SUPERFLEX *@
+                                <div style="width:72px; flex-shrink:0;">
+                                    <span style="@($"font-size:0.62rem; font-weight:700; color:{GetSlotAccentColor(slot.Position)}; letter-spacing:0.04em; text-transform:uppercase;")">
+                                        @slot.SlotLabel
+                                    </span>
+                                </div>
+
+                                @* Player headshot avatar — position-colored circle with photo *@
+                                <div style="@($"width:28px; height:28px; flex-shrink:0; margin-right:8px; border-radius:50%; overflow:hidden; background:{GetSlotAccentColor(slot.Position)}33; display:flex; align-items:center; justify-content:center;")">
+                                    <img src="@($"https://sleepercdn.com/content/nfl/players/thumb/{slot.SleeperPlayerId}.jpg")"
+                                         alt="@slot.PlayerName"
+                                         style="width:100%; height:100%; object-fit:cover;"
+                                         onerror="this.style.display='none'" />
+                                </div>
+
+                                @* Name + team inline — single line, grows but capped *@
+                                <div style="flex:1; min-width:0; max-width:500px; display:flex; align-items:center; gap:6px; overflow:hidden;">
+                                    <span style="font-size:0.82rem; font-weight:600; color:var(--fc-cyan); cursor:pointer; white-space:nowrap;"
+                                          @onclick="@(() => _ = OpenPlayerCardFromLineupCardAsync(slot))">
+                                        @slot.PlayerName
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(slot.NflTeam))
+                                    {
+                                        <span style="font-size:0.68rem; color:#9CA3AF; white-space:nowrap;">
+                                            @slot.Position · @slot.NflTeam
+                                        </span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(slot.InjuryDesignation))
+                                    {
+                                        <span style="font-size:0.68rem; color:#FF9800; white-space:nowrap;">@slot.InjuryDesignation</span>
+                                    }
+                                </div>
+
+                                @* Note — fixed width, right-aligned *@
+                                <span style="font-size:0.68rem; color:#9CA3AF; font-style:italic; white-space:nowrap; width:140px; text-align:right; flex-shrink:0; padding:0 8px; overflow:hidden; text-overflow:ellipsis;">
+                                    @GetLockedSlotNote(slot)
+                                </span>
+
+                                @* Pts *@
+                                <span style="font-weight:600; font-size:0.82rem; width:34px; text-align:right; flex-shrink:0;">
+                                    @slot.ProjectedPoints.ToString("F1")
+                                </span>
+
+                                @* LOCKED chip *@
+                                <MudChip T="string" Size="Size.Small"
+                                         Style="height:18px; font-size:0.6rem; font-weight:700; padding:0 7px; background:rgba(76,175,80,0.15); color:#4CAF50; border-radius:3px; margin-left:8px; flex-shrink:0;"
+                                         DisableRipple="true">
+                                    LOCKED
+                                </MudChip>
+                            </div>
+                        }
+
+                        <div class="d-flex justify-end mt-1 pr-1 gap-2">
+                            <span style="font-size:0.75rem; color:var(--mud-palette-text-secondary);">Projected total:</span>
+                            <span style="font-size:0.75rem; font-weight:700;">@_lineupCard.TotalProjectedPoints.ToString("F1") pts</span>
+                        </div>
+                    </div>
+                }
             }
         }
     </MudTabPanel>
@@ -434,10 +548,10 @@
                                 @g.Label
                             </MudText>
                             <MudProgressLinear Value="@g.GradeScore"
-                                              Color="@GradeBarColor(g.Grade)"
-                                              Rounded="true"
-                                              Size="Size.Small"
-                                              Class="my-2" />
+                                               Color="@GradeBarColor(g.Grade)"
+                                               Rounded="true"
+                                               Size="Size.Small"
+                                               Class="my-2" />
                             <div class="d-flex justify-space-around mt-2">
                                 <div>
                                     <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
@@ -628,13 +742,13 @@
                         <MudTh Style="width:7%">
                             <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => x.ScoreRank)">
                                 <MudTooltip Text="Rank by composite DynastyScore (descending)">
-                                    Score Rank ⓘ
+                                    Score Rank ↑
                                 </MudTooltip>
                             </MudTableSortLabel>
                         </MudTh>
                         <MudTh Style="width:7%">
                             <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => (object)(x.FantasyProsRank ?? 999))"
-                                               InitialDirection="SortDirection.Ascending">
+                                              InitialDirection="SortDirection.Ascending">
                                 FP Rank
                             </MudTableSortLabel>
                         </MudTh>
@@ -659,7 +773,7 @@
                         <MudTh Style="width:13%">
                             <MudTableSortLabel SortBy="new Func<RookieTargetDto, object>(x => x.DynastyScore)">
                                 <MudTooltip Text="Composite dynasty score — same calculation as Draft Board. Click to sort by this column.">
-                                    Score ⓘ
+                                    Score ↑
                                 </MudTooltip>
                             </MudTableSortLabel>
                         </MudTh>
@@ -775,19 +889,23 @@ else if (_roster is null)
     private int _season;
     private int _week;
 
-    // ── TEAM-002: Lineup Optimizer ─────────────────────────
+    // ── TEAM-002: Lineup Optimizer ───────────────────────────────────
     private bool _optimizing;
     private string? _optimizerError;
     private OptimizerResult? _lineupResult;
     private string _optimizerMode = "Median";
     private string _optimizerRisk = "";
 
-    // ── TEAM-004: Start/Sit ────────────────────────────────
+    // ── TEAM-004: Start/Sit ──────────────────────────────────────────
     private int _activeTab;
     private bool _startSitLoading;
     private StartSitRecommendationsDto? _startSitData;
 
-    // ── TEAM-005: Depth Grades ────────────────────────────
+    // ── FAN-66: Lineup Card (Locked Slots) ──────────────────────────
+    private bool _lineupCardLoading;
+    private LineupCardDto? _lineupCard;
+
+    // ── TEAM-005: Depth Grades ───────────────────────────────────────
     private bool _depthLoading;
     private PositionalDepthGradesDto? _depthGrades;
     private static readonly System.Text.Json.JsonSerializerOptions _enumJsonOptions = new()
@@ -796,11 +914,11 @@ else if (_roster is null)
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
-    // ── TEAM-006: Dynasty Grade ───────────────────────────
+    // ── TEAM-006: Dynasty Grade ──────────────────────────────────────
     private bool _dynastyLoading;
     private DynastyTeamGradeDto? _dynastyGrade;
 
-    // ── TEAM-007: Draft Prep ─────────────────────────────
+    // ── TEAM-007: Draft Prep ─────────────────────────────────────────
     private bool _draftPrepLoading;
     private bool _draftPrepQueried;
     private DraftPrepDto? _draftPrep;
@@ -866,6 +984,26 @@ else if (_roster is null)
         decimal ProjectedPoints,
         decimal? RiskScore);
 
+    // ── FAN-66: Lineup Card DTO ──────────────────────────────────────
+    private record LineupCardDto(
+        int Week,
+        int Season,
+        decimal TotalProjectedPoints,
+        List<LineupCardSlotDto> Starters,
+        List<LineupCardSlotDto> Bench);
+
+    private record LineupCardSlotDto(
+        string SlotLabel,
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        string NflTeam,
+        decimal ProjectedPoints,
+        double? BoomProbability,
+        double? BustProbability,
+        string? InjuryDesignation,
+        bool IsLocked);
+
     private async Task LoadRosterAsync()
     {
         _loading = true;
@@ -924,13 +1062,14 @@ else if (_roster is null)
 
     private void OnLeagueChangedHandler()
     {
-        _startSitData = null;
-        _depthGrades = null;
-        _dynastyGrade = null;
-        _draftPrep = null;
+        _startSitData     = null;
+        _lineupCard       = null;
+        _depthGrades      = null;
+        _dynastyGrade     = null;
+        _draftPrep        = null;
         _draftPrepQueried = false;
         _season = 0;
-        _week = 0;
+        _week   = 0;
         _ = InvokeAsync(async () =>
         {
             await LoadRosterAsync();
@@ -977,9 +1116,9 @@ else if (_roster is null)
         int Losses,
         int WaiverPosition,
         List<MyRosterPlayerDto> Players,
-        List<RosterPickDto> OwnedPicks);    // ← NEW
+        List<RosterPickDto> OwnedPicks);
 
-    private record RosterPickDto(int Season, int Round);  // ← NEW local mirror
+    private record RosterPickDto(int Season, int Round);
 
     private record MyRosterPlayerDto(
         string SleeperPlayerId,
@@ -1014,7 +1153,6 @@ else if (_roster is null)
             await LoadDraftPrepAsync();
     }
 
-    // ── Shared NflContext resolver ────────────────────────────────────────────
     private async Task EnsureSeasonAsync()
     {
         if (_season == 0)
@@ -1023,17 +1161,28 @@ else if (_roster is null)
 
     private async Task LoadStartSitAsync()
     {
-        _startSitLoading = true;
+        _startSitLoading   = true;
+        _lineupCardLoading = true;
         StateHasChanged();
         try
         {
             var leagueId = LeagueState.ActiveLeagueId;
             if (string.IsNullOrEmpty(leagueId)) return;
             await EnsureSeasonAsync();
-            var response = await Http.GetAsync(
-                $"api/v1/team/start-sit?sleeperLeagueId={leagueId}&season={_season}&week={_week}");
-            if (response.IsSuccessStatusCode)
-                _startSitData = await response.Content.ReadFromJsonAsync<StartSitRecommendationsDto>(_enumJsonOptions);
+
+            var startSitTask   = Http.GetAsync($"api/v1/team/start-sit?sleeperLeagueId={leagueId}&season={_season}&week={_week}");
+            var lineupCardTask = Http.GetAsync($"api/v1/team/lineup-card?sleeperLeagueId={leagueId}&season={_season}&week={_week}");
+
+            await Task.WhenAll(startSitTask, lineupCardTask);
+
+            var startSitResponse   = await startSitTask;
+            var lineupCardResponse = await lineupCardTask;
+
+            if (startSitResponse.IsSuccessStatusCode)
+                _startSitData = await startSitResponse.Content.ReadFromJsonAsync<StartSitRecommendationsDto>(_enumJsonOptions);
+
+            if (lineupCardResponse.IsSuccessStatusCode)
+                _lineupCard = await lineupCardResponse.Content.ReadFromJsonAsync<LineupCardDto>();
         }
         catch (Exception ex)
         {
@@ -1041,7 +1190,8 @@ else if (_roster is null)
         }
         finally
         {
-            _startSitLoading = false;
+            _startSitLoading   = false;
+            _lineupCardLoading = false;
         }
     }
 
@@ -1123,6 +1273,56 @@ else if (_roster is null)
             ? (_draftPrep?.RookieTargets ?? [])
             : (_draftPrep?.RookieTargets ?? []).Where(r => r.Position == _draftPrepPosition);
 
+    // ── FAN-66: Lineup card helpers ──────────────────────────────────
+    private static string GetSlotAccentColor(string position) => position switch
+    {
+        "QB" => "#9C27B0",
+        "RB" => "#4CAF50",
+        "WR" => "#2196F3",
+        "TE" => "#FF9800",
+        _    => "#9E9E9E"
+    };
+
+    private static string GetLockedSlotNote(LineupCardSlotDto slot)
+    {
+        if (slot.InjuryDesignation is "Q" or "Questionable")
+            return "Q tag noted · cleared to play";
+        if (slot.InjuryDesignation is "D" or "Doubtful")
+            return "Doubtful — monitor";
+        if (slot.ProjectedPoints == 0)
+            return "No projection available";
+        if (slot.BoomProbability.HasValue && slot.BoomProbability > 0.25)
+            return $"Boom upside {slot.BoomProbability:P0}";
+        return "No viable challenger";
+    }
+
+    private async Task OpenPlayerCardFromLineupCardAsync(LineupCardSlotDto slot)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: slot.SleeperPlayerId,
+            FullName:        slot.PlayerName,
+            Position:        slot.Position,
+            NflTeam:         slot.NflTeam,
+            Age: null,
+            DraftRound: null, DraftPick: null, CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{slot.SleeperPlayerId}.jpg",
+            FantasyProsRank: null, FantasyProsTier: null,
+            PffGrade: null, PffRank: null, ConsensusAdp: null,
+            DynastyScore: 0, DraftCapitalScore: 0, PositionalScore: 0,
+            ValuationBlendScore: 0, FantasyProsScore: 0, PffGradeScore: 0,
+            ConsensusAdpScore: 0, AgeMultiplier: 0, AthleticismSignalScore: 0,
+            AthleticismScore: null, SpeedScore: null, FortyYard: null);
+
+        var parameters = new DialogParameters<PlayerCardDialog>
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Stats }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(slot.PlayerName, parameters, options);
+    }
+
+    // ── Grade / style helpers ────────────────────────────────────────
     private static string GradeColor(string grade) => grade switch
     {
         "A+" or "A" => "color:#00e5c8;",
@@ -1171,8 +1371,6 @@ else if (_roster is null)
         _     => Color.Error
     };
 
-    // Mirrors Draft Board (RookieDraftBoard.razor) so the same DynastyScore
-    // renders with identical color treatment on both pages. (DRAFT-PARITY-001)
     private static Color GetScoreColor(double score) => score switch
     {
         >= 75 => Color.Success,
@@ -1208,19 +1406,19 @@ else if (_roster is null)
     private enum StartSitVerdict { Start, LeanStart, LeanSit, Sit }
     private static Color VerdictColor(StartSitVerdict v) => v switch
     {
-        StartSitVerdict.Start      => Color.Success,
-        StartSitVerdict.LeanStart  => Color.Info,
-        StartSitVerdict.LeanSit    => Color.Warning,
-        StartSitVerdict.Sit        => Color.Error,
-        _                          => Color.Default
+        StartSitVerdict.Start     => Color.Success,
+        StartSitVerdict.LeanStart => Color.Info,
+        StartSitVerdict.LeanSit   => Color.Warning,
+        StartSitVerdict.Sit       => Color.Error,
+        _                         => Color.Default
     };
     private static string VerdictLabel(StartSitVerdict v) => v switch
     {
-        StartSitVerdict.Start      => "START",
-        StartSitVerdict.LeanStart  => "LEAN START",
-        StartSitVerdict.LeanSit    => "LEAN SIT",
-        StartSitVerdict.Sit        => "SIT",
-        _                          => "—"
+        StartSitVerdict.Start     => "START",
+        StartSitVerdict.LeanStart => "LEAN START",
+        StartSitVerdict.LeanSit   => "LEAN SIT",
+        StartSitVerdict.Sit       => "SIT",
+        _                         => "—"
     };
 
     private record PositionalDepthGradesDto(List<PositionDepthGradeDto> Grades);
@@ -1238,21 +1436,20 @@ else if (_roster is null)
     private record DraftPrepDto(List<PositionNeedDto> PositionNeeds, List<RookieTargetDto> RookieTargets);
     private record PositionNeedDto(string Position, string Grade, int GradeScore, string NeedLevel, string Summary);
     record RookieTargetDto(
-            string SleeperPlayerId, string PlayerName, string Position, string? NflTeam,
-            int? FantasyProsRank, int? PositionRank, string? Tier, string NeedLevel, string FitLabel,
-            double? ConsensusAdp,
-            // Parity fields with Draft Board (DRAFT-PARITY-001)
-            int? Age, int? DraftRound, int? DraftPick, string? CollegeTeam, string? HeadshotUrl,
-            double DynastyScore, int ScoreRank, double? PffGrade, int? PffRank);
+        string SleeperPlayerId, string PlayerName, string Position, string? NflTeam,
+        int? FantasyProsRank, int? PositionRank, string? Tier, string NeedLevel, string FitLabel,
+        double? ConsensusAdp,
+        int? Age, int? DraftRound, int? DraftPick, string? CollegeTeam, string? HeadshotUrl,
+        double DynastyScore, int ScoreRank, double? PffGrade, int? PffRank);
 
     private async Task OpenPlayerCardAsync(MyRosterPlayerDto player)
     {
         var data = new PlayerCardDialog.PlayerCardData(
             SleeperPlayerId: player.SleeperPlayerId,
-            FullName: player.PlayerName,
-            Position: player.Position,
-            NflTeam: player.NflTeam,
-            Age: player.Age,
+            FullName:    player.PlayerName,
+            Position:    player.Position,
+            NflTeam:     player.NflTeam,
+            Age:         player.Age,
             DraftRound: null, DraftPick: null, CollegeTeam: null,
             HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{player.SleeperPlayerId}.jpg",
             FantasyProsRank: null, FantasyProsTier: null,
@@ -1273,14 +1470,15 @@ else if (_roster is null)
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         await DialogService.ShowAsync<PlayerCardDialog>(player.PlayerName, parameters, options);
     }
+
     private async Task OpenPlayerCardFromRookieAsync(RookieTargetDto r)
     {
         var data = new PlayerCardDialog.PlayerCardData(
             SleeperPlayerId: r.SleeperPlayerId,
-            FullName: r.PlayerName,
-            Position: r.Position,
-            NflTeam: r.NflTeam,
-            Age: r.Age,
+            FullName:   r.PlayerName,
+            Position:   r.Position,
+            NflTeam:    r.NflTeam,
+            Age:        r.Age,
             DraftRound: r.DraftRound, DraftPick: r.DraftPick, CollegeTeam: r.CollegeTeam,
             HeadshotUrl: r.HeadshotUrl
                 ?? $"https://sleepercdn.com/content/nfl/players/thumb/{r.SleeperPlayerId}.jpg",
@@ -1295,10 +1493,10 @@ else if (_roster is null)
             YearsExperience: 0);
 
         var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, data },
-        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
-    };
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
+        };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         await DialogService.ShowAsync<PlayerCardDialog>(r.PlayerName, parameters, options);
     }
@@ -1307,9 +1505,9 @@ else if (_roster is null)
     {
         var data = new PlayerCardDialog.PlayerCardData(
             SleeperPlayerId: opt.SleeperPlayerId,
-            FullName: opt.PlayerName,
-            Position: opt.Position,
-            NflTeam: opt.NflTeam,
+            FullName:  opt.PlayerName,
+            Position:  opt.Position,
+            NflTeam:   opt.NflTeam,
             Age: null,
             DraftRound: null, DraftPick: null, CollegeTeam: null,
             HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{opt.SleeperPlayerId}.jpg",
@@ -1321,18 +1519,19 @@ else if (_roster is null)
             AthleticismScore: null, SpeedScore: null, FortyYard: null);
 
         var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, data },
-        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Stats }
-    };
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Stats }
+        };
         var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
         await DialogService.ShowAsync<PlayerCardDialog>(opt.PlayerName, parameters, options);
     }
+
     private static string PickChipStyle(int round) => round switch
     {
-        1 => "border-color:#22C55E; color:#22C55E;",   // green — 1st rounders
-        2 => "border-color:#00C8F0; color:#00C8F0;",   // cyan — 2nd rounders
-        3 => "border-color:#F59E0B; color:#F59E0B;",   // amber — 3rd rounders
-        _ => "border-color:#6B7280; color:#6B7280;"    // gray — 4th+
+        1 => "border-color:#22C55E; color:#22C55E;",
+        2 => "border-color:#00C8F0; color:#00C8F0;",
+        3 => "border-color:#F59E0B; color:#F59E0B;",
+        _ => "border-color:#6B7280; color:#6B7280;"
     };
 }
