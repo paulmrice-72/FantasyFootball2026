@@ -40,6 +40,44 @@ public class DfvCalculationService(
         ["TE"] = 1.05
     };
 
+    // FAN-52: TE positional TV caps by rank within the TE pool.
+    //
+    // Root cause: 216 TEs with NflTeam all get career sims seeded to ~9 FPPG
+    // from the position prior (shrinkage blending). They generate similar raw
+    // DFV values, and the linear normalization spreads them into TV 40-53.
+    // Threshold gates alone don't help for year 2-3 TEs who have actual sim
+    // data producing baseFppg > 8.5 — they still pass through.
+    //
+    // Caps enforce that only genuine TE1s reach WR/RB-equivalent TV ranges.
+    // Calibrated against FantasyPros dynasty superflex (May 2026):
+    //   TE #1  (McBride)          → cap 65
+    //   TE #2  (Bowers)           → cap 55
+    //   TE #3–4 (LaPorta/Kraft)   → cap 48
+    //   TE #5–8 (Pitts/Kincaid)   → cap 42
+    //   TE #9–12 (emerging)       → cap 36
+    //   TE #13+ (depth)           → cap 28
+    private static readonly double[] TeRankCaps =
+    [
+        65.0,  // rank 1
+        55.0,  // rank 2
+        48.0,  // rank 3
+        48.0,  // rank 4
+        42.0,  // rank 5
+        42.0,  // rank 6
+        42.0,  // rank 7
+        42.0,  // rank 8
+        36.0,  // rank 9
+        36.0,  // rank 10
+        36.0,  // rank 11
+        36.0,  // rank 12
+        // rank 13+: 28.0
+    ];
+
+    private static double GetTeRankCap(int oneBasedRank) =>
+        oneBasedRank <= TeRankCaps.Length
+            ? TeRankCaps[oneBasedRank - 1]
+            : 28.0;
+
     private static double GetSuperflexScarcityMultiplier(
         string position,
         DynastyValuationDocument valuation)
@@ -55,30 +93,14 @@ public class DfvCalculationService(
             };
         }
 
-        // QB CVS runs ~40% higher than skill positions due to volume scoring.
-        // Deflate before tier lookup so thresholds are comparable across positions.
-        //
-        // Adjusted CVS reference points (raw CVS / 1.4):
-        //   Josh Allen      1231 → 879   ≥ 850: top tier
-        //   Mahomes         1062 → 758 ┐
-        //   Lawrence        1080 → 771 ├ ≥ 700: solid starter
-        //   Purdy           1061 → 758 ┘
-        //   Hurts           1031 → 736 ┐
-        //   Herbert          991 → 708 ├ ≥ 650: good starter
-        //   Daniel Jones     953 → 681 ┘
-        //   Burrow           908 → 649 ┐
-        //   Jackson          893 → 638 ├ ≥ 550: average starter
-        //   Goff             869 → 621 ┘
-        //   Brissett         711 → 508   < 550: fringe/backup
-
         var adjustedCvs = valuation.CareerValueScore / 1.4;
         return adjustedCvs switch
         {
-            >= 850 => 1.15,  // Generational franchise QB (Allen only)
-            >= 700 => 1.00,  // Solid starter — neutral, no superflex premium
-            >= 650 => 0.92,  // Good starter — slight discount vs WR/RB
-            >= 550 => 0.84,  // Average starter — meaningful discount
-            _ => 0.75   // Fringe/backup — penalize
+            >= 850 => 1.15,
+            >= 700 => 1.00,
+            >= 650 => 0.92,
+            >= 550 => 0.84,
+            _ => 0.75
         };
     }
 
@@ -104,9 +126,7 @@ public class DfvCalculationService(
             return [];
         }
 
-        // ── Bulk-load career sims in ONE query ───────────────────────────────
-        // Replaces N serial GetByPlayerIdAsync calls — the primary perf bottleneck.
-        // With ~700 players this was 700 round-trips; now it's 1.
+        // ── Bulk-load career sims ────────────────────────────────────────────
         var allSims = await careerSimRepository.GetAllBySeasonAsync(season, ct);
         var simMap = allSims
             .GroupBy(s => s.SleeperPlayerId)
@@ -129,10 +149,17 @@ public class DfvCalculationService(
         {
             if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
 
-            if (valuation.Position == "QB" && string.IsNullOrEmpty(valuation.NflTeam))
+            // FAN-52: FA zeroing for all positions (QB already zeroed before).
+            // Skill position FAs generate phantom DFV from the career sim prior.
+            // Exception: rookies with FP rank may not yet have team stamped.
+            if (string.IsNullOrEmpty(valuation.NflTeam))
             {
-                rawDfvMap[valuation.SleeperPlayerId] = 0;
-                continue;
+                if (valuation.Position == "QB"
+                    || !fpRankMap.ContainsKey(valuation.SleeperPlayerId))
+                {
+                    rawDfvMap[valuation.SleeperPlayerId] = 0;
+                    continue;
+                }
             }
 
             var isFaSkillPlayer = string.IsNullOrEmpty(valuation.NflTeam)
@@ -144,9 +171,8 @@ public class DfvCalculationService(
                 continue;
             }
 
-            // Depth gate — unranked skill players in year 0 or 1 with no starter-level
-            // sim data get zeroed rather than floating up via prior inflation.
-            // QB exempt — rookies handled by shrinkage + rookie floor in DFV.
+            // Depth gate — year 0-1 unranked players with sub-starter projections
+            // FAN-52: TE threshold raised from 6.0 → 9.0
             if (valuation.Position != "QB"
                 && (valuation.YearsExperience ?? -1) <= 1
                 && !fpRankMap.ContainsKey(valuation.SleeperPlayerId)
@@ -162,10 +188,6 @@ public class DfvCalculationService(
 
             var raw = CalculateRawDfvWithScarcity(careerSim, valuation.Position, scarcity);
 
-            // P3 — Additive ascent bonus replaces multiplicative breakout boost.
-            // Only activates above score=50 (genuine ascending trajectory).
-            // Established elites (Lamb ~10, Jefferson ~8) get 0 — ranks purely on CVS.
-            // Ascending sophomores (score 65-80) get +2-5 raw points before normalization.
             var ascentBonus = valuation.BreakoutScore >= 50
                 ? ((valuation.BreakoutScore - 50.0) / 50.0) * 8.0
                 : 0.0;
@@ -175,21 +197,42 @@ public class DfvCalculationService(
         }
 
         var top20Raw = rawDfvMap
-    .OrderByDescending(kvp => kvp.Value)
-    .Take(20)
-    .Select(kvp => $"{kvp.Key}: {kvp.Value:F1}")
-    .ToList();
+            .OrderByDescending(kvp => kvp.Value)
+            .Take(20)
+            .Select(kvp => $"{kvp.Key}: {kvp.Value:F1}")
+            .ToList();
         logger.LogInformation("Top 20 raw DFV before normalization: {Values}",
             string.Join(", ", top20Raw));
 
         // ── Normalize ACROSS all positions to 0-95 ──────────────────────────
-        // 95 ceiling reserves headroom for post-norm rookie floor (97-100).
         NormalizeAcrossAllPositions(valuations, rawDfvMap, ceiling: 95.0);
 
-        // ── Rookie floor applied POST-normalization ──────────────────────────
-        // Top FP-ranked rookies (age ≤ 22, yearsExperience == 0) get a TradeValue
-        // floor above the 95 organic ceiling — reflecting dynasty upside the
-        // career sim can't capture in year 1.
+        // ── FAN-52: TE positional rank caps — applied POST-normalization ─────
+        // Rank all TEs by normalized score, apply TeRankCaps[].
+        // This is the primary fix for the "mid-tier TE inflation" problem.
+        // Year 2-3 TEs with real sim data bypass the depth gate (they have
+        // legit-looking baseFppg from partial/fill-in game production), so the
+        // caps are the enforcement layer that maps them to realistic TV ranges.
+        var tesByNormScore = valuations
+            .Where(v => v.Position == "TE"
+                     && rawDfvMap.TryGetValue(v.SleeperPlayerId, out var s) && s > 0)
+            .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
+            .ToList();
+
+        for (int i = 0; i < tesByNormScore.Count; i++)
+        {
+            var te = tesByNormScore[i];
+            var cap = GetTeRankCap(i + 1);
+            if (rawDfvMap.TryGetValue(te.SleeperPlayerId, out var current) && current > cap)
+            {
+                rawDfvMap[te.SleeperPlayerId] = cap;
+                logger.LogDebug(
+                    "TE rank cap: {Player} rank {Rank} {Old:F1} → {Cap:F1}",
+                    te.PlayerName, i + 1, current, cap);
+            }
+        }
+
+        // ── Rookie floor — POST-normalization, POST-cap ──────────────────────
         foreach (var valuation in valuations.Where(v => (v.YearsExperience ?? -1) == 0))
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var normalized)) continue;
@@ -211,7 +254,7 @@ public class DfvCalculationService(
             rawDfvMap[valuation.SleeperPlayerId] = Math.Max(normalized, floorTradeValue);
         }
 
-        // ── Final stamp — runs AFTER rookie floor ────────────────────────────
+        // ── Final stamp ──────────────────────────────────────────────────────
         foreach (var valuation in valuations)
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var final)) continue;
@@ -273,27 +316,14 @@ public class DfvCalculationService(
 
     // ── Private ──────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Rank-based power curve normalization (P2 — FAN-62).
-    /// Replaces rawDfv/maxRawDfv*95 which compressed the entire distribution
-    /// whenever a single outlier changed at the top.
-    ///
-    /// finalScore = 95 * (1 - (rank-1) / (N-1)) ^ 0.6
-    ///
-    /// Key properties:
-    ///   - Top player always scores 95 regardless of raw magnitude
-    ///   - Adding/removing one player shifts others by at most 1 rank → < 0.5 pts
-    ///   - 0.6 exponent: convex curve — top tier clusters, mid-tier spreads
-    ///   - Exponent is a tuning dial: lower = more compression at top, higher = more spread
-    /// </summary>
     private static void NormalizeAcrossAllPositions(
-    List<DynastyValuationDocument> valuations,
-    Dictionary<string, double> rawDfvMap,
-    double ceiling = 95.0)
+        List<DynastyValuationDocument> valuations,
+        Dictionary<string, double> rawDfvMap,
+        double ceiling = 95.0)
     {
         var eligible = valuations
             .Where(v => rawDfvMap.ContainsKey(v.SleeperPlayerId)
-                && rawDfvMap[v.SleeperPlayerId] > 0)
+                     && rawDfvMap[v.SleeperPlayerId] > 0)
             .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
             .ToList();
 
@@ -308,18 +338,20 @@ public class DfvCalculationService(
         foreach (var v in eligible)
         {
             var raw = rawDfvMap[v.SleeperPlayerId];
-            // Linear scale within actual raw range → maps to 2.0-95.0
             var normalized = 2.0 + (raw - minRaw) / rawRange * (ceiling - 2.0);
             rawDfvMap[v.SleeperPlayerId] = Math.Round(normalized, 2);
         }
     }
 
+    // FAN-52: TE raised from 6.0 → 9.0.
+    // Catches year 0-1 TEs with no real production. Year 2-3 TEs with actual
+    // sim data still bypass this gate — they are handled by TeRankCaps above.
     private static double StarterThresholdDfv(string position) => position switch
     {
         "QB" => 16.0,
         "RB" => 7.0,
         "WR" => 7.5,
-        "TE" => 6.0,
+        "TE" => 9.0,
         _ => 7.0
     };
 }

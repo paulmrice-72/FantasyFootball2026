@@ -31,9 +31,19 @@ public class GetStartSitRecommendationsQueryHandler(
             return null;
 
         // 2 — Load league roster configuration
-        // TO:
+        // Try exact season match first; fall back to any active league with this Sleeper ID.
+        // This handles testing with historical seasons where the league row is stored
+        // under a different season year (e.g. league stored as 2025, testing with 2024).
         var league = await leagueRepository
             .GetBySleeperIdAsync(request.SleeperLeagueId, request.Season, cancellationToken);
+
+        if (league is null)
+        {
+            var activeLeagues = await leagueRepository.GetActiveLeaguesAsync(cancellationToken);
+            league = activeLeagues.FirstOrDefault(l =>
+                l.SleeperLeagueId == request.SleeperLeagueId);
+        }
+
         var rosterConfig = league?.GetRosterConfiguration()
             ?? RosterConfiguration.Standard;
 
