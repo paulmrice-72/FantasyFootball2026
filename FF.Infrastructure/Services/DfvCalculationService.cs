@@ -41,9 +41,14 @@ public class DfvCalculationService(
     };
 
     // ── P2: Rank-based normalization ──────────────────────────────────────
-    // 0.6 (convex): top tier clusters closer together, mid-tier spreads more.
-    // Per scoring math reference doc (FAN-62).
-    private const double NormExponent = 0.6;
+    // P2 normalization exponent — controls distribution shape.
+    // 0.9 (slightly convex): good spread across the full range while
+    // preserving mild top-tier compression. At 0.6 (original), the top 200
+    // were crammed into a 75-95 band, burying TE caps in a sea of WRs/QBs.
+    // 0.9 gives rank 100 ≈ 80.7 and rank 150 ≈ 73.4 with N=600, so a TE
+    // capped at 78 lands around overall rank 115 instead of rank 170.
+    // Tunable via calibration harness (FAN-62).
+    private const double NormExponent = 0.9;
     private const double NormCeiling = 95.0;
 
     // ── Positional guardrail caps ─────────────────────────────────────────
@@ -66,31 +71,39 @@ public class DfvCalculationService(
 
     private static double GetTeGuardrailCap(int posRank) => posRank switch
     {
-        <= 2 => 70.0,         // elite tier (Bowers/McBride class)
-        <= 5 => 55.0,         // strong starters
-        <= 10 => 42.0,         // mid-tier
-        <= 15 => 32.0,         // back-end starters
-        _ => 22.0          // depth
+        1 => 92.0,         // generational TE — overall ~25 (Bowers class)
+        2 => 89.0,         // elite TE1 — overall ~40 (McBride class)
+        <= 4 => 84.0,         // strong starters — overall ~75 (LaPorta/Kraft tier)
+        <= 8 => 78.0,         // mid-tier starters — overall ~120
+        <= 12 => 70.0,         // back-end starters — overall ~175
+        _ => 50.0          // depth
     };
 
-    // ── FP dynasty rank → blending weight ─────────────────────────────────
-    // Instead of a floor table that overrides the model, we use FP dynasty
-    // rank as a BLENDING signal. Players with stale sim data get pulled
-    // toward their FP consensus value proportionally to how stale the data is.
+    // ── FP dynasty rank → blend anchor ─────────────────────────────────────
+    // Used as a blending signal for players whose model value is below their
+    // FP dynasty consensus. Only raises, never lowers.
     //
-    // The blend weight is based on how far the model's value is below what
-    // FP consensus suggests. If the model already agrees, no adjustment.
-    // This replaces the old GetDynastyRankFloor() table entirely.
+    // Anchors are aligned with the P2 curve (0.9 exponent, N≈600), offset
+    // ~3 points below to let the model retain some influence. At FP rank 18
+    // (Bowers), P2 produces ~92.6 — anchor is 90, so blend can pull him
+    // into the right neighborhood. Without this alignment, the old anchors
+    // (70 for rank ≤20) were 22+ points below the P2 curve, making the
+    // blend ineffective at correcting stale-data players.
+    //
+    // Blend formula (in CalculateAllAsync): if model < anchor,
+    //   new = model + (anchor - model) * 0.65
+    // Players already above their anchor are untouched.
     private static double GetFpDynastyAnchor(int fpRank) => fpRank switch
     {
-        <= 5 => 90.0,
-        <= 10 => 80.0,
-        <= 20 => 70.0,
-        <= 30 => 62.0,
-        <= 50 => 52.0,
-        <= 75 => 42.0,
-        <= 100 => 32.0,
-        <= 150 => 20.0,
+        <= 5 => 92.0,    // P2 rank 5  ≈ 94.4
+        <= 10 => 91.0,    // P2 rank 10 ≈ 93.7
+        <= 20 => 90.0,    // P2 rank 20 ≈ 92.3
+        <= 30 => 88.0,    // P2 rank 30 ≈ 90.5
+        <= 50 => 85.0,    // P2 rank 50 ≈ 88.0
+        <= 75 => 80.0,    // P2 rank 75 ≈ 84.4
+        <= 100 => 74.0,    // P2 rank 100 ≈ 80.7
+        <= 150 => 62.0,    // P2 rank 150 ≈ 73.4
+        <= 200 => 50.0,    // P2 rank 200 ≈ 66.1
         _ => 0.0
     };
 
@@ -154,7 +167,8 @@ public class DfvCalculationService(
             simMap.Count, season);
 
         // ── Load FP rookie rankings ──────────────────────────────────────
-        var fpRookieRankings = await fpRookieRepository.GetAllBySeasonAndTypeAsync(season, "Rookie", ct);
+        var fpRookieRankings = await fpRookieRepository.GetAllBySeasonAndTypeAsync(season, "Rookie", ct)
+                               ?? Array.Empty<FantasyProsRookieRankingDocument>();
         var fpRookieRankMap = fpRookieRankings
             .Where(r => r.SleeperPlayerId is not null)
             .GroupBy(r => r.SleeperPlayerId!)
@@ -162,7 +176,8 @@ public class DfvCalculationService(
 
         // ── Load FP dynasty rankings ─────────────────────────────────────
         // Used as a blending signal for players with stale/missing sim data.
-        var fpDynastyRankings = await fpRookieRepository.GetAllBySeasonAndTypeAsync(season, "Dynasty", ct);
+        var fpDynastyRankings = await fpRookieRepository.GetAllBySeasonAndTypeAsync(season, "Dynasty", ct)
+                                ?? Array.Empty<FantasyProsRookieRankingDocument>();
         var fpDynastyRankMap = fpDynastyRankings
             .Where(r => r.SleeperPlayerId is not null && !string.IsNullOrEmpty(r.SleeperPlayerId))
             .GroupBy(r => r.SleeperPlayerId!)
@@ -279,6 +294,10 @@ public class DfvCalculationService(
             getCap: GetQbGuardrailCap,
             logLabel: "QB guardrail");
 
+        // ── TE guardrails — POST-blend ──────────────────────────────────
+        // Same mechanism as QB: tier-based caps, model determines ordering.
+        // With 0.9 exponent there's enough spread that TE caps place elite
+        // TEs in a reasonable overall range without needing FP-rank overrides.
         ApplyPositionalGuardrails(
             valuations, rawDfvMap,
             position: "TE",
@@ -419,6 +438,15 @@ public class DfvCalculationService(
         if (eligible.Count == 0) return;
 
         int n = eligible.Count;
+
+        for (int i = 0; i < n; i++)
+        {
+            var id = eligible[i].SleeperPlayerId;
+            double rankFraction = n > 1 ? (double)i / (n - 1) : 0.0;
+            double normalized = ceiling * Math.Pow(1.0 - rankFraction, NormExponent);
+            rawDfvMap[id] = Math.Round(normalized, 2);
+        }
+    }
 
     /// <summary>
     /// Applies tier-based guardrail caps to a position.

@@ -371,7 +371,8 @@ public class CareerSimulationService(
     ///   Allen (5yr, 28 raw) → 24.44 — elite, mostly trusted
     ///   Milton (1yr, 19 raw) → 18.63 — pulled toward starter average
     ///   Purdy (3yr, 20 raw) → 19.25 — moderate credibility
-    ///   Rookie (0yr, no data) → 18.5 or depth gate
+    ///   Rookie (0yr, no data) → 18.5 (prior) or depth gate (no draft pedigree)
+    ///   Ehlinger (4yr, no data) → 6.0 (depth) — career backup, not unknown
     ///
     /// Journeyman cap: age 28+, exp 8+ QBs capped at 21.0 FPPG blended.
     /// Catches Mayfield/Darnold/Goff without affecting Allen/Burrow/Hurts.
@@ -402,10 +403,25 @@ public class CareerSimulationService(
                 : GetDepthLevelFppg(position); // 6.0 — unknown/late round
         }
 
-        // Standard shrinkage blend
-        var blended = rawFppg <= 0
-            ? prior
-            : credibility * rawFppg + (1.0 - credibility) * prior;
+        // Experienced player with NO sim data → depth-level, not prior.
+        // Having multiple years in the league with zero measurable production
+        // means career backup, not unknown starter. The prior (18.5 for QB)
+        // is designed for BLENDING with real observations, not as a standalone
+        // value. Only rookies (exp 0) get the full prior as their starting
+        // point — handled by the rookie gate above for QBs and by the
+        // credibility formula (0% weight on raw) for other positions.
+        if (rawFppg <= 0)
+        {
+            if ((player.YearsExperience ?? 0) >= 1)
+                return GetDepthLevelFppg(position);
+
+            // True rookie with no sim data — full prior is appropriate
+            // (credibility = 0%, blend = 100% prior)
+            return prior;
+        }
+
+        // Standard shrinkage blend — player has real sim data
+        var blended = credibility * rawFppg + (1.0 - credibility) * prior;
 
         // Journeyman QB cap — Mayfield (31/exp8), Darnold (28/exp8), Goff tier.
         // Allen age 29 exp 7, Burrow age 29 exp 6 — NOT caught.
