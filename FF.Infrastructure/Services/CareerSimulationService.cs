@@ -10,31 +10,42 @@ using MongoDB.Bson;
 namespace FF.Infrastructure.Services;
 
 public class CareerSimulationService(
-IPlayerRepository playerRepository,
-IAgingCurveRepository agingCurveRepository,
-ISimulationResultRepository simulationResultRepository,
-ILogger<CareerSimulationService> logger) : ICareerSimulationService
+    IPlayerRepository playerRepository,
+    IAgingCurveRepository agingCurveRepository,
+    ISimulationResultRepository simulationResultRepository,
+    ILogger<CareerSimulationService> logger) : ICareerSimulationService
 {
     private const int Iterations = 1000;
     private const int ProjectYears = 5;
     private const int CurrentSeason = 2026;
 
-    // ── Empirical Bayes shrinkage ─────────────────────────────────────────────
+    // ── Empirical Bayes shrinkage ─────────────────────────────────────────
     // credibility = min(YearsExp, 5) / (min(YearsExp, 5) + K)
     // blended = credibility × raw + (1 - credibility) × prior
     // K=3: rookie → 0% credibility (full prior), 5yr vet → 62.5% (cap)
     // Admin-configurable in a future sprint (ADMIN-WEIGHT-001).
     private const double ShrinkageK = 3.0;
 
-    // FAN-52: TE prior raised from 7.5 → 9.0.
-    // 7.5 was the TE2 average — it caused shrinkage to pull low-evidence TEs
-    // up to a CVS plateau of ~391-397, flooding the DFV normalization pool
-    // with phantom starters. 9.0 matches real TE1 production (Kelce/Waller era
-    // median); TE2s and depth players fall to GetDepthLevelFppg (3.5) via
-    // the StarterThreshold gate below.
+    // Position priors per scoring math reference doc (FAN-61).
+    // These represent average STARTER FPPG by position in half-PPR.
+    //
+    // QB prior = 18.5: This is the median starter QB FPPG. The scoring doc
+    // explicitly designed P1 shrinkage around this value. At 14.0 (previous),
+    // shrinkage was pulling proven QBs DOWN too aggressively, compressing
+    // Allen/Hurts/Jackson toward the same band as Purdy/Goff — then requiring
+    // hand-tuned cap tables downstream in DfvCalculationService to fix the
+    // ordering. With 18.5, the shrinkage formula naturally differentiates:
+    //   - Allen (5+ yrs, 28 FPPG raw): blended = 62.5% × 28 + 37.5% × 18.5 = 24.44
+    //   - Milton (1 yr, 19 FPPG raw):  blended = 25% × 19 + 75% × 18.5 = 18.63
+    //   - Rookie (0 yrs):              blended = 100% × 18.5 = 18.5 (or depth gate)
+    //
+    // The journeyman QB cap (21.0 at age 28+ / exp 8+) still catches
+    // Mayfield/Darnold/Goff without the prior change affecting them differently.
+    //
+    // TE prior = 9.0 (FAN-52): raised from 7.5 — real TE1 production average.
     private static readonly Dictionary<string, double> PositionPriors = new()
     {
-        ["QB"] = 14.0, // median starter, excludes top-tier inflation
+        ["QB"] = 18.5, // FAN-61: median starter, per scoring math reference doc
         ["RB"] = 9.5,  // accounts for committee backs
         ["WR"] = 9.0,  // slot + role players drag median down
         ["TE"] = 9.0,  // FAN-52: raised from 7.5 — real TE1 average
@@ -90,12 +101,12 @@ ILogger<CareerSimulationService> logger) : ICareerSimulationService
         var results = new List<CareerSimulationDocument>();
         var positions = new[] { Position.QB, Position.RB, Position.WR, Position.TE };
 
-        // ── Bulk-load aging curves ───────────────────────────────────────────
+        // ── Bulk-load aging curves ───────────────────────────────────────
         var curves = new Dictionary<string, AgingCurveDocument?>();
         foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
             curves[pos] = await agingCurveRepository.GetByPositionAsync(pos, ct);
 
-        // ── Bulk-load ALL season-average sim results in ONE query ────────────
+        // ── Bulk-load ALL season-average sim results in ONE query ────────
         var allSimResults = await simulationResultRepository.GetAllSeasonAveragesAsync(ct);
         logger.LogInformation(
             "Bulk-loaded {Count} season-average sim results for baseline lookup",
@@ -106,7 +117,7 @@ ILogger<CareerSimulationService> logger) : ICareerSimulationService
         // an inflated 5-year projection. Uses best single season only as fallback.
         var simByPlayerId = allSimResults
             .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0
-                     && r.Week == 0) // season-average sentinel only
+                        && r.Week == 0) // season-average sentinel only
             .GroupBy(r => r.SleeperPlayerId!)
             .ToDictionary(
                 g => g.Key,
@@ -139,7 +150,7 @@ ILogger<CareerSimulationService> logger) : ICareerSimulationService
 
         var simByNamePos = allSimResults
             .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0
-                     && r.Week == 0)
+                        && r.Week == 0)
             .GroupBy(r => $"{r.PlayerName}|{r.Position}")
             .ToDictionary(
                 g => g.Key,
@@ -168,7 +179,7 @@ ILogger<CareerSimulationService> logger) : ICareerSimulationService
                     };
                 });
 
-        // ── Simulate each player ─────────────────────────────────────────────
+        // ── Simulate each player ─────────────────────────────────────────
         foreach (var position in positions)
         {
             var players = (await playerRepository.GetByPositionAsync(position, ct))
@@ -205,7 +216,7 @@ ILogger<CareerSimulationService> logger) : ICareerSimulationService
         string sleeperPlayerId, CancellationToken ct = default)
     {
         var player = await playerRepository.GetBySleeperIdAsync(sleeperPlayerId, ct)
-            ?? throw new InvalidOperationException($"Player not found: {sleeperPlayerId}");
+                     ?? throw new InvalidOperationException($"Player not found: {sleeperPlayerId}");
 
         var posStr = player.Position.ToString();
         var curve = await agingCurveRepository.GetByPositionAsync(posStr, ct);
@@ -354,7 +365,13 @@ ILogger<CareerSimulationService> logger) : ICareerSimulationService
     /// credibility = min(YearsExp, 5) / (min(YearsExp, 5) + K)
     /// blended = credibility × raw + (1 - credibility) × prior
     ///
-    /// K=3: 0 yrs → 0% (full prior)  1 yr → 25%  3 yrs → 50%  5+ yrs → 62.5%
+    /// K=3: 0 yrs → 0% (full prior) 1 yr → 25% 3 yrs → 50% 5+ yrs → 62.5%
+    ///
+    /// With QB prior at 18.5 (FAN-61), shrinkage naturally produces:
+    ///   Allen (5yr, 28 raw) → 24.44 — elite, mostly trusted
+    ///   Milton (1yr, 19 raw) → 18.63 — pulled toward starter average
+    ///   Purdy (3yr, 20 raw) → 19.25 — moderate credibility
+    ///   Rookie (0yr, no data) → 18.5 or depth gate
     ///
     /// Journeyman cap: age 28+, exp 8+ QBs capped at 21.0 FPPG blended.
     /// Catches Mayfield/Darnold/Goff without affecting Allen/Burrow/Hurts.
@@ -371,15 +388,17 @@ ILogger<CareerSimulationService> logger) : ICareerSimulationService
         var credibility = clampedExp / (clampedExp + ShrinkageK);
 
         // Rookie QB with no sim data and no draft pedigree → depth-level,
-        // not prior. Prior (14.0) is still too high for unknown QBs —
-        // it puts Beck/Green/Simpson in the top 20 via superflex inflation.
+        // not prior. Prior (18.5) would put unknown QBs into the starter
+        // range via superflex inflation — only high picks earn it.
         if (position == "QB" && (player.YearsExperience ?? 0) == 0 && rawFppg <= 0)
         {
             var round = player.DraftRound ?? 99;
             var pick = player.DraftPick ?? 999;
-            // Only top-5 picks earn the starter prior; everyone else is depth
-            return (round == 1 && pick <= 5)
-                ? prior                       // 14.0 — high pick, legitimate prospect
+            // Only 1st-round picks earn the starter prior; everyone else is depth.
+            // Widened from top-5 to full 1st round — a 1st-round QB is a legitimate
+            // dynasty prospect even at pick 20+.
+            return (round == 1)
+                ? prior  // 18.5 — 1st round pick, legitimate prospect
                 : GetDepthLevelFppg(position); // 6.0 — unknown/late round
         }
 
@@ -449,9 +468,9 @@ ILogger<CareerSimulationService> logger) : ICareerSimulationService
     {
         var peak = PeakAges.GetValueOrDefault(position, 26);
         return age < peak - 2 ? CareerPhase.Ascending
-             : age <= peak + 2 ? CareerPhase.Prime
-             : age <= peak + 5 ? CareerPhase.Declining
-             : CareerPhase.Unknown;
+            : age <= peak + 2 ? CareerPhase.Prime
+            : age <= peak + 5 ? CareerPhase.Declining
+            : CareerPhase.Unknown;
     }
 
     private static double GetPositionVariance(string position) => position switch
