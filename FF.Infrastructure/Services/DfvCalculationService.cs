@@ -40,36 +40,67 @@ public class DfvCalculationService(
         ["TE"] = 1.05
     };
 
-    // FAN-52: TE positional TV caps by rank within the TE pool.
-    //
-    // Root cause: 216 TEs with NflTeam all get career sims seeded to ~9 FPPG
-    // from the position prior (shrinkage blending). They generate similar raw
-    // DFV values, and the linear normalization spreads them into TV 40-53.
-    // Threshold gates alone don't help for year 2-3 TEs who have actual sim
-    // data producing baseFppg > 8.5 — they still pass through.
-    //
-    // Caps enforce that only genuine TE1s reach WR/RB-equivalent TV ranges.
-    // Calibrated against FantasyPros dynasty superflex (May 2026):
-    //   TE #1  (McBride)          → cap 65
-    //   TE #2  (Bowers)           → cap 55
-    //   TE #3–4 (LaPorta/Kraft)   → cap 48
-    //   TE #5–8 (Pitts/Kincaid)   → cap 42
-    //   TE #9–12 (emerging)       → cap 36
-    //   TE #13+ (depth)           → cap 28
+    // P2 normalization exponent — controls distribution shape.
+    // 0.6 (convex): top tier clusters closer together, mid-tier spreads more.
+    private const double NormExponent = 0.6;
+
+    // QB positional TV caps by dynasty rank — applied POST-normalization, POST-floor.
+    // Caps are the final enforcement layer — they always win over floors.
+    // Pipeline order: normalize → dynasty floor → QB caps → TE caps → rookie floor
+    // This means: FP consensus lifts stale players (Daniels/Love/Fields), then caps
+    // push win-now QBs (Purdy/Goff/Mayfield) back down regardless of their FP rank.
+    // Rank 26+: 5.0
+    private static readonly double[] QbRankCaps =
+    [
+        95.0, // rank 1  — Allen
+        91.0, // rank 2  — Hurts
+        88.0, // rank 3  — Jackson
+        85.0, // rank 4  — Burrow
+        83.0, // rank 5  — Mahomes
+        80.0, // rank 6  — Herbert
+        78.0, // rank 7  — Lawrence
+        76.0, // rank 8  — Love (young, upside)
+        74.0, // rank 9  — Fields (young, upside)
+        72.0, // rank 10 — Nix (2026 starter, youth)
+        68.0, // rank 11 — Mendoza (2026 rookie QB1, elite landing spot)
+        58.0, // rank 12 — Stroud / Daniels tier
+        52.0, // rank 13
+        48.0, // rank 14
+        44.0, // rank 15
+        35.0, // rank 16 — Purdy / Goff / Mayfield — win-now, no dynasty upside
+        30.0, // rank 17
+        26.0, // rank 18
+        22.0, // rank 19
+        18.0, // rank 20
+        14.0, // rank 21 — clear backups
+        12.0, // rank 22
+        10.0, // rank 23
+        8.0,  // rank 24
+        6.0,  // rank 25
+        // rank 26+: 5.0
+    ];
+
+    private static double GetQbRankCap(int oneBasedRank) =>
+        oneBasedRank <= QbRankCaps.Length
+            ? QbRankCaps[oneBasedRank - 1]
+            : 5.0;
+
+    // TE positional TV caps by rank — applied POST-floor.
+    // Rank 13+: 28.0
     private static readonly double[] TeRankCaps =
     [
-        65.0,  // rank 1
-        55.0,  // rank 2
-        48.0,  // rank 3
-        48.0,  // rank 4
-        42.0,  // rank 5
-        42.0,  // rank 6
-        42.0,  // rank 7
-        42.0,  // rank 8
-        36.0,  // rank 9
-        36.0,  // rank 10
-        36.0,  // rank 11
-        36.0,  // rank 12
+        68.0, // rank 1  — Bowers
+        65.0, // rank 2  — McBride
+        52.0, // rank 3  — Loveland / LaPorta
+        48.0, // rank 4  — LaPorta / Kraft
+        42.0, // rank 5
+        42.0, // rank 6
+        42.0, // rank 7
+        42.0, // rank 8
+        36.0, // rank 9
+        36.0, // rank 10
+        36.0, // rank 11
+        36.0, // rank 12
         // rank 13+: 28.0
     ];
 
@@ -77,6 +108,36 @@ public class DfvCalculationService(
         oneBasedRank <= TeRankCaps.Length
             ? TeRankCaps[oneBasedRank - 1]
             : 28.0;
+
+    // FP dynasty overall rank → TV floor.
+    // Applied POST-normalization but PRE-positional-caps so that caps always win.
+    //
+    // Purpose: players whose career sim is stale/missing (no 2025 data) get lifted
+    // to their FP community consensus value before caps enforce the ceiling.
+    //
+    // Example flow for Purdy (FP dynasty rank ~38, cap rank ~16):
+    //   P2 normalize  → ~62 (QB #4 in raw pool)
+    //   Dynasty floor → Math.Max(62, 58) = 62 (floor doesn't fire — already above)
+    //   QB caps       → rank 16 cap = 35 → Purdy stamped at 35 ✓
+    //
+    // Example flow for Jayden Daniels (FP dynasty rank ~7, no sim data):
+    //   P2 normalize  → 0 (zeroed — no sim, no team)
+    //   Dynasty floor → Math.Max(0, 83) = 83
+    //   QB caps       → rank 12 cap = 58 → Daniels stamped at 58 ✓
+    //
+    // Rank 151+: no floor (depth players — speculative)
+    private static double GetDynastyRankFloor(int overallRank) => overallRank switch
+    {
+        <= 5 => 90.0,
+        <= 10 => 83.0,
+        <= 20 => 76.0,
+        <= 30 => 68.0,
+        <= 50 => 58.0,
+        <= 75 => 45.0,
+        <= 100 => 35.0,
+        <= 150 => 22.0,
+        _ => 0.0
+    };
 
     private static double GetSuperflexScarcityMultiplier(
         string position,
@@ -136,26 +197,37 @@ public class DfvCalculationService(
             "Bulk-loaded {Count} career sims for season {Season}",
             simMap.Count, season);
 
-        // ── Load FP rookie rankings for post-norm floor ──────────────────────
-        var fpRookieRankings = await fpRookieRepository.GetAllBySeasonAsync(season, ct);
-        var fpRankMap = fpRookieRankings
+        // ── Load FP rookie rankings ──────────────────────────────────────────
+        var fpRookieRankings = await fpRookieRepository.GetAllBySeasonAndTypeAsync(season, "Rookie", ct);
+        var fpRookieRankMap = fpRookieRankings
             .Where(r => r.SleeperPlayerId is not null)
             .GroupBy(r => r.SleeperPlayerId!)
             .ToDictionary(g => g.Key, g => g.OrderBy(r => r.FantasyProsRank).First().FantasyProsRank);
 
-        // ── Build raw DFV for every player ──────────────────────────────────
+        // ── Load FP dynasty rankings ─────────────────────────────────────────
+        // Used as a pre-cap floor signal for veterans with stale/missing sim data.
+        var fpDynastyRankings = await fpRookieRepository.GetAllBySeasonAndTypeAsync(season, "Dynasty", ct);
+        var fpDynastyRankMap = fpDynastyRankings
+            .Where(r => r.SleeperPlayerId is not null && !string.IsNullOrEmpty(r.SleeperPlayerId))
+            .GroupBy(r => r.SleeperPlayerId!)
+            .ToDictionary(g => g.Key, g => g.OrderBy(r => r.FantasyProsRank).First().FantasyProsRank);
+
+        logger.LogInformation(
+            "Loaded {RookieCount} FP rookie ranks, {DynastyCount} FP dynasty ranks",
+            fpRookieRankMap.Count, fpDynastyRankMap.Count);
+
+        // ── Build raw DFV for every player ───────────────────────────────────
         var rawDfvMap = new Dictionary<string, double>();
         foreach (var valuation in valuations)
         {
             if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
 
-            // FAN-52: FA zeroing for all positions (QB already zeroed before).
-            // Skill position FAs generate phantom DFV from the career sim prior.
+            // FA zeroing — skill position FAs generate phantom DFV from the career sim prior.
             // Exception: rookies with FP rank may not yet have team stamped.
             if (string.IsNullOrEmpty(valuation.NflTeam))
             {
                 if (valuation.Position == "QB"
-                    || !fpRankMap.ContainsKey(valuation.SleeperPlayerId))
+                    || !fpRookieRankMap.ContainsKey(valuation.SleeperPlayerId))
                 {
                     rawDfvMap[valuation.SleeperPlayerId] = 0;
                     continue;
@@ -171,11 +243,10 @@ public class DfvCalculationService(
                 continue;
             }
 
-            // Depth gate — year 0-1 unranked players with sub-starter projections
-            // FAN-52: TE threshold raised from 6.0 → 9.0
+            // Depth gate — year 0-1 unranked players with sub-starter projections.
             if (valuation.Position != "QB"
                 && (valuation.YearsExperience ?? -1) <= 1
-                && !fpRankMap.ContainsKey(valuation.SleeperPlayerId)
+                && !fpRookieRankMap.ContainsKey(valuation.SleeperPlayerId)
                 && careerSim.YearProjections.All(y => y.MedianFppg < StarterThresholdDfv(valuation.Position)))
             {
                 rawDfvMap[valuation.SleeperPlayerId] = 0;
@@ -204,52 +275,84 @@ public class DfvCalculationService(
         logger.LogInformation("Top 20 raw DFV before normalization: {Values}",
             string.Join(", ", top20Raw));
 
-        // ── Normalize ACROSS all positions to 0-95 ──────────────────────────
+        // ── P2: Rank-based power curve normalization ─────────────────────────
         NormalizeAcrossAllPositions(valuations, rawDfvMap, ceiling: 95.0);
 
-        // ── FAN-52: TE positional rank caps — applied POST-normalization ─────
-        // Rank all TEs by normalized score, apply TeRankCaps[].
-        // This is the primary fix for the "mid-tier TE inflation" problem.
-        // Year 2-3 TEs with real sim data bypass the depth gate (they have
-        // legit-looking baseFppg from partial/fill-in game production), so the
-        // caps are the enforcement layer that maps them to realistic TV ranges.
-        var tesByNormScore = valuations
-            .Where(v => v.Position == "TE"
-                     && rawDfvMap.TryGetValue(v.SleeperPlayerId, out var s) && s > 0)
-            .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
-            .ToList();
-
-        for (int i = 0; i < tesByNormScore.Count; i++)
+        // ── FP dynasty floor — POST-normalize, PRE-caps ──────────────────────
+        // Caps run after this block so they always win. Floor only raises (Math.Max).
+        // Players with no dynasty rank entry are unaffected.
+        // Players already above their floor (good sim data) are unaffected.
+        // FA players with TradeValue=0 who have a dynasty rank get lifted (e.g.
+        // a vet QB who lost their team but FP still ranks — let caps handle zeroing).
+        foreach (var valuation in valuations)
         {
-            var te = tesByNormScore[i];
-            var cap = GetTeRankCap(i + 1);
-            if (rawDfvMap.TryGetValue(te.SleeperPlayerId, out var current) && current > cap)
-            {
-                rawDfvMap[te.SleeperPlayerId] = cap;
-                logger.LogDebug(
-                    "TE rank cap: {Player} rank {Rank} {Old:F1} → {Cap:F1}",
-                    te.PlayerName, i + 1, current, cap);
-            }
+            if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
+            if (!fpDynastyRankMap.TryGetValue(valuation.SleeperPlayerId, out var dynastyRank)) continue;
+
+            var floor = GetDynastyRankFloor(dynastyRank);
+            if (floor <= 0) continue;
+
+            if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var current)) continue;
+            if (floor <= current) continue; // already above floor — sim data is good
+
+            rawDfvMap[valuation.SleeperPlayerId] = floor;
+            logger.LogDebug(
+                "Dynasty floor: {Player} ({Position}) FP rank {Rank} {Old:F1} → {Floor:F1}",
+                valuation.PlayerName, valuation.Position, dynastyRank, current, floor);
         }
 
-        // ── Rookie floor — POST-normalization, POST-cap ──────────────────────
+        // ── QB positional rank caps — POST-floor ─────────────────────────────
+        // Caps are the final word on QB values. Win-now QBs (Purdy/Goff/Mayfield)
+        // may have been lifted by dynasty floor; caps push them back down.
+        ApplyPositionalRankCaps(
+            valuations, rawDfvMap,
+            position: "QB",
+            getCap: GetQbRankCap,
+            logLabel: "QB rank cap");
+
+        // ── TE positional rank caps — POST-floor ─────────────────────────────
+        ApplyPositionalRankCaps(
+            valuations, rawDfvMap,
+            position: "TE",
+            getCap: GetTeRankCap,
+            logLabel: "TE rank cap");
+
+        // ── Rookie floor — POST-cap ───────────────────────────────────────────
+        // Most high-value rookies are already in the dynasty import and got a floor
+        // above. This catches any rookie not yet in the dynasty rankings (very recent
+        // draftees added after the last FP dynasty export).
         foreach (var valuation in valuations.Where(v => (v.YearsExperience ?? -1) == 0))
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var normalized)) continue;
-            if (!fpRankMap.TryGetValue(valuation.SleeperPlayerId, out var fpRank)) continue;
+            if (!fpRookieRankMap.TryGetValue(valuation.SleeperPlayerId, out var fpRank)) continue;
             if (valuation.Age > 22) continue;
 
-            var floorTradeValue = fpRank switch
+            double floorTradeValue;
+
+            if (valuation.Position == "TE")
             {
-                1 => 97.0,
-                <= 3 => 93.0,
-                <= 5 => 88.0,
-                <= 10 => 82.0,
-                <= 20 => 75.0,
-                <= 30 => 65.0,
-                <= 50 => 50.0,
-                _ => 35.0
-            };
+                floorTradeValue = fpRank switch
+                {
+                    <= 5 => 45.0,
+                    <= 15 => 38.0,
+                    <= 30 => 30.0,
+                    _ => 20.0
+                };
+            }
+            else
+            {
+                floorTradeValue = fpRank switch
+                {
+                    1 => 92.0,
+                    <= 3 => 88.0,
+                    <= 5 => 83.0,
+                    <= 10 => 76.0,
+                    <= 20 => 68.0,
+                    <= 30 => 58.0,
+                    <= 50 => 45.0,
+                    _ => 30.0
+                };
+            }
 
             rawDfvMap[valuation.SleeperPlayerId] = Math.Max(normalized, floorTradeValue);
         }
@@ -329,23 +432,44 @@ public class DfvCalculationService(
 
         if (eligible.Count == 0) return;
 
-        double maxRaw = rawDfvMap[eligible[0].SleeperPlayerId];
-        double minRaw = rawDfvMap[eligible[^1].SleeperPlayerId];
-        double rawRange = maxRaw - minRaw;
+        int n = eligible.Count;
 
-        if (rawRange == 0) return;
-
-        foreach (var v in eligible)
+        for (int i = 0; i < n; i++)
         {
-            var raw = rawDfvMap[v.SleeperPlayerId];
-            var normalized = 2.0 + (raw - minRaw) / rawRange * (ceiling - 2.0);
-            rawDfvMap[v.SleeperPlayerId] = Math.Round(normalized, 2);
+            var id = eligible[i].SleeperPlayerId;
+            double rankFraction = n > 1 ? (double)i / (n - 1) : 0.0;
+            double normalized = ceiling * Math.Pow(1.0 - rankFraction, NormExponent);
+            rawDfvMap[id] = Math.Round(normalized, 2);
         }
     }
 
-    // FAN-52: TE raised from 6.0 → 9.0.
-    // Catches year 0-1 TEs with no real production. Year 2-3 TEs with actual
-    // sim data still bypass this gate — they are handled by TeRankCaps above.
+    private void ApplyPositionalRankCaps(
+        List<DynastyValuationDocument> valuations,
+        Dictionary<string, double> rawDfvMap,
+        string position,
+        Func<int, double> getCap,
+        string logLabel)
+    {
+        var ranked = valuations
+            .Where(v => v.Position == position
+                     && rawDfvMap.TryGetValue(v.SleeperPlayerId, out var s) && s > 0)
+            .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
+            .ToList();
+
+        for (int i = 0; i < ranked.Count; i++)
+        {
+            var player = ranked[i];
+            var cap = getCap(i + 1);
+            if (rawDfvMap.TryGetValue(player.SleeperPlayerId, out var current) && current > cap)
+            {
+                rawDfvMap[player.SleeperPlayerId] = cap;
+                logger.LogDebug(
+                    "{Label}: {Player} rank {Rank} {Old:F1} → {Cap:F1}",
+                    logLabel, player.PlayerName, i + 1, current, cap);
+            }
+        }
+    }
+
     private static double StarterThresholdDfv(string position) => position switch
     {
         "QB" => 16.0,
