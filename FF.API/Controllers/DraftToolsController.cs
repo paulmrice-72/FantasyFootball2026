@@ -1,5 +1,6 @@
 // FF.API/Controllers/DraftToolsController.cs
 using FF.Application.Features.DraftTools.Commands.ImportConsensusAdp;
+using FF.Application.Features.DraftTools.Commands.ImportFantasyProsDynastyRankings;
 using FF.Application.Features.DraftTools.Commands.ImportFantasyProsRookeRankings;
 using FF.Application.Features.DraftTools.Commands.ImportPffDraftGrades;
 using FF.Application.Features.DraftTools.Commands.RecordDraftPick;
@@ -38,7 +39,7 @@ public class DraftToolsController(
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
-    // ── FantasyPros import (Admin only) ───────────────────────────────────
+    // ── FantasyPros imports (Admin only) ──────────────────────────────────
 
     [HttpPost("fantasyPros/import")]
     [Authorize(Roles = "Admin")]
@@ -53,13 +54,30 @@ public class DraftToolsController(
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
+    /// <summary>
+    /// POST /api/v1/drafttools/dynasty/import
+    /// Imports FantasyPros dynasty superflex rankings CSV.
+    /// Stored in same collection as rookie rankings with RankingType = "Dynasty".
+    /// Used by DfvCalculationService as a floor signal for veteran players
+    /// whose career sim data is stale or missing (e.g. no 2025 stats yet).
+    /// CSV format: RK,TIERS,PLAYER NAME,TEAM,POS,AGE,BEST,WORST,AVG.,STD.DEV,ECR VS. ADP
+    /// Source: fantasypros.com/nfl/rankings/dynasty-superflex.php → Export
+    /// </summary>
+    [HttpPost("dynasty/import")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ImportFantasyProsDynastyRankings(
+        [FromBody] ImportFantasyProsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new ImportFantasyProsDynastyRankingsCommand(request.CsvContent, request.Season),
+            cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
     // ── Draft session ─────────────────────────────────────────────────────
 
-    /// <summary>
-    /// POST /api/v1/drafttools/sessions
-    /// Starts a new draft session (closes any existing active session for same league).
-    /// Also looks up the active Sleeper draft_id so auto-sync can work.
-    /// </summary>
     [HttpPost("sessions")]
     public async Task<IActionResult> StartSession(
         [FromBody] StartSessionRequest request,
@@ -68,7 +86,6 @@ public class DraftToolsController(
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        // Look up SleeperUserId from ApplicationUser so we can map roster_id → IsMyPick
         var appUser = await userManager.FindByIdAsync(userId);
         var sleeperUserId = appUser?.SleeperUserId;
 
@@ -84,11 +101,6 @@ public class DraftToolsController(
         return result.IsSuccess ? Ok(new { sessionId = result.Value }) : BadRequest(result.Error);
     }
 
-    /// <summary>
-    /// GET /api/v1/drafttools/sessions/active?leagueId={leagueId}
-    /// Returns the active session for the current user+league, or 404 if none.
-    /// Used on page load to auto-resume an in-progress session.
-    /// </summary>
     [HttpGet("sessions/active")]
     public async Task<IActionResult> GetActiveSession(
         [FromQuery] string leagueId,
@@ -97,17 +109,12 @@ public class DraftToolsController(
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        // Reuse the existing repository method via a query
         var result = await mediator.Send(
             new GetActiveSessionQuery(userId, leagueId), cancellationToken);
 
         return result.IsSuccess ? Ok(result.Value) : NotFound();
     }
 
-    /// <summary>
-    /// GET /api/v1/drafttools/sessions/{sessionId}
-    /// Returns session state including all picks made so far.
-    /// </summary>
     [HttpGet("sessions/{sessionId}")]
     public async Task<IActionResult> GetSession(
         string sessionId,
@@ -122,12 +129,6 @@ public class DraftToolsController(
         return result.IsSuccess ? Ok(result.Value) : NotFound(result.Error);
     }
 
-    /// <summary>
-    /// GET /api/v1/drafttools/sessions/{sessionId}/sync-sleeper
-    /// Polls Sleeper for new picks, diffs against session, auto-records new picks.
-    /// Returns only the newly added picks so the UI can update the board.
-    /// Safe to call repeatedly — idempotent.
-    /// </summary>
     [HttpGet("sessions/{sessionId}/sync-sleeper")]
     public async Task<IActionResult> SyncSleeperPicks(
         string sessionId,
@@ -142,10 +143,6 @@ public class DraftToolsController(
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
-    /// <summary>
-    /// POST /api/v1/drafttools/sessions/{sessionId}/picks
-    /// Records a single pick manually. Idempotent — safe to call twice for same player.
-    /// </summary>
     [HttpPost("sessions/{sessionId}/picks")]
     public async Task<IActionResult> RecordPick(
         string sessionId,
@@ -172,10 +169,6 @@ public class DraftToolsController(
         return result.IsSuccess ? Ok() : BadRequest(result.Error);
     }
 
-    /// <summary>
-    /// POST /api/v1/drafttools/sync/draft-picks?season=2026
-    /// Admin only. Manually triggers nflverse draft pick sync.
-    /// </summary>
     [HttpPost("sync/draft-picks")]
     [Authorize(Roles = "Admin")]
     public IActionResult TriggerDraftPickSync([FromQuery] int season = 2026)
@@ -186,7 +179,8 @@ public class DraftToolsController(
         return Ok(new { message = $"Draft pick sync queued for season {season}" });
     }
 
-    // ── PFF Draft Grades import (Admin only) ────────────────────────────
+    // ── PFF Draft Grades import (Admin only) ─────────────────────────────
+
     [HttpPost("pff/import")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ImportPffGrades(
@@ -200,7 +194,8 @@ public class DraftToolsController(
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
-    // ── Consensus ADP import (Admin only) ───────────────────────────────
+    // ── Consensus ADP import (Admin only) ────────────────────────────────
+
     [HttpPost("adp/import")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ImportConsensusAdp(
@@ -214,7 +209,7 @@ public class DraftToolsController(
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
 
-    // ── Request DTOs (thin, controller-layer only) ────────────────────────────────
+    // ── Request DTOs ──────────────────────────────────────────────────────
     public record StartSessionRequest(string LeagueId, string LeagueName, int Season);
     public record ImportFantasyProsRequest(string CsvContent, int Season);
     public record RecordPickRequest(
