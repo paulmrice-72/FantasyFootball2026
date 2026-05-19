@@ -178,13 +178,12 @@ public class DfvCalculationService(
         {
             if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
 
-            // FAN-52: FA zeroing for all positions (QB already zeroed before).
-            // Skill position FAs generate phantom DFV from the career sim prior.
+            // FA zeroing — skill position FAs generate phantom DFV from the career sim prior.
             // Exception: rookies with FP rank may not yet have team stamped.
             if (string.IsNullOrEmpty(valuation.NflTeam))
             {
                 if (valuation.Position == "QB"
-                    || !fpRankMap.ContainsKey(valuation.SleeperPlayerId))
+                    || !fpRookieRankMap.ContainsKey(valuation.SleeperPlayerId))
                 {
                     rawDfvMap[valuation.SleeperPlayerId] = 0;
                     continue;
@@ -200,11 +199,10 @@ public class DfvCalculationService(
                 continue;
             }
 
-            // Depth gate — year 0-1 unranked players with sub-starter projections
-            // FAN-52: TE threshold raised from 6.0 → 9.0
+            // Depth gate — year 0-1 unranked players with sub-starter projections.
             if (valuation.Position != "QB"
                 && (valuation.YearsExperience ?? -1) <= 1
-                && !fpRankMap.ContainsKey(valuation.SleeperPlayerId)
+                && !fpRookieRankMap.ContainsKey(valuation.SleeperPlayerId)
                 && careerSim.YearProjections.All(y => y.MedianFppg < StarterThresholdDfv(valuation.Position)))
             {
                 rawDfvMap[valuation.SleeperPlayerId] = 0;
@@ -295,7 +293,7 @@ public class DfvCalculationService(
         foreach (var valuation in valuations.Where(v => (v.YearsExperience ?? -1) == 0))
         {
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var normalized)) continue;
-            if (!fpRankMap.TryGetValue(valuation.SleeperPlayerId, out var fpRank)) continue;
+            if (!fpRookieRankMap.TryGetValue(valuation.SleeperPlayerId, out var fpRank)) continue;
             if (valuation.Age > 22) continue;
 
             double floorTradeValue;
@@ -420,9 +418,7 @@ public class DfvCalculationService(
 
         if (eligible.Count == 0) return;
 
-        double maxRaw = rawDfvMap[eligible[0].SleeperPlayerId];
-        double minRaw = rawDfvMap[eligible[^1].SleeperPlayerId];
-        double rawRange = maxRaw - minRaw;
+        int n = eligible.Count;
 
     /// <summary>
     /// Applies tier-based guardrail caps to a position.
@@ -444,17 +440,20 @@ public class DfvCalculationService(
             .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
             .ToList();
 
-        foreach (var v in eligible)
+        for (int i = 0; i < ranked.Count; i++)
         {
-            var raw = rawDfvMap[v.SleeperPlayerId];
-            var normalized = 2.0 + (raw - minRaw) / rawRange * (ceiling - 2.0);
-            rawDfvMap[v.SleeperPlayerId] = Math.Round(normalized, 2);
+            var player = ranked[i];
+            var cap = getCap(i + 1);
+            if (rawDfvMap.TryGetValue(player.SleeperPlayerId, out var current) && current > cap)
+            {
+                rawDfvMap[player.SleeperPlayerId] = cap;
+                logger.LogDebug(
+                    "{Label}: {Player} rank {Rank} {Old:F1} → {Cap:F1}",
+                    logLabel, player.PlayerName, i + 1, current, cap);
+            }
         }
     }
 
-    // FAN-52: TE raised from 6.0 → 9.0.
-    // Catches year 0-1 TEs with no real production. Year 2-3 TEs with actual
-    // sim data still bypass this gate — they are handled by TeRankCaps above.
     private static double StarterThresholdDfv(string position) => position switch
     {
         "QB" => 16.0,

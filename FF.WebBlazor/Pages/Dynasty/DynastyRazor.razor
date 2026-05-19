@@ -1,4 +1,4 @@
-﻿@page "/dynasty"
+@page "/dynasty"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
@@ -35,10 +35,10 @@
         </MudItem>
         <MudItem xs="6" sm="3" md="2">
             <MudNumericField @bind-Value="_topCount"
-                             Label="Show Top"
+                             Label="Per Position"
                              Variant="Variant.Outlined"
                              Margin="Margin.Dense"
-                             Min="10" Max="500" />
+                             Min="10" Max="200" />
         </MudItem>
         <MudItem xs="6" sm="2" md="2" Class="d-flex align-end">
             <MudButton Variant="Variant.Filled"
@@ -190,11 +190,14 @@ else if (_filtered.Count > 0)
     </MudPaper>
 }
 
-
-
 @code {
     // ── State ─────────────────────────────────────────────────
-    private int _topCount = 100;
+    // Per-position fetch: P2 normalization correctly ranks TEs lower than elite
+    // QBs/RBs/WRs in a cross-position pool — a single shared top-N would exclude
+    // all TEs (McBride at 68 sits behind 760+ non-TE players scoring 68+).
+    // Fetching top-N per position and merging gives every position fair representation.
+    // The label says "Per Position" so the user understands the number applies per group.
+    private int _topCount = 50;
     private string _search = string.Empty;
     private int _activeTab = 0;
     private bool _loading;
@@ -216,14 +219,26 @@ else if (_filtered.Count > 0)
         _error = null;
         _all = [];
         StateHasChanged();
+
         try
         {
-            // Always load all positions — tab filtering is client-side only.
-            // Passing position= to the API breaks cross-position normalization
-            // because it limits the result set to position-ranked TradeValues.
-            var rows = await Http.GetFromJsonAsync<List<DynastyRow>>(
-                $"api/v1/dynasty/valuations?top={_topCount}");
-            _all = rows ?? [];
+            // Fetch top-N per position in parallel then merge.
+            var tasks = new[]
+            {
+                FetchPositionAsync("QB"),
+                FetchPositionAsync("RB"),
+                FetchPositionAsync("WR"),
+                FetchPositionAsync("TE")
+            };
+
+            var results = await Task.WhenAll(tasks);
+
+            _all = results
+                .SelectMany(r => r)
+                .GroupBy(r => r.SleeperPlayerId)
+                .Select(g => g.First())
+                .OrderByDescending(r => r.TradeValue)
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -236,6 +251,19 @@ else if (_filtered.Count > 0)
         }
     }
 
+    private async Task<List<DynastyRow>> FetchPositionAsync(string position)
+    {
+        try
+        {
+            var rows = await Http.GetFromJsonAsync<List<DynastyRow>>(
+                $"api/v1/dynasty/valuations?top={_topCount}&position={position}");
+            return rows ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
 
     private async Task OpenPlayerDetail(DynastyRow player)
     {
@@ -258,7 +286,7 @@ else if (_filtered.Count > 0)
             DraftCapitalScore: 0,
             PositionalScore: 0,
             ValuationBlendScore: player.CareerValue,
-            FantasyProsScore: player.BreakoutScore,   // reused slot: BreakoutScore for veterans
+            FantasyProsScore: player.BreakoutScore,
             PffGradeScore: 0,
             ConsensusAdpScore: 0,
             AgeMultiplier: 0,
@@ -270,13 +298,13 @@ else if (_filtered.Count > 0)
             CareerValueScore: player.CareerValueScore,
             CareerPhase: player.CareerPhase,
             YearsOfPrimeRemaining: player.YearsOfPrimeRemaining,
-            YearsExperience: player.YearsExperience);   // ← NEW
+            YearsExperience: player.YearsExperience);
 
         var parameters = new DialogParameters<PlayerCardDialog>
-    {
-        { x => x.Player, data },
-        { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Dynasty }
-    };
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Dynasty }
+        };
         var options = new DialogOptions
         {
             MaxWidth = MaxWidth.Small,
@@ -334,9 +362,9 @@ else if (_filtered.Count > 0)
     private static string PhaseClass(string phase) => phase switch
     {
         "Ascending" => "fc-stat fc-cyan",
-        "Prime" => "fc-stat fc-ceiling",
+        "Prime"     => "fc-stat fc-ceiling",
         "Declining" => "fc-stat fc-bust",
-        _ => "fc-stat mud-text-secondary"
+        _           => "fc-stat mud-text-secondary"
     };
 
     // ── DTOs ──────────────────────────────────────────────────
@@ -356,7 +384,7 @@ else if (_filtered.Count > 0)
         string CareerPhase)
     {
         public double YearsOfPrime => YearsOfPrimeRemaining;
-        public double CareerValue => CareerValueScore;
+        public double CareerValue  => CareerValueScore;
     }
 
     private record CareerSimResponse(
