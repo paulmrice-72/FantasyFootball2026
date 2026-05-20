@@ -120,8 +120,14 @@ public class GetLeagueRosterGradesQueryHandler(
                     .ToList();
 
                 var starterScore = posPlayers.Take(slots).DefaultIfEmpty(0).Average();
-                var starterNorm = baseline > 0 ? (starterScore / baseline) * 50.0 : 0;
-                totalDepthScore += Math.Clamp(starterNorm, 0, 100);
+
+                // GRADE-FIX-002: position contributes 0 if starter quality < 50% of baseline
+                var starterQualityFloor = baseline * 0.50;
+                if (starterScore >= starterQualityFloor)
+                {
+                    var starterNorm = baseline > 0 ? (starterScore / baseline) * 50.0 : 0;
+                    totalDepthScore += Math.Clamp(starterNorm, 0, 100);
+                }
                 positionsGraded++;
             }
 

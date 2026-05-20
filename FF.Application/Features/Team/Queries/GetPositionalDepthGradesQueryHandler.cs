@@ -43,7 +43,7 @@ public class GetPositionalDepthGradesQueryHandler(
         ["TE"] = 1
     };
 
-    private const double FillerFloorFraction = 0.40;
+    private const double FillerFloorFraction = 0.50;
 
     public async Task<PositionalDepthGradesDto?> Handle(
         GetPositionalDepthGradesQuery request,
@@ -137,9 +137,14 @@ public class GetPositionalDepthGradesQueryHandler(
                 }
             }
 
+            // GRADE-FIX-002: if starter quality is below 50% of baseline,
+            // position contributes nothing — prevents filler inflation
+            var starterQualityFloor = baseline * 0.50;
             var starterNorm = baseline > 0 ? (starterScore / baseline) * 50.0 : 0;
             var depthNorm = baseline > 0 ? (depthScore / (baseline * starterSlots)) * 30.0 : 0;
-            var rawScore = Math.Clamp(starterNorm + depthNorm, 0, 100);
+            var rawScore = starterScore < starterQualityFloor
+                ? 0.0
+                : Math.Clamp(starterNorm + depthNorm, 0, 100);
 
             var (grade, label) = MapGrade((int)Math.Round(rawScore));
 

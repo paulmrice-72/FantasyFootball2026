@@ -162,9 +162,9 @@ public class GetPositionalDepthGradesQueryHandlerTests
     // ── New tests for filler floor ────────────────────────────────────────────
 
     [Fact]
-    public async Task Handle_FillerTEsBelow40PctBaseline_DoNotInflateDepthGrade()
+    public async Task Handle_FillerTEsBelow50PctBaseline_DoNotInflateDepthGrade()
     {
-        // TE baseline = 12.1; 40% floor = 4.84 pts
+        // TE baseline = 12.1; 50% floor = 6.05 pts
         // te1 (starter) = 9.7 — legit starter, always counts
         // te2/te3/te4 = 2.0 — filler, below floor, should contribute 0
         SetupRoster("qb1", "rb1", "wr1", "te1", "te2", "te3", "te4");
@@ -191,7 +191,7 @@ public class GetPositionalDepthGradesQueryHandlerTests
     [Fact]
     public async Task Handle_QualityBackupAboveFloor_StillContributesToDepthScore()
     {
-        // RB baseline = 15.1; 40% floor = 6.04 pts
+        // RB baseline = 15.1; 50% floor = 7.55 pts
         // rb1 (starter slot 1) = 18.0 — always counts
         // rb2 (starter slot 2) = 10.0 — above floor, always counts as starter
         // rb3 (backup) = 10.0 — above floor, contributes to depth
@@ -217,7 +217,7 @@ public class GetPositionalDepthGradesQueryHandlerTests
     [Fact]
     public async Task Handle_FillerBackupBelowFloor_DoesNotContributeToDepthScore()
     {
-        // RB baseline = 15.1; 40% floor = 6.04 pts
+        // RB baseline = 15.1; 50% floor = 7.55 pts
         // rb1 (starter) = 18.0, rb2 (starter) = 14.0 — both starter slots, always count
         // rb3 (backup) = 3.0 — below floor, contributes 0
         SetupRoster("qb1", "rb1", "rb2", "rb3", "wr1", "te1");
@@ -248,11 +248,12 @@ public class GetPositionalDepthGradesQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_StarterAlwaysCountsRegardlessOfProjection()
+    public async Task Handle_StarterBelowQualityFloor_ContributesZeroToGradeScore()
     {
-        // Even if the starter projects below the filler floor (injured backup filling in),
-        // the starter slot always contributes — only depth slots are gated.
-        // TE baseline = 12.1; floor = 4.84; starter projecting 3.0 (below floor)
+        // GRADE-FIX-002: if starter projects below 50% of positional baseline,
+        // the position contributes 0 to grade score — prevents "injured backup
+        // starting" from masking a genuinely weak position.
+        // TE baseline = 12.1; 50% floor = 6.05; starter projecting 3.0 (below floor)
         SetupRoster("qb1", "rb1", "wr1", "te1");
         SetupPlayers(("qb1", "QB"), ("rb1", "RB"), ("wr1", "WR"), ("te1", "TE"));
         SetupSims(("qb1", 20m), ("rb1", 15m), ("wr1", 13m), ("te1", 3m));
@@ -263,8 +264,8 @@ public class GetPositionalDepthGradesQueryHandlerTests
 
         var teGrade = result!.Grades.Single(g => g.Position == "TE");
 
-        // te1 (starter slot) always counts — score is low but not zero
-        teGrade.GradeScore.Should().BeGreaterThan(0);
-        teGrade.StarterScore.Should().Be(3.0);
+        // Position zeroes out — no grade contribution when starter is below quality floor
+        teGrade.GradeScore.Should().Be(0);
+        teGrade.StarterScore.Should().Be(3.0); // raw score still reported correctly
     }
 }
