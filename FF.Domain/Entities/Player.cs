@@ -30,6 +30,7 @@ public class Player : Entity
 
     public int? YearsExperience { get; private set; }
     public string? GsisId { get; set; }
+    public string? EspnId { get; set; }
     public string? InjuryStatus { get; private set; }
 
     // ── E10 Dynasty Draft ────────────────────────────────────────────────────
@@ -37,7 +38,7 @@ public class Player : Entity
     public int? DraftPick { get; private set; }
     public string? CollegeTeam { get; private set; }
 
-     private Player() { }
+    private Player() { }
 
     public static Player Create(
         string firstName,
@@ -99,6 +100,12 @@ public class Player : Entity
         DraftRound = draftRound;
         DraftPick = draftPick;
         if (collegeTeam != null) CollegeTeam = collegeTeam;
+        SetUpdated();
+    }
+
+    public void SetEspnId(string espnId)
+    {
+        EspnId = espnId;
         SetUpdated();
     }
 }
