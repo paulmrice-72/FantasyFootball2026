@@ -77,7 +77,7 @@ try
         .Enrich.WithThreadId()
         .Enrich.WithCorrelationId()
         .WriteTo.Console()
-        .WriteTo.Seq(context.Configuration["Seq:ServerUrl"] ?? "http://ff-seq:5341"));
+        .WriteTo.Seq(string.IsNullOrWhiteSpace(context.Configuration["Seq:ServerUrl"]) ? "http://localhost:8082" : context.Configuration["Seq:ServerUrl"]!));
 
     // ── API SERVICES ──────────────────────────────────────
     builder.Services.AddControllers()

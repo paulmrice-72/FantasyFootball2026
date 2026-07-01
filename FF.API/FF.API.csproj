@@ -4,6 +4,7 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+		<UserSecretsId>72408e6d-0342-46bc-a708-bfee2bddf7b4</UserSecretsId>
 	</PropertyGroup>
 	<ItemGroup>
 	  <Content Include="appsettings.development.json.example" />
