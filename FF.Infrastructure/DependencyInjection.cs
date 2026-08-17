@@ -188,8 +188,6 @@ public static class DependencyInjection
         services.AddScoped<INflContextService, NflContextService>();
         services.AddScoped<IUserLeaguePreferenceRepository, UserLeaguePreferenceRepository>();
         services.AddScoped<ILeagueContextResolverService, LeagueContextResolverService>();
-        services.AddScoped<IEspnStatsSyncService, EspnStatsSyncService>();
-        services.AddScoped<EspnStatsSyncJob>();
         services.AddSleeperApiClient();
 
         services.AddScoped<ICalibrationResultRepository, CalibrationResultRepository>();

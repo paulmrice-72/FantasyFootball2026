@@ -88,9 +88,10 @@ public class SeedSeasonAverageSimsCommandHandler(
                 catch (Exception ex)
                 {
                     throw new InvalidOperationException(
-                        $"Neither season aggregate (player_stats_season_{request.Season}.csv) " +
-                        $"nor weekly file (player_stats_{request.Season}.csv) could be downloaded from nflverse. " +
-                        $"Upload the CSV directly via the Admin import panel instead.", ex);
+                        $"Neither season aggregate (stats_player_reg_{request.Season}.csv) " +
+                        $"nor weekly file (stats_player_week_{request.Season}.csv) could be downloaded from nflverse. " +
+                        $"This is expected if season {request.Season} hasn't started yet — nflverse only " +
+                        $"publishes data once games are played. Upload the CSV directly via the Admin import panel instead.", ex);
                 }
             }
 
