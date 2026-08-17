@@ -17,21 +17,23 @@ public class NflverseDownloadService(
     private readonly ILogger<NflverseDownloadService> _logger = logger;
 
     private const string BaseUrl =
-        "https://github.com/nflverse/nflverse-data/releases/download/player_stats";
+        "https://github.com/nflverse/nflverse-data/releases/download/stats_player";
 
-    public async Task<NflverseDownloadResult> DownloadCurrentSeasonAsync(
-        int season, CancellationToken cancellationToken = default)
+    // nflverse renamed the release tag from "player_stats" to "stats_player"
+    // in their Jul 2026 rebuild (nflfastR::calculate_stats()). Old tag 404s permanently.
+
+     public async Task<NflverseDownloadResult> DownloadCurrentSeasonAsync(
+         int season, CancellationToken cancellationToken = default)
     {
         var startedAt = DateTime.UtcNow;
-        // Try current season first, fall back to prior year
-        // nflverse publishes season aggregate ~4-8 weeks post-Super Bowl
-        // New naming convention (2025+): player_stats_season_{year}.csv
-        // Legacy naming (pre-2025): player_stats_{year}.csv
+        // This parser (NflfastrCsvParser) needs per-week rows, so the weekly
+        // file is primary. Fall back to prior season, then to the legacy
+        // pre-rebuild filenames in case an old tag/asset is ever restored.
         var seasonsToTry = new[]
         {
-            (season,     $"{BaseUrl}/player_stats_season_{season}.csv"),
-            (season - 1, $"{BaseUrl}/player_stats_season_{season - 1}.csv"),
-            (season - 1, $"{BaseUrl}/player_stats_{season - 1}.csv"),  // legacy fallback
+            (season,     $"{BaseUrl}/stats_player_week_{season}.csv"),
+            (season - 1, $"{BaseUrl}/stats_player_week_{season - 1}.csv"),
+            (season - 1, $"https://github.com/nflverse/nflverse-data/releases/download/player_stats/player_stats_{season - 1}.csv"),  // legacy fallback
         };
 
         foreach (var (s, url) in seasonsToTry)

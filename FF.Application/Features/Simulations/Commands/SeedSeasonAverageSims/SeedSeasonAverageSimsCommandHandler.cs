@@ -1,6 +1,7 @@
 ﻿// FF.Application/Features/Simulations/Commands/SeedSeasonAverageSims/SeedSeasonAverageSimsCommandHandler.cs
 using System.Globalization;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -10,16 +11,15 @@ namespace FF.Application.Features.Simulations.Commands.SeedSeasonAverageSims;
 public class SeedSeasonAverageSimsCommandHandler(
     ISimulationResultRepository simRepository,
     IPlayerRepository playerRepository,
+    IPlayerIdResolutionService resolutionService,
     IHttpClientFactory httpClientFactory,
     ILogger<SeedSeasonAverageSimsCommandHandler> logger)
     : IRequestHandler<SeedSeasonAverageSimsCommand, SeedSeasonAverageSimsResult>
 {
     private static readonly HashSet<string> SkillPositions = ["QB", "RB", "WR", "TE"];
 
-    private const string SeasonAggregateUrlTemplate =
-        "https://github.com/nflverse/nflverse-data/releases/download/player_stats/player_stats_season_{0}.csv";
-    private const string WeeklyUrlTemplate =
-        "https://github.com/nflverse/nflverse-data/releases/download/player_stats/player_stats_{0}.csv";
+    private const string SeasonAggregateUrlTemplate = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_reg_{0}.csv";
+    private const string WeeklyUrlTemplate = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{0}.csv";
 
     public async Task<SeedSeasonAverageSimsResult> Handle(
         SeedSeasonAverageSimsCommand request,
@@ -126,8 +126,15 @@ public class SeedSeasonAverageSimsCommandHandler(
             logger.LogInformation("{Count} eligible REG-season rows after filtering", eligible.Count);
         }
 
-        // ── 4: Load Sleeper players for name matching ─────────────────────────
+        // ── 4: Load Sleeper players — GsisId match is primary, normalized name is fallback ──
+        var gsisToSleeper = await resolutionService.BuildGsisToSleeperMapAsync(cancellationToken);
+        
         var allPlayers = await playerRepository.GetAllAsync(cancellationToken);
+        var playerBySleeperId = allPlayers
+                    .Where(p => p.SleeperPlayerId != null)
+                    .GroupBy(p => p.SleeperPlayerId!)
+                    .ToDictionary(g => g.Key, g => g.First());
+
         var playerByNormalizedName = allPlayers
             .Where(p => p.SleeperPlayerId != null && p.FullName != null)
             .GroupBy(p => NormalizeName(p.FullName!))
@@ -135,7 +142,7 @@ public class SeedSeasonAverageSimsCommandHandler(
 
         // ── 5: Build sim docs ─────────────────────────────────────────────────
         var toUpsert = new List<SimulationResultDocument>();
-        int skipped = 0, unmatched = 0;
+        int skipped = 0, unmatched = 0, matchedByGsis = 0, matchedByName = 0;
 
         foreach (var row in eligible)
         {
@@ -143,7 +150,10 @@ public class SeedSeasonAverageSimsCommandHandler(
                 ?? row.GetValueOrDefault("player_name")
                 ?? string.Empty;
             var position = row["position"].Trim().ToUpper();
-            var nflTeam = row.GetValueOrDefault("recent_team") ?? string.Empty;
+            var nflTeam = row.GetValueOrDefault("recent_team")
+                            ?? row.GetValueOrDefault("team")   // weekly file (Jul 2026+) renamed this column
+                            ?? string.Empty;
+            var gsisId = row.GetValueOrDefault("player_id");
 
             if (!int.TryParse(row.GetValueOrDefault("games"), out var games) || games <= 0)
             {
@@ -165,12 +175,28 @@ public class SeedSeasonAverageSimsCommandHandler(
             var halfPprTotal = stdPts + (receptions * 0.5m);
             var avgHalfPpr = halfPprTotal / games;
 
-            var normalized = NormalizeName(playerName);
-            if (!playerByNormalizedName.TryGetValue(normalized, out var player))
+            FF.Domain.Entities.Player? player = null;
+
+            if (!string.IsNullOrWhiteSpace(gsisId)
+                && gsisToSleeper.TryGetValue(gsisId, out var sleeperId)
+                && playerBySleeperId.TryGetValue(sleeperId, out player))
             {
-                logger.LogDebug("No Sleeper match for '{Name}' ({Pos})", playerName, position);
-                unmatched++;
-                continue;
+                matchedByGsis++;
+            }
+            else
+            {
+                var normalized = NormalizeName(playerName);
+                if (playerByNormalizedName.TryGetValue(normalized, out player))
+                {
+                    matchedByName++;
+                }
+                else
+                {
+                    logger.LogDebug("No Sleeper match for '{Name}' ({Pos}) — GsisId={Gsis}",
+                        playerName, position, gsisId);
+                    unmatched++;
+                    continue;
+                }
             }
 
             toUpsert.Add(new SimulationResultDocument
@@ -201,8 +227,8 @@ public class SeedSeasonAverageSimsCommandHandler(
 
         logger.LogInformation(
             "Upserting {Count} season-average sim docs for season {Season} " +
-            "(skipped={Skip}, unmatched={Unmatched})",
-            toUpsert.Count, request.Season, skipped, unmatched);
+            "(byGsis={Gsis}, byName={Name}, skipped={Skip}, unmatched={Unmatched})",
+                toUpsert.Count, request.Season, matchedByGsis, matchedByName, skipped, unmatched);
 
         await simRepository.UpsertBatchAsync(toUpsert, cancellationToken);
 
@@ -256,11 +282,12 @@ public class SeedSeasonAverageSimsCommandHandler(
 
                 return new Dictionary<string, string>
                 {
+                    ["player_id"] = sample.GetValueOrDefault("player_id") ?? string.Empty,
                     ["player_display_name"] = sample.GetValueOrDefault("player_display_name")
                         ?? sample.GetValueOrDefault("player_name")
                         ?? string.Empty,
                     ["position"] = sample["position"].Trim().ToUpper(),
-                    ["recent_team"] = sample.GetValueOrDefault("recent_team") ?? string.Empty,
+                    ["recent_team"] = sample.GetValueOrDefault("recent_team") ?? sample.GetValueOrDefault("team") ?? string.Empty,
                     ["season_type"] = "REG",
                     ["games"] = gamesPlayed.ToString(),
                     ["fantasy_points"] = totalPts.ToString(CultureInfo.InvariantCulture),
@@ -277,10 +304,11 @@ public class SeedSeasonAverageSimsCommandHandler(
             .Replace(".", "")
             .Replace("'", "")
             .Replace("-", " ")
-            .Replace("jr", "")
-            .Replace("sr", "")
-            .Replace("ii", "")
-            .Replace("iii", "")
+            .Replace(" jr", "")
+            .Replace(" sr", "")
+            .Replace(" iv", "")
+            .Replace(" iii", "")   // longest suffix first — "ii" below would otherwise eat part of it
+            .Replace(" ii", "")
             .Trim();
 
     private static List<Dictionary<string, string>> ParseCsv(string csv)
