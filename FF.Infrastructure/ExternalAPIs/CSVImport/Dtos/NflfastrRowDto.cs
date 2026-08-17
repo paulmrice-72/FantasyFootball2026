@@ -2,10 +2,15 @@
 //
 // Maps directly to nflfastR player_stats CSV column headers.
 // Property names match CSV headers exactly — CsvHelper uses these names
-// for automatic column binding (case-insensitive by default).
+// for automatic column binding (case-insensitive by default). Where nflverse
+// renamed columns in the Jul 2026 "stats_player" release rebuild, [Name]
+// lists both the old and new header so files from either era still bind.
 //
-// SOURCE: https://github.com/nflverse/nflverse-data/releases/tag/player_stats
-// FILES:  player_stats_2022.csv, player_stats_2023.csv, player_stats_2024.csv
+// SOURCE: https://github.com/nflverse/nflverse-data/releases/tag/stats_player
+//         (renamed from "player_stats" ~Jul 2026 — old tag is dead/404)
+// FILES:  stats_player_week_{season}.csv (weekly, used by this parser)
+
+using CsvHelper.Configuration.Attributes;
 
 namespace FF.Infrastructure.ExternalApis.CsvImport.Dtos;
 
@@ -18,6 +23,8 @@ public class NflfastrRowDto
     public string position { get; set; } = string.Empty;
     public string position_group { get; set; } = string.Empty;
     public string? headshot_url { get; set; }
+
+    [Name("recent_team", "team")]
     public string recent_team { get; set; } = string.Empty;
 
     // ── Game Context ──────────────────────────────────────────────────────
@@ -31,8 +38,14 @@ public class NflfastrRowDto
     public decimal? attempts { get; set; }
     public decimal? passing_yards { get; set; }
     public decimal? passing_tds { get; set; }
+
+    [Name("interceptions", "passing_interceptions")]
     public decimal? interceptions { get; set; }
+
+    [Name("sacks", "sacks_suffered")]
     public decimal? sacks { get; set; }
+
+    [Name("sack_yards", "sack_yards_lost")]
     public decimal? sack_yards { get; set; }
     public decimal? sack_fumbles { get; set; }
     public decimal? sack_fumbles_lost { get; set; }
