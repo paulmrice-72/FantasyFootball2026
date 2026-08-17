@@ -407,7 +407,6 @@ public class AdminController(
         });
     }
 
-
     public record SeedSeasonAveragesCsvRequest(string CsvContent, int Season);
     // ── Request records ─────────────────────────────────────────────────────
     public record RunJobRequest(int Season);
