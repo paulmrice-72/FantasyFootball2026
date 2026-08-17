@@ -407,44 +407,6 @@ public class AdminController(
         });
     }
 
-    /// <summary>
-    /// Phase 1 — Populates EspnId on the Players table using the nflverse
-    /// players.csv GsisId → EspnId bridge. Run once, then re-run if new
-    /// players are imported.
-    /// </summary>
-    [HttpPost("espn/sync-ids")]
-    public IActionResult TriggerEspnIdSync()
-    {
-        var jobId = BackgroundJob.Enqueue<EspnStatsSyncJob>(
-            job => job.SyncEspnIdsAsync());
-
-        logger.LogInformation("Admin triggered EspnId bridge sync — JobId: {JobId}", jobId);
-
-        return Accepted(new { Message = "EspnId sync job queued.", JobId = jobId });
-    }
-
-    /// <summary>
-    /// Phase 2 — Fetches 2025 season stats from the ESPN API for all players
-    /// that have an EspnId, and seeds simulation_results (Week=0 sentinels).
-    /// Defaults to season 2025. Pass season in body to override.
-    /// </summary>
-    [HttpPost("espn/sync-stats")]
-    public IActionResult TriggerEspnStatSync(
-        [FromBody] EspnSyncStatsRequest? request = null)
-    {
-        var season = request?.Season ?? 2025;
-
-        var jobId = BackgroundJob.Enqueue<EspnStatsSyncJob>(
-            job => job.SyncStatsAsync(season));
-
-        logger.LogInformation(
-            "Admin triggered ESPN stats sync for season {Season} — JobId: {JobId}", season, jobId);
-
-        return Accepted(new { Message = $"ESPN stats sync job queued for season {season}.", JobId = jobId });
-    }
-
-    public record EspnSyncStatsRequest(int Season = 2025);
-
     public record SeedSeasonAveragesCsvRequest(string CsvContent, int Season);
     // ── Request records ─────────────────────────────────────────────────────
     public record RunJobRequest(int Season);

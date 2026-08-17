@@ -45,6 +45,7 @@ public class NflfastrCsvParser(ILogger<NflfastrCsvParser> logger)
             HasHeaderRecord = true,
             MissingFieldFound = null,       // ignore missing columns gracefully
             BadDataFound = null,            // skip malformed rows
+            HeaderValidated = null,         // nflverse drops/renames columns between rebuilds; don't throw on it
             TrimOptions = TrimOptions.Trim
         };
 
