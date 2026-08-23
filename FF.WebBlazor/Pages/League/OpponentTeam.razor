@@ -197,10 +197,10 @@ else
                 <ColGroup>
                     <col style="width:35%" />  @* Player *@
                     <col style="width:10%" />  @* Team *@
-                    <col style="width:8%"  />  @* Age *@
+                    <col style="width:8%" />  @* Age *@
                     <col style="width:12%" />  @* Status *@
                     <col style="width:12%" />  @* Proj Pts *@
-                    <col style="width:8%"  />  @* Bye *@
+                    <col style="width:8%" />  @* Bye *@
                     <col style="width:15%" />  @* Role *@
                 </ColGroup>
                 <HeaderContent>
@@ -250,7 +250,7 @@ else
             </MudTable>
         </MudPaper>
         @* ── Draft Picks ─────────────────────────────────────────────────────── *@
-        @if (_roster.OwnedPicks.Count > 0)
+        @if (_isDynastyLeague && _roster.OwnedPicks.Count > 0)
         {
             <MudPaper Class="pa-4 mt-4" Elevation="1">
                 <MudText Typo="Typo.subtitle1" Class="mb-3" Style="color: var(--fc-amber);">
@@ -280,7 +280,7 @@ else
                 }
             </MudPaper>
         }
-        else
+        else if (_isDynastyLeague)
         {
             <MudPaper Class="pa-4 mt-4" Elevation="1">
                 <MudText Typo="Typo.subtitle1" Class="mb-2" Style="color: var(--fc-amber);">
@@ -309,6 +309,7 @@ else
     private PositionalDepthGradesDto? _depthGrades;
     private DynastyTeamGradeDto? _dynastyGrade;
     private int _season;
+    private bool _isDynastyLeague = true;
 
     private readonly TableGroupDefinition<MyRosterPlayerDto> _groupDefinition = new()
     {
@@ -357,6 +358,14 @@ else
             var result = await http.GetFromJsonAsync<List<LeagueTeamSummaryDto>>(
                 $"api/v1/league/teams?sleeperLeagueId={LeagueState.ActiveLeagueId}");
             _teams = result ?? [];
+
+            try
+            {
+                var context = await http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
+                var activeLeague = context?.Leagues?.FirstOrDefault(l => l.LeagueId == LeagueState.ActiveLeagueId);
+                _isDynastyLeague = activeLeague?.LeagueType != "Redraft";
+            }
+            catch { /* keep last-known value rather than guessing */ }
         }
         catch { _teams = []; }
         finally { _teamsLoading = false; }
@@ -424,6 +433,19 @@ else
         List<RosterPickDto> OwnedPicks);    // ← NEW
 
     private record RosterPickDto(int Season, int Round);  // ← NEW local mirror
+
+    private record UserContextResponse(
+        bool IsSleeperLinked,
+        string? ActiveLeagueId,
+        List<LeagueItem>? Leagues);
+
+    private record LeagueItem(
+        string LeagueId,
+        string LeagueName,
+        int Season,
+        string Role,
+        bool IsActive = false,
+        string LeagueType = "Redraft");
 
     private record MyRosterPlayerDto(
         string SleeperPlayerId, string PlayerName, string Position,
