@@ -79,7 +79,7 @@ public class RunSimulationsCommandHandler(
                     continue;
                 }
 
-                if (projection.ProjectedPointsHalfPpr <= 0)
+                if (projection.ProjectedPointsPpr <= 0)
                 {
                     skipped++;
                     logger.LogDebug(
