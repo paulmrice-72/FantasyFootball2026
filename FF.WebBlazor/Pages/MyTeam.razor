@@ -167,7 +167,7 @@
                 </MudPaper>
             }
             @* ── Draft Picks ── *@
-            @if (_roster.OwnedPicks.Count > 0)
+            @if (_isDynastyLeague && _roster.OwnedPicks.Count > 0)
             {
                 <MudPaper Class="pa-4 mt-4" Elevation="1">
                     <MudText Typo="Typo.subtitle1" Class="mb-3" Style="color: var(--fc-amber);">
@@ -197,7 +197,7 @@
                     }
                 </MudPaper>
             }
-            else
+            else if (_isDynastyLeague)
             {
                 <MudPaper Class="pa-4 mt-4" Elevation="1">
                     <MudText Typo="Typo.subtitle1" Class="mb-2" Style="color: var(--fc-amber);">

@@ -48,7 +48,7 @@ public static class MonteCarloSimulationService
         int iterations = DefaultIterations,
         int? seed = null)
     {
-        var baseProjection = projection.ProjectedPointsHalfPpr;
+        var baseProjection = projection.ProjectedPointsPpr;
 
         // Derive standard deviation from position + role
         var positionCoeff = PositionVariance.GetValueOrDefault(projection.Position, 0.40m);
@@ -109,7 +109,7 @@ public static class MonteCarloSimulationService
             BoomProbability = Math.Round(boomProbability, 4),
             BustProbability = Math.Round(bustProbability, 4),
             PlayerRole = role.ToString(),
-            ScoringFormat = projection.ScoringFormat,
+            ScoringFormat = "FullPpr",
             CalculatedAt = DateTime.UtcNow
         };
     }
