@@ -47,9 +47,13 @@ public class MonteCarloSimulationServiceTests
     [Fact]
     public void Simulate_Mean_IsApproximatelyBaseProjection()
     {
-        // With 10k iterations the mean should converge close to base projection
-        var result = MonteCarloSimulationService.Simulate(Projection(20m), seed: 42);
-        result.Mean.Should().BeApproximately(20m, 2.0m,
+        // With 10k iterations the mean should converge close to base projection.
+        // Simulate() bases its distribution on ProjectedPointsPpr (full-PPR stopgap,
+        // FAN-97, 2026-08-23) rather than ProjectedPointsHalfPpr — assert against
+        // that field directly instead of the raw half-PPR fixture input.
+        var projection = Projection(20m);
+        var result = MonteCarloSimulationService.Simulate(projection, seed: 42);
+        result.Mean.Should().BeApproximately(projection.ProjectedPointsPpr, 2.0m,
             "mean of normal distribution should converge near the base projection");
     }
 
