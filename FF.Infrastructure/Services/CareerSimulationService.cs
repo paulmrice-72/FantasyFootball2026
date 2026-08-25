@@ -26,6 +26,24 @@ public class CareerSimulationService(
     // Admin-configurable in a future sprint (ADMIN-WEIGHT-001).
     private const double ShrinkageK = 3.0;
 
+    // ── FAN-95: Elite-tier post-peak aging dampening ────────────────────────
+    // The aging curve (AgingCurveService) is a single population-average
+    // polynomial fit across ALL players at a position — it can't distinguish
+    // a proven, durable elite talent from a replacement-level one and applies
+    // the same post-peak decline to both. Verified 2026-08-25: this was
+    // pulling Josh Allen's CareerValueScore below Brock Purdy's/Bo Nix's
+    // despite Allen's shrunk baseline FPPG being clearly higher every
+    // projected year — and contradicting real Superflex market consensus
+    // (FantasyPros), which keeps proven elite QBs well ahead of unproven
+    // younger ones despite the age gap.
+    //
+    // Fix: rank players within their position by shrunk baseline FPPG (a
+    // real, current, evidence-based signal — not a player-specific override)
+    // and soften the post-peak decay proportionally for the top tier. Applied
+    // in SimulatePlayer via eliteTierFactor. Tunable via the calibration
+    // harness (FAN-95) like ShrinkageK and NormExponent elsewhere.
+    private const double EliteDecayDampening = 0.6;
+
     // Position priors per scoring math reference doc (FAN-61).
     // These represent average STARTER FPPG by position in half-PPR.
     //
@@ -188,6 +206,10 @@ public class CareerSimulationService(
                 .ToList();
             var posStr = position.ToString();
 
+            // FAN-95: rank this position's players by shrunk baseline FPPG so
+            // SimulatePlayer can dampen post-peak decay for the proven top tier.
+            var eliteTierByPlayerId = BuildEliteTierMap(players, posStr, simByPlayerId, simByNamePos);
+
             foreach (var player in players)
             {
                 if (player.SleeperPlayerId is null) continue;
@@ -196,9 +218,10 @@ public class CareerSimulationService(
 
                 try
                 {
+                    var eliteTier = eliteTierByPlayerId.GetValueOrDefault(player.SleeperPlayerId, 0.0);
                     var sim = SimulatePlayer(
                         player, posStr, curves[posStr], season,
-                        simByPlayerId, simByNamePos);
+                        simByPlayerId, simByNamePos, eliteTier);
                     results.Add(sim);
                 }
                 catch (Exception ex)
@@ -232,7 +255,17 @@ public class CareerSimulationService(
             .GroupBy(r => $"{r.PlayerName}|{r.Position}")
             .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Season).First());
 
-        return SimulatePlayer(player, posStr, curve, CurrentSeason, simByPlayerId, simByNamePos);
+        // FAN-95: same elite-tier ranking the bulk path uses, so a single-player
+        // recompute (e.g. an admin "recalculate this player" action) agrees with
+        // SimulateAllPlayersAsync instead of silently using eliteTierFactor = 0.
+        var positionPlayers = (await playerRepository.GetByPositionAsync(player.Position, ct))
+            .GroupBy(p => p.SleeperPlayerId)
+            .Select(g => g.First())
+            .ToList();
+        var eliteTierByPlayerId = BuildEliteTierMap(positionPlayers, posStr, simByPlayerId, simByNamePos);
+        var eliteTier = eliteTierByPlayerId.GetValueOrDefault(sleeperPlayerId, 0.0);
+
+        return SimulatePlayer(player, posStr, curve, CurrentSeason, simByPlayerId, simByNamePos, eliteTier);
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
@@ -243,9 +276,11 @@ public class CareerSimulationService(
         AgingCurveDocument? curve,
         int season,
         Dictionary<string, SimulationResultDocument> simByPlayerId,
-        Dictionary<string, SimulationResultDocument> simByNamePos)
+        Dictionary<string, SimulationResultDocument> simByNamePos,
+        double eliteTierFactor = 0.0)
     {
         var currentAge = player.Age ?? (player.YearsExperience == 0 ? 21 : 22);
+        var peakAgeForPosition = curve?.PeakAge ?? PeakAges.GetValueOrDefault(position, 26);
 
         var rawBaseline = GetBaselineFppg(
             player.SleeperPlayerId!, player.FullName, position,
@@ -264,6 +299,17 @@ public class CareerSimulationService(
             var projYear = season + yearOffset;
             var ageAtYear = currentAge + yearOffset;
             var aging = GetAgingMultiplier(curve, position, ageAtYear);
+
+            // FAN-95: dampen post-peak decay for players ranked in the top
+            // tier of their position by shrunk baseline FPPG (see
+            // BuildEliteTierMap). Pre-peak ascent is untouched — this only
+            // softens the decline for players who've already proven elite,
+            // durable production, not a blanket QB boost.
+            if (eliteTierFactor > 0 && ageAtYear > peakAgeForPosition)
+            {
+                aging += eliteTierFactor * EliteDecayDampening * (1.0 - aging);
+            }
+
             var injury = GetInjuryRisk(position, ageAtYear);
 
             var yearSamples = new double[Iterations];
@@ -324,6 +370,52 @@ public class CareerSimulationService(
             ComputedAt = DateTime.UtcNow,
             Iterations = Iterations
         };
+    }
+
+    /// <summary>
+    /// FAN-95: Ranks a position's players by shrunk baseline FPPG and buckets
+    /// them into a tiered dampening factor for SimulatePlayer's post-peak
+    /// aging decay. Rank-based (like P2 normalization elsewhere in the
+    /// pipeline) rather than a fixed raw-FPPG threshold, so it stays stable
+    /// as the player pool and scoring environment shift year to year — and
+    /// it's derived from real per-season data, not any specific player name.
+    ///
+    /// Tiers: top 3 at the position → full dampening (1.0), 4-8 → half (0.5),
+    /// everyone else → none (0.0). Mirrors the tier-boundary style already
+    /// used for the QB/TE guardrail caps in DfvCalculationService.
+    /// </summary>
+    private Dictionary<string, double> BuildEliteTierMap(
+        List<FF.Domain.Entities.Player> players,
+        string position,
+        Dictionary<string, SimulationResultDocument> simByPlayerId,
+        Dictionary<string, SimulationResultDocument> simByNamePos)
+    {
+        var baselines = new List<(string Id, double BaseFppg)>();
+        foreach (var player in players)
+        {
+            if (player.SleeperPlayerId is null) continue;
+
+            var raw = GetBaselineFppg(
+                player.SleeperPlayerId, player.FullName, position,
+                simByPlayerId, simByNamePos);
+            var blended = ApplyShrinkage(position, raw, player);
+            baselines.Add((player.SleeperPlayerId, blended));
+        }
+
+        var ranked = baselines.OrderByDescending(b => b.BaseFppg).ToList();
+        var tierMap = new Dictionary<string, double>();
+        for (int i = 0; i < ranked.Count; i++)
+        {
+            var rank = i + 1;
+            tierMap[ranked[i].Id] = rank switch
+            {
+                <= 3 => 1.0,
+                <= 8 => 0.5,
+                _ => 0.0
+            };
+        }
+
+        return tierMap;
     }
 
     /// <summary>

@@ -55,14 +55,27 @@ public class DfvCalculationService(
     // These are GUARDRAILS, not rankings. They prevent gross outliers but
     // do NOT predetermine ordering. The model decides who is QB #1 vs #5 —
     // these just say "no TE should ever score above 70" and "no QB outside
-    // the top-6 raw should exceed 80".
+    // the top-3 raw should exceed 85".
     //
     // IMPORTANT: These are tier-based, not rank-by-rank. Multiple players
     // can land in the same tier. The model's raw ordering is preserved
     // within each tier.
+    //
+    // FAN-95 (2026-08-25): the old "<=6 => NormCeiling" band let ANY six QBs
+    // by raw rank plateau at ~95 with almost no spread between them (94.5 to
+    // 95.0 across all six). Real Superflex market consensus (FantasyPros)
+    // doesn't do this — it clusters a true top tier (Allen/Lamar/Burrow) up
+    // near the top of the whole board, then drops the next tier (Hurts/
+    // Purdy/Nix) down a full level, not a fraction of a point. Split the old
+    // 6-player "free" band into a true top-3 (still uncapped — the model
+    // decides that ordering freely) and a 4-6 band with a real, lower cap
+    // (85) so that separation can show up in TradeValue instead of getting
+    // flattened. Tunable via the calibration harness like the rest of this
+    // tier table.
     private static double GetQbGuardrailCap(int posRank) => posRank switch
     {
-        <= 6 => NormCeiling,  // elite tier — model decides ordering freely
+        <= 3 => NormCeiling,  // true elite tier — model decides ordering freely
+        <= 6 => 85.0,          // very good starters — real tier below elite, not a plateau
         <= 12 => 80.0,         // solid starters — model orders within band
         <= 20 => 55.0,         // fringe starters / high-upside backups
         <= 30 => 35.0,         // roster QBs
@@ -77,6 +90,38 @@ public class DfvCalculationService(
         <= 8 => 78.0,         // mid-tier starters — overall ~120
         <= 12 => 70.0,         // back-end starters — overall ~175
         _ => 50.0          // depth
+    };
+
+    // FAN-95 (2026-08-25): WR had NO guardrail at all — QB and TE were the
+    // only capped positions. With no cap, P3 ascent bonus + raw CVS let
+    // several boom/bust or hype-driven WRs (Rice, Higgins, Jameson Williams,
+    // Pickens, Wilson) sit at 90-92 TradeValue despite FP dynasty consensus
+    // ranking them 36-67 overall — nothing in the pipeline pulls an
+    // overvalued player back down (the FP blend only raises undervalued
+    // players, never lowers overvalued ones). Same tier-based approach as
+    // QB/TE: caps compress the ceiling per band, model still orders freely
+    // within a band. Tiers are wider than QB/TE since the startable WR pool
+    // is much deeper. Tunable via the calibration harness.
+    //
+    // FAN-95 addendum (same day): the first pass's flat "<=8 => 87" band
+    // reproduced the exact plateau bug the QB fix was meant to kill — five
+    // WRs (London, Smith-Njigba, Rice, Collins, Higgins) all landed at an
+    // identical 87.0 because their pre-cap values all exceeded a single flat
+    // ceiling for the whole 4-8 band, burying a legitimately elite player
+    // (Smith-Njigba, FP rank 7) next to clear outliers (Rice FP 55,
+    // Higgins FP 53). Split 4-8 into a narrower 4-5 and 6-8 band, same
+    // remedy as the QB 1-6 split, so the model's within-tier ordering has
+    // somewhere to show up instead of collapsing to one number.
+    private static double GetWrGuardrailCap(int posRank) => posRank switch
+    {
+        <= 3 => NormCeiling,  // true elite — unquestioned WR1 overall tier
+        <= 5 => 89.0,          // near-elite — real tier below the top-3, not a plateau
+        <= 8 => 83.0,          // clear WR1 tier
+        <= 16 => 76.0,          // strong starters
+        <= 28 => 65.0,          // solid WR2/flex
+        <= 45 => 50.0,          // streaming / flex depth
+        <= 70 => 35.0,          // bench
+        _ => 20.0          // deep bench / speculative
     };
 
     // ── FP dynasty rank → blend anchor ─────────────────────────────────────
@@ -303,6 +348,16 @@ public class DfvCalculationService(
             position: "TE",
             getCap: GetTeGuardrailCap,
             logLabel: "TE guardrail");
+
+        // ── WR guardrails — POST-blend ──────────────────────────────────
+        // FAN-95: new guardrail — WR previously had no cap at all, letting
+        // ascent-bonus/CVS-driven outliers plateau near the ceiling with no
+        // downward correction available anywhere else in the pipeline.
+        ApplyPositionalGuardrails(
+            valuations, rawDfvMap,
+            position: "WR",
+            getCap: GetWrGuardrailCap,
+            logLabel: "WR guardrail");
 
         // ── Rookie floor — POST-guardrails ────────────────────────────────
         // Catches rookies not yet in FP dynasty rankings (recent draftees).
