@@ -61,12 +61,32 @@ public class RunCalibrationCommandHandler(
 
         var subset = matched.Take(n).ToList();
 
-        // Spearman ρ — rank by our ordering (already 1..n), compare to FP ranks
-        double sumD2 = subset.Sum(p => Math.Pow(p.OurRank - p.FpRank, 2));
+        // Spearman's simplified d² shortcut formula (below) is only valid when BOTH rankings
+        // are dense permutations of 1..n over the same n items. OurRank already is one — it's
+        // assigned by position within this matched subset. Raw FpRank is NOT: it's FantasyPros'
+        // rank within their own much larger full-population list, so within this subset it has
+        // gaps (e.g. FpRank 52 when the subset only has ~100 players in it). Feeding a dense
+        // rank and a sparse rank into the shortcut formula breaks its bounds and produces rho
+        // far outside the mathematically valid [-1, 1] range — this is why every prior
+        // calibration run (-14.5, -6.1, -4.7, -6.88, ...) showed an impossible rho. It was never
+        // a model-quality signal; the harness itself was miscomputing the statistic.
+        //
+        // Fix: dense-rank FpRank within this same matched subset (ties get the average rank,
+        // standard Spearman tie handling) before computing d_i, so both series are proper 1..n
+        // rankings over the identical population and the shortcut formula's assumptions hold.
+        var fpDenseRankBySubsetPosition = subset
+            .Select(p => p.FpRank)
+            .OrderBy(r => r)
+            .Select((r, i) => new { r, position = i + 1 })
+            .GroupBy(x => x.r)
+            .ToDictionary(g => g.Key, g => g.Average(x => (double)x.position));
+
+        // Spearman ρ — our dense rank vs. FP's dense rank within this matched subset
+        double sumD2 = subset.Sum(p => Math.Pow(p.OurRank - fpDenseRankBySubsetPosition[p.FpRank], 2));
         double rho = 1.0 - (6.0 * sumD2) / ((double)n * (n * n - 1));
 
-        // Avg absolute delta
-        double avgDelta = subset.Average(p => Math.Abs(p.OurRank - p.FpRank));
+        // Avg absolute delta — same dense-rank basis as ρ, so it measures the same comparison
+        double avgDelta = subset.Average(p => Math.Abs(p.OurRank - fpDenseRankBySubsetPosition[p.FpRank]));
 
         // Top-10 overlap
         var ourTop10SleeperIds = ourValuations.Take(10)
