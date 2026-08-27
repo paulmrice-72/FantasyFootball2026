@@ -40,6 +40,25 @@ public class DfvCalculationService(
         ["TE"] = 1.05
     };
 
+    // ── FP dynasty blend weight ─────────────────────────────────────────────
+    // Fix 2026-08-27b: TE-scoped bump. Kraft/LaPorta/McBride/Bowers stayed
+    // overvalued (Δ-22 to Δ-58) even after the symmetric blend fix, because
+    // their post-normalize raw values cluster tightly (~90 each — real
+    // trailing FPPG barely separates them) while FP dynasty consensus prices
+    // in scheme/role-security signal the model doesn't have, spreading them
+    // rank 18 to 73+. A 0.65 blend only closes 65% of that gap. Scoped to TE
+    // only (not the global weight) per Paul's call — raising it league-wide
+    // would also reshuffle QB/RB/WR blending, which isn't the problem here.
+    // Tunable via the calibration harness; verify live before widening scope.
+    private const double DefaultFpBlendWeight = 0.65;
+    private const double TeFpBlendWeight = 0.85;
+
+    // Headroom above a TE's FP dynasty anchor before the guardrail cap fires.
+    // Small and deliberate: the anchor already IS the market signal for a
+    // ranked TE, so the tier cap (92/89/84/78...) should defer to it instead
+    // of the other way around. See GetTeEffectiveCap below.
+    private const double TeAnchorCapHeadroom = 2.0;
+
     // ── P2: Rank-based normalization ──────────────────────────────────────
     // P2 normalization exponent — controls distribution shape.
     // 0.9 (slightly convex): good spread across the full range while
@@ -359,10 +378,12 @@ public class DfvCalculationService(
         // Blend formula (symmetric): new = model + (anchor - model) * blendWeight.
         // When model < anchor, this raises (unchanged from before). When
         // model > anchor, (anchor - model) is negative and this now pulls
-        // the value DOWN toward consensus by the same 0.65 weight instead
+        // the value DOWN toward consensus by the same weight instead
         // of leaving it untouched. Players already exactly at their anchor
         // are (trivially) unaffected either way.
-        const double fpBlendWeight = 0.65;
+        //
+        // Fix 2026-08-27b: TE gets a higher blend weight (see
+        // TeFpBlendWeight above) — every other position keeps 0.65.
         foreach (var valuation in valuations)
         {
             if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
@@ -372,6 +393,7 @@ public class DfvCalculationService(
             var anchor = GetFpDynastyAnchor(dynastyRank);
             if (anchor <= 0 || current == anchor) continue;
 
+            var fpBlendWeight = valuation.Position == "TE" ? TeFpBlendWeight : DefaultFpBlendWeight;
             var blended = current + (anchor - current) * fpBlendWeight;
             rawDfvMap[valuation.SleeperPlayerId] = Math.Round(blended, 2);
 
@@ -389,17 +411,36 @@ public class DfvCalculationService(
         ApplyPositionalGuardrails(
             valuations, rawDfvMap,
             position: "QB",
-            getCap: GetQbGuardrailCap,
+            getCap: (rank, _) => GetQbGuardrailCap(rank),
             logLabel: "QB guardrail");
 
         // ── TE guardrails — POST-blend ──────────────────────────────────
-        // Same mechanism as QB: tier-based caps, model determines ordering.
-        // With 0.9 exponent there's enough spread that TE caps place elite
-        // TEs in a reasonable overall range without needing FP-rank overrides.
+        // Fix 2026-08-27b: the flat tier cap (92/89/84/78...) was never the
+        // binding constraint for Kraft/LaPorta/McBride — their post-blend
+        // values sat comfortably UNDER it, so the "guardrail" wasn't
+        // actually guarding anything for this group. Reconciled with the FP
+        // anchor: when a TE has a real FP dynasty rank, its effective cap is
+        // min(tier cap, anchor + headroom) instead of the tier cap alone —
+        // the anchor already IS the market signal, so it should bind first.
+        // TEs with no FP dynasty rank (too new to be priced in) fall back to
+        // the plain tier cap, same as before.
+        double GetTeEffectiveCap(int posRank, DynastyValuationDocument v)
+        {
+            var tierCap = GetTeGuardrailCap(posRank);
+            if (string.IsNullOrEmpty(v.SleeperPlayerId)
+                || !fpDynastyRankMap.TryGetValue(v.SleeperPlayerId, out var fpRank))
+            {
+                return tierCap;
+            }
+
+            var anchor = GetFpDynastyAnchor(fpRank);
+            return anchor > 0 ? Math.Min(tierCap, anchor + TeAnchorCapHeadroom) : tierCap;
+        }
+
         ApplyPositionalGuardrails(
             valuations, rawDfvMap,
             position: "TE",
-            getCap: GetTeGuardrailCap,
+            getCap: GetTeEffectiveCap,
             logLabel: "TE guardrail");
 
         // ── WR guardrails — POST-blend ──────────────────────────────────
@@ -409,7 +450,7 @@ public class DfvCalculationService(
         ApplyPositionalGuardrails(
             valuations, rawDfvMap,
             position: "WR",
-            getCap: GetWrGuardrailCap,
+            getCap: (rank, _) => GetWrGuardrailCap(rank),
             logLabel: "WR guardrail");
 
         // ── RB guardrails — POST-blend ──────────────────────────────────
@@ -419,7 +460,7 @@ public class DfvCalculationService(
         ApplyPositionalGuardrails(
             valuations, rawDfvMap,
             position: "RB",
-            getCap: GetRbGuardrailCap,
+            getCap: (rank, _) => GetRbGuardrailCap(rank),
             logLabel: "RB guardrail");
 
         // ── Rookie floor — POST-guardrails ────────────────────────────────
@@ -614,12 +655,20 @@ public class DfvCalculationService(
     /// being compressed together (more collisions = more room needed to
     /// keep them distinct) but is kept small so it can't bleed into the
     /// next tier down. Tunable via the calibration harness.
+    ///
+    /// getCap takes (positionRank, player) rather than just positionRank —
+    /// most positions ignore the player and return a flat tier cap as
+    /// before; TE's cap (2026-08-27b) uses it to fold in the player's own
+    /// FP dynasty anchor. When caps vary per player instead of per tier,
+    /// "tiers" below naturally shrink to runs of players sharing an
+    /// identical cap value (often just one) — the overflow/banding logic
+    /// still applies correctly, it just has less to spread across.
     /// </summary>
     private void ApplyPositionalGuardrails(
         List<DynastyValuationDocument> valuations,
         Dictionary<string, double> rawDfvMap,
         string position,
-        Func<int, double> getCap,
+        Func<int, DynastyValuationDocument, double> getCap,
         string logLabel)
     {
         var ranked = valuations
@@ -631,11 +680,11 @@ public class DfvCalculationService(
         int i = 0;
         while (i < ranked.Count)
         {
-            // Walk forward while consecutive ranks share the same tier cap —
+            // Walk forward while consecutive ranks share the same cap —
             // that run of players is one guardrail tier.
-            var cap = getCap(i + 1);
+            var cap = getCap(i + 1, ranked[i]);
             var tierStart = i;
-            while (i < ranked.Count && getCap(i + 1) == cap) i++;
+            while (i < ranked.Count && getCap(i + 1, ranked[i]) == cap) i++;
             var tierEnd = i; // exclusive
 
             // Within this tier, find the players whose pre-cap value actually

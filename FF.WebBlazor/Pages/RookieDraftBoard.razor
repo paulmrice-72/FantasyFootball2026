@@ -26,9 +26,16 @@
         <MudIcon Icon="@Icons.Material.Filled.SportsFootball" Class="mr-2" Style="vertical-align:middle;" />
         Draft Board
     </MudText>
+    @* Fix 2026-08-27: redraft subtitle used to literally read "ranked by dynasty
+       trade value" because that's what the board pulled from. Now matches the
+       corrected data source (Week 1 projected points) in LoadRedraftPlayers below.
+       FIX-PRESEASON-001 (2026-08-27): added a third state — preseason, before
+       Week 1 sim data exists — where the board falls back to live ADP. *@
     <MudText Typo="Typo.body2" Class="mud-text-secondary">
         @(_isRedraftMode
-            ? "Available players ranked by dynasty trade value · Scoring-adjusted"
+            ? (_isPreseasonAdpFallback
+                ? "Live ADP rankings · 2025 avg pts for context (preseason — Week 1 sims not in yet)"
+                : "Week 1 projected points · Your league's scoring format")
             : "Dynasty composite scores · Draft capital · FantasyPros rankings")
     </MudText>
 </div>
@@ -41,44 +48,46 @@
             @(_isRedraftMode ? "Redraft Mode" : "Dynasty / Rookie Mode")
         </MudChip>
 
-        @if (!_isRedraftMode)
+        @* Fix 2026-08-27: live Sleeper draft sync (StartSession/sync-sleeper) has
+           never been dynasty-specific on the backend — DraftSessionDocument and
+           StartDraftSessionCommandHandler work off LeagueId alone. This whole
+           block was gated to dynasty in the UI only; un-gated so redraft leagues
+           get the same live monitoring during the actual draft. *@
+        @if (_sessionId is null)
         {
-            @if (_sessionId is null)
-            {
-                <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.PlayArrow"
-                           OnClick="StartSession" Size="Size.Medium"
-                           Disabled="@(string.IsNullOrEmpty(_selectedLeagueId) || _startingSession)">
-                    @if (_startingSession) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
-                    Start Draft Session
-                </MudButton>
-            }
-            else
-            {
-                <div class="d-flex align-center gap-2 flex-wrap">
-                    <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Style="color:#34D399; font-size:0.9rem;" />
-                    <MudText Typo="Typo.body2" Style="color:#34D399; font-weight:600;">LIVE</MudText>
-                    @if (_totalPicksInDraft > 0)
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            Pick @(_picks.Count + 1) of @_totalPicksInDraft
-                        </MudText>
-                        <MudProgressLinear Value="@(_picks.Count)" Max="@(_totalPicksInDraft)"
-                                           Color="Color.Primary" Style="width:80px; height:4px; border-radius:2px;" />
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@_picks.Count picked</MudText>
-                    }
-                    @if (_autoSyncEnabled)
-                    {
-                        <MudChip T="string" Size="Size.Small" Color="Color.Success"
-                                 Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Sync">
-                            auto-refresh 30s
-                        </MudChip>
-                    }
-                </div>
-            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.PlayArrow"
+                       OnClick="StartSession" Size="Size.Medium"
+                       Disabled="@(string.IsNullOrEmpty(_selectedLeagueId) || _startingSession)">
+                @if (_startingSession) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                Start Draft Session
+            </MudButton>
+        }
+        else
+        {
+            <div class="d-flex align-center gap-2 flex-wrap">
+                <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Style="color:#34D399; font-size:0.9rem;" />
+                <MudText Typo="Typo.body2" Style="color:#34D399; font-weight:600;">LIVE</MudText>
+                @if (_totalPicksInDraft > 0)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Pick @(_picks.Count + 1) of @_totalPicksInDraft
+                    </MudText>
+                    <MudProgressLinear Value="@(_picks.Count)" Max="@(_totalPicksInDraft)"
+                                       Color="Color.Primary" Style="width:80px; height:4px; border-radius:2px;" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@_picks.Count picked</MudText>
+                }
+                @if (_autoSyncEnabled)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success"
+                             Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Sync">
+                        auto-refresh 30s
+                    </MudChip>
+                }
+            </div>
         }
 
         @if (_sessionId is not null && !_isRedraftMode)
@@ -106,8 +115,8 @@
     </div>
 </MudPaper>
 
-@* ── UP NEXT HORIZONTAL TICKER (session active + dynasty only) ────────── *@
-@if (_sessionId is not null && !_isRedraftMode)
+@* ── UP NEXT HORIZONTAL TICKER (session active — dynasty or redraft) ──── *@
+@if (_sessionId is not null)
 {
     <MudPaper Class="fc-card pa-2 mb-3" Elevation="0">
         <div class="d-flex align-center gap-2" style="overflow-x:auto; white-space:nowrap; min-height:44px;">
@@ -170,6 +179,10 @@
 <MudGrid Spacing="3">
 
     @* ── MAIN BOARD ──────────────────────────────────────────────────── *@
+    @* Note: ROSTER NEEDS / BEST AVAILABLE / BEST FIT sidebar (below) stays
+       dynasty-only for now — it's keyed off RookiePlayerDto/DynastyScore and
+       needs its own redraft-typed version rather than a blind reuse. Board
+       goes full-width for redraft even with a live session running. *@
     <MudItem xs="12" md="@(_sessionId is not null && !_isRedraftMode ? 9 : 12)">
         <MudPaper Class="fc-card" Elevation="0">
             @if (_loading)
@@ -194,8 +207,7 @@
                             <MudTh>Player</MudTh>
                             <MudTh>Pos</MudTh>
                             <MudTh>Team</MudTh>
-                            <MudTh>Age</MudTh>
-                            <MudTh Style="text-align:right">Dynasty Value</MudTh>
+                            <MudTh Style="text-align:right">@(_isPreseasonAdpFallback ? "2025 Avg Pts" : "Proj. Pts (Wk 1)")</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="Rank"><MudText Typo="Typo.body2" Style="color:#9CA3AF;">#@context.Rank</MudText></MudTd>
@@ -206,8 +218,7 @@
                                 <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(context.Position)" Variant="Variant.Filled">@context.Position</MudChip>
                             </MudTd>
                             <MudTd DataLabel="Team"><MudText Typo="Typo.body2">@(context.NflTeam ?? "FA")</MudText></MudTd>
-                            <MudTd DataLabel="Age"><MudText Typo="Typo.body2">@context.Age</MudText></MudTd>
-                            <MudTd DataLabel="Dynasty Value" Style="text-align:right; font-family:'JetBrains Mono',monospace; color:var(--fc-cyan);">@context.TradeValue.ToString("F1")</MudTd>
+                            <MudTd DataLabel="@(_isPreseasonAdpFallback ? "2025 Avg Pts" : "Proj. Pts (Wk 1)")" Style="text-align:right; font-family:'JetBrains Mono',monospace; color:var(--fc-cyan);">@context.ProjectedPoints.ToString("F1")</MudTd>
                         </RowTemplate>
                     </MudTable>
                 }
@@ -576,8 +587,11 @@
 @code {
     private List<RookiePlayerDto> _allRookies = [];
     private List<RookiePlayerDto> _filtered = [];
-    private List<OffSeasonPlayerDto> _redraftPlayers = [];
-    private List<OffSeasonPlayerDto> _filteredRedraft = [];
+    private List<RedraftBoardPlayerDto> _redraftPlayers = [];
+    private List<RedraftBoardPlayerDto> _filteredRedraft = [];
+    // FIX-PRESEASON-001 (2026-08-27): true when LoadRedraftPlayers had to fall
+    // back to live ADP because no Week 1 sim data exists yet.
+    private bool _isPreseasonAdpFallback = false;
     private List<LeagueItem> _leagues = [];
 
     private HashSet<string> _picks = [];
@@ -631,7 +645,9 @@
 
         await LoadCurrentMode();
 
-        if (!_isRedraftMode && !string.IsNullOrEmpty(_selectedLeagueId))
+        // Fix 2026-08-27: session resume is no longer dynasty-gated (see
+        // session bar above) — live sync now works for redraft leagues too.
+        if (!string.IsNullOrEmpty(_selectedLeagueId))
             await TryResumeSession();
     }
 
@@ -647,7 +663,7 @@
         _ = InvokeAsync(async () =>
         {
             await LoadCurrentMode();
-            if (!_isRedraftMode && !string.IsNullOrEmpty(_selectedLeagueId))
+            if (!string.IsNullOrEmpty(_selectedLeagueId))
                 await TryResumeSession();
             StateHasChanged();
         });
@@ -658,7 +674,7 @@
         _sessionId = null;
         _picks = []; _myPickIds = []; _myPicksList = []; _pickDetails = [];
         _hideDrafted = false; _allRookies = []; _filtered = [];
-        _redraftPlayers = []; _filteredRedraft = [];
+        _redraftPlayers = []; _filteredRedraft = []; _isPreseasonAdpFallback = false;
         _totalPicksInDraft = 0; _remainingPicks = [];
         _rosterNeeds = []; _bestAvailable = []; _bestFit = [];
         _liveRosterPositionCounts = null; _rosterNeedsStale = false;
@@ -881,14 +897,58 @@
         finally { _loading = false; }
     }
 
+    // Fix 2026-08-27: this used to call api/v1/waiver/available/offseason,
+    // which ranks by dynasty TradeValue — the exact bug Paul flagged
+    // (Joe Milton, a dynasty-cold-start-shrinkage outlier, showing up in the
+    // redraft top 20). Swapped to the same api/v1/projections/simulations
+    // endpoint RedraftRankings.razor already uses (redraft-scoring-format
+    // weekly production, not career-long dynasty value). Week 1 stands in
+    // for "preseason draft baseline" since there's no live week yet.
+    // FIX-PRESEASON-001 (2026-08-27): "Week 1 stands in" above turned out to
+    // be wrong — Week 1 sim data doesn't exist until this season's own game
+    // logs do (CalculateProjectionsCommandHandler needs them), i.e. not until
+    // Week 1 is actually played. Added a fallback to live FFC ADP + prior-
+    // season per-game average (api/v1/drafttools/redraft-board) for the true
+    // preseason window. FAN-96/FAN-100's "wire Consensus ADP" note is now
+    // superseded by this — used the already-syncing FFC ADP cache instead of
+    // the rookie-only Consensus ADP importer.
     private async Task LoadRedraftPlayers()
     {
         _loading = true; StateHasChanged();
         try
         {
+            var season = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId)?.Season
+                         ?? DateTime.UtcNow.Year;
             var posParam = string.IsNullOrEmpty(_selectedPosition) ? "" : $"&position={_selectedPosition}";
-            _redraftPlayers = await Http.GetFromJsonAsync<List<OffSeasonPlayerDto>>(
-                $"api/v1/waiver/available/offseason?leagueId={_selectedLeagueId}&top=150{posParam}") ?? [];
+            var rows = await Http.GetFromJsonAsync<List<RedraftSimDto>>(
+                $"api/v1/projections/simulations?season={season}&week=1{posParam}") ?? [];
+
+            if (rows.Count > 0)
+            {
+                _isPreseasonAdpFallback = false;
+                _redraftPlayers = rows
+                    .OrderByDescending(r => r.Median)
+                    .Select((r, i) => new RedraftBoardPlayerDto(
+                        r.SleeperPlayerId, r.PlayerName, r.Position, r.NflTeam, r.Median, i + 1))
+                    .ToList();
+            }
+            else
+            {
+                // No Week 1 sim data yet — fall back to live ADP. ADP drives
+                // rank/inclusion here (covers rookies); season-avg fills the
+                // points column only where a prior-season number exists.
+                _isPreseasonAdpFallback = true;
+                var adpRows = await Http.GetFromJsonAsync<List<RedraftBoardEntryDto>>(
+                    $"api/v1/drafttools/redraft-board?season={season}{posParam}") ?? [];
+                _redraftPlayers = adpRows
+                    .OrderBy(a => a.Adp)
+                    .Select((a, i) => new RedraftBoardPlayerDto(
+                        a.SleeperPlayerId, a.PlayerName, a.Position, a.NflTeam,
+                        a.SeasonAvgPoints ?? 0, i + 1))
+                    .ToList();
+                if (_redraftPlayers.Count == 0)
+                    Snackbar.Add("No Week 1 sim or ADP data found — run sync-ffc-adp from the Admin console.", Severity.Warning);
+            }
             ApplyRedraftFilter();
         }
         catch { Snackbar.Add("Failed to load redraft rankings.", Severity.Error); _redraftPlayers = []; _filteredRedraft = []; }
@@ -1065,7 +1125,15 @@
         double AgeMultiplier, double AthleticismSignalScore,
         double? AthleticismScore, double? SpeedScore, double? FortyYard, double? BroadJump, string? CombineSchool);
 
-    private record OffSeasonPlayerDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, int Age, double TradeValue, int Rank, string? CollegeTeam);
+    // Fix 2026-08-27: replaces the old dynasty-TradeValue-shaped OffSeasonPlayerDto
+    // for the redraft board. RedraftSimDto mirrors the subset of SimRow fields
+    // (RedraftRankings.razor) this page needs; RedraftBoardPlayerDto is the
+    // post-projection, ranked shape the table binds to.
+    private record RedraftSimDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, decimal Median);
+    private record RedraftBoardPlayerDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, decimal ProjectedPoints, int Rank);
+    // FIX-PRESEASON-001 (2026-08-27): mirrors RedraftBoardEntryDto from
+    // GetRedraftBoardQuery (api/v1/drafttools/redraft-board) — the preseason fallback.
+    private record RedraftBoardEntryDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, double Adp, int AdpRound, decimal? SeasonAvgPoints);
     private record MyPickEntry(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, int Round, int Slot);
     private record PickDetailEntry(string PlayerName, int Round, int Slot, string? PickedByTeamName);
     private record RemainingPickEntry(int Round, int Slot, string TeamName, string SleeperRosterId, bool IsMyPick);
