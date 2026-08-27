@@ -120,6 +120,8 @@ public static class DependencyInjection
         services.AddScoped<SeedPickValuesJob>();
         services.AddScoped<IPffDraftGradeRepository, PffDraftGradeRepository>();
         services.AddScoped<IConsensusAdpRepository, ConsensusAdpRepository>();
+        // FIX-PRESEASON-001 (2026-08-27): preseason redraft board fallback source.
+        services.AddScoped<IRedraftAdpRepository, RedraftAdpRepository>();
         services.AddScoped<ICombineResultRepository, CombineResultRepository>();
         services.AddScoped<SyncCombineDataCommandHandler>();
         services.AddHttpClient("NflverseClient", client =>

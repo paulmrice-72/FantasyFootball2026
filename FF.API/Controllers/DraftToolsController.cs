@@ -6,6 +6,7 @@ using FF.Application.Features.DraftTools.Commands.ImportPffDraftGrades;
 using FF.Application.Features.DraftTools.Commands.RecordDraftPick;
 using FF.Application.Features.DraftTools.Commands.StartDraftSession;
 using FF.Application.Features.DraftTools.Queries.GetDraftSession;
+using FF.Application.Features.DraftTools.Queries.GetRedraftBoard;
 using FF.Application.Features.DraftTools.Queries.SyncSleeperPicks;
 using FF.Application.Players.Queries.GetRookiePool;
 using FF.Infrastructure.Identity;
@@ -72,6 +73,25 @@ public class DraftToolsController(
         var result = await mediator.Send(
             new ImportFantasyProsDynastyRankingsCommand(request.CsvContent, request.Season),
             cancellationToken);
+
+        return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
+    }
+
+    // ── Redraft board (preseason fallback) ───────────────────────────────
+    // FIX-PRESEASON-001 (2026-08-27): before real Week-N simulation data
+    // exists for the current season, merges live FFC ADP (covers rookies —
+    // real 2026 drafts already have them going) with prior-season per-game
+    // average for context. See GetRedraftBoardQueryHandler. Anonymous read
+    // access would be reasonable here too, but kept behind [Authorize] like
+    // the rest of this controller for consistency.
+    [HttpGet("redraft-board")]
+    public async Task<IActionResult> GetRedraftBoard(
+        [FromQuery] int season,
+        [FromQuery] string? position,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new GetRedraftBoardQuery(season, position), cancellationToken);
 
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error);
     }
