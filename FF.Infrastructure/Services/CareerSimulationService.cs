@@ -507,8 +507,28 @@ public class CareerSimulationService(
             if ((player.YearsExperience ?? 0) >= 1)
                 return GetDepthLevelFppg(position);
 
-            // True rookie with no sim data — full prior is appropriate
-            // (credibility = 0%, blend = 100% prior)
+            // Fix 2026-08-27 (live calibration + Mongo/Postgres data pull):
+            // true zero-experience RB/WR/TE rookies with no sim data used to
+            // get the FULL position-average prior unconditionally — no
+            // pedigree check at all, unlike QB's gate above (1st-round only).
+            // Confirmed live for three UDFA TEs (Dallen Bentley, Matt Hibner,
+            // John Michael Gyllenborg — all YearsExperience 0, no DraftRound
+            // on file, no simulation_results doc): each got baseFppg ≈ 9.0
+            // (the flat TE prior) treated as a proven average TE1 for a full
+            // 5-year career, producing CareerValueScore ≈ 468-472 — nearly
+            // identical generic curves carrying no real signal about these
+            // specific players, high enough to land them in top TE guardrail
+            // tiers (TV 83-90) despite FP dynasty ranks in the 300s-400s.
+            // Fix: require actual draft pedigree (any DraftRound on file) to
+            // earn the full prior — undrafted zero-data rookies fall to
+            // depth level instead, same treatment as an experienced no-data
+            // backup. Mirrors the QB gate above; QB is exempted here since
+            // that gate already returned earlier in this method for QB.
+            if (position != "QB" && player.DraftRound is null)
+                return GetDepthLevelFppg(position);
+
+            // True rookie with no sim data and real draft pedigree — full
+            // prior is appropriate (credibility = 0%, blend = 100% prior)
             return prior;
         }
 

@@ -124,6 +124,29 @@ public class DfvCalculationService(
         _ => 20.0          // deep bench / speculative
     };
 
+    // Fix 2026-08-27 (live calibration): RB had NO guardrail at all — the
+    // same gap FAN-95 already found and fixed for WR ("nothing pulls an
+    // overvalued player back down"), just never extended to RB. Confirmed
+    // live: 7 of the top 20 in a calibration run were RBs, every one
+    // overvalued relative to FP (Gibbs Δ-6 through Breece Hall Δ-26).
+    // Ceiling starts below WR/QB's uncapped 95 — FP's own dynasty consensus
+    // never puts even the best RB above ~rank 11 overall, so the cap should
+    // reflect the market's structural discount on RB career length instead
+    // of letting RB compete for the very top of the board. Same tier-based,
+    // model-orders-within-tier mechanism as QB/WR/TE. Initial pass — tunable
+    // via the calibration harness like the rest of this tier table.
+    private static double GetRbGuardrailCap(int posRank) => posRank switch
+    {
+        <= 2 => 88.0,
+        <= 5 => 82.0,
+        <= 8 => 74.0,
+        <= 15 => 64.0,
+        <= 25 => 52.0,
+        <= 40 => 38.0,
+        <= 60 => 25.0,
+        _ => 15.0
+    };
+
     // ── FP dynasty rank → blend anchor ─────────────────────────────────────
     // Used as a blending signal for players whose model value is below their
     // FP dynasty consensus. Only raises, never lowers.
@@ -138,6 +161,17 @@ public class DfvCalculationService(
     // Blend formula (in CalculateAllAsync): if model < anchor,
     //   new = model + (anchor - model) * 0.65
     // Players already above their anchor are untouched.
+    // Fix 2026-08-27 (live calibration — J.J. McCarthy, FP dynasty rank 219):
+    // anchors used to stop at rank 200 (anchor 0.0 = blend inapplicable beyond
+    // that). That left the pipeline with NO way to correct a model value that
+    // disagrees with the market past rank 200 — confirmed live for McCarthy,
+    // whose career sim is grounded in real 2025 production data (legitimate,
+    // not a bug) but whose TV (83.8) sat nowhere near his real FP dynasty
+    // consensus rank (219) because the blend simply never engaged. Guardrail
+    // caps alone can't fix this since they're keyed to the model's own
+    // internal rank order, not FP rank. Extended the taper down to the tail
+    // of the P2 curve (N≈600) so deep-ranked players can still be pulled
+    // toward consensus, just with a smaller anchor the further out they are.
     private static double GetFpDynastyAnchor(int fpRank) => fpRank switch
     {
         <= 5 => 92.0,    // P2 rank 5  ≈ 94.4
@@ -149,7 +183,9 @@ public class DfvCalculationService(
         <= 100 => 74.0,    // P2 rank 100 ≈ 80.7
         <= 150 => 62.0,    // P2 rank 150 ≈ 73.4
         <= 200 => 50.0,    // P2 rank 200 ≈ 66.1
-        _ => 0.0
+        <= 300 => 35.0,    // P2 rank 300 ≈ 51.0
+        <= 450 => 20.0,    // P2 rank 450 ≈ 27.3
+        _ => 10.0    // deep bench / effectively unranked — still correctable
     };
 
     // ── Superflex QB scarcity ─────────────────────────────────────────────
@@ -301,15 +337,31 @@ public class DfvCalculationService(
         NormalizeAcrossAllPositions(valuations, rawDfvMap, NormCeiling);
 
         // ── FP dynasty consensus blend — POST-normalize ──────────────────
-        // For players whose model value is significantly below their FP
-        // dynasty consensus, blend upward. This handles players with stale
-        // or missing sim data (no 2025 nflverse yet) without overriding
-        // the model entirely like the old floor table did.
+        // Blends every dynasty-ranked player's model value toward their FP
+        // consensus anchor — in BOTH directions.
         //
-        // Blend formula: if model < anchor, new = model + (anchor - model) * blendWeight
-        // blendWeight = 0.65 — trusts FP consensus moderately but lets the
-        // model retain influence. Players already at or above their anchor
-        // are untouched.
+        // Fix 2026-08-26 (live calibration + Mongo data pull): this used to
+        // only raise undervalued players (`current >= anchor` skipped
+        // everyone else), on the theory that it existed to handle stale/
+        // missing sim data. But that leaves the model with NO way to correct
+        // an OVERvalued player — confirmed live for Trey McBride, Tucker
+        // Kraft, Sam LaPorta, and Brock Bowers: two years of season-average
+        // FPPG only shows a modest gap between them (9.35 → 13.33), but FP's
+        // dynasty consensus sees a much wider one (LaPorta #73 to McBride
+        // #37) because it prices in things trailing-FPPG-only inputs can't
+        // see (target competition, scheme, role security). Every one of
+        // those four had already cleared their FP anchor pre-blend, so the
+        // one-directional blend never engaged for any of them, and they hit
+        // the guardrail ceiling with nothing upstream having corrected them.
+        // Same root cause FAN-95 already flagged for WR ("nothing pulls an
+        // overvalued player back down").
+        //
+        // Blend formula (symmetric): new = model + (anchor - model) * blendWeight.
+        // When model < anchor, this raises (unchanged from before). When
+        // model > anchor, (anchor - model) is negative and this now pulls
+        // the value DOWN toward consensus by the same 0.65 weight instead
+        // of leaving it untouched. Players already exactly at their anchor
+        // are (trivially) unaffected either way.
         const double fpBlendWeight = 0.65;
         foreach (var valuation in valuations)
         {
@@ -318,14 +370,15 @@ public class DfvCalculationService(
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var current)) continue;
 
             var anchor = GetFpDynastyAnchor(dynastyRank);
-            if (anchor <= 0 || current >= anchor) continue;
+            if (anchor <= 0 || current == anchor) continue;
 
             var blended = current + (anchor - current) * fpBlendWeight;
             rawDfvMap[valuation.SleeperPlayerId] = Math.Round(blended, 2);
 
             logger.LogDebug(
-                "FP dynasty blend: {Player} ({Position}) FP rank {Rank} anchor {Anchor:F0} — {Old:F1} → {New:F1}",
-                valuation.PlayerName, valuation.Position, dynastyRank, anchor, current, blended);
+                "FP dynasty blend: {Player} ({Position}) FP rank {Rank} anchor {Anchor:F0} — {Old:F1} → {New:F1} ({Direction})",
+                valuation.PlayerName, valuation.Position, dynastyRank, anchor, current, blended,
+                blended > current ? "raised" : "lowered");
         }
 
         // ── Positional guardrail caps — POST-blend ───────────────────────
@@ -359,13 +412,45 @@ public class DfvCalculationService(
             getCap: GetWrGuardrailCap,
             logLabel: "WR guardrail");
 
+        // ── RB guardrails — POST-blend ──────────────────────────────────
+        // Fix 2026-08-27: RB was the last unguarded position — same
+        // "nothing pulls an overvalued player back down" gap FAN-95 already
+        // fixed for WR.
+        ApplyPositionalGuardrails(
+            valuations, rawDfvMap,
+            position: "RB",
+            getCap: GetRbGuardrailCap,
+            logLabel: "RB guardrail");
+
         // ── Rookie floor — POST-guardrails ────────────────────────────────
-        // Catches rookies not yet in FP dynasty rankings (recent draftees).
-        // Uses FP rookie rank as a floor — never lowers, only raises.
-        // TE rookies are gated separately to prevent them from exceeding
-        // the TE guardrail ceiling.
+        // Catches rookies NOT YET in FP dynasty rankings (very recent
+        // draftees the dynasty consensus hasn't priced in yet) using their
+        // FP ROOKIE-class rank as a stand-in floor. Never lowers, only
+        // raises — for THAT case.
+        //
+        // Bug found 2026-08-26 (live calibration run): this fired
+        // unconditionally for ANY YearsExperience==0 player with an FP
+        // rookie rank, even when the player ALREADY has a real FP DYNASTY
+        // rank — i.e. even when the dynasty blend earlier in this method
+        // already placed them correctly against the full market. Because
+        // this runs last and is a plain Math.Max, the rookie-rank floor
+        // then overrode that good, market-accurate value. Confirmed live:
+        // Fernando Mendoza (FP rookie top-3 → floor 88) has an FP DYNASTY
+        // rank of #50 (anchor ~45 from the blend above) but still landed
+        // at TV 88 (Δ-35 vs FP). Carnell Tate: FP dynasty #42 (anchor ~85)
+        // but rookie-floored to 88 anyway (Δ-26) — in his case the floor
+        // happened to roughly agree, Mendoza's shows how badly it can
+        // disagree. Being the #2-3 ranked ROOKIE doesn't mean top-3
+        // overall value, and once a real dynasty rank exists, it's a
+        // strictly better signal than the rookie-class rank.
+        //
+        // Fix: skip this fallback entirely for anyone already present in
+        // fpDynastyRankMap — the blend step already handled them. This
+        // floor now only fires for genuine "too new to be dynasty-ranked
+        // yet" players, which is what the comment always said it was for.
         foreach (var valuation in valuations.Where(v => (v.YearsExperience ?? -1) == 0))
         {
+            if (fpDynastyRankMap.ContainsKey(valuation.SleeperPlayerId)) continue;
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var normalized)) continue;
             if (!fpRookieRankMap.TryGetValue(valuation.SleeperPlayerId, out var fpRank)) continue;
             if (valuation.Age > 22) continue;
@@ -509,6 +594,26 @@ public class DfvCalculationService(
     /// (top 6, 7-12, 13-20, etc.) so the model's ordering within a tier
     /// is preserved. Caps only fire when a player's value exceeds the
     /// tier ceiling — they never raise values.
+    ///
+    /// FAN-95 structural finding (2026-08-25), fixed here: a flat
+    /// "clamp to cap" collapses every player who exceeds the ceiling to
+    /// the IDENTICAL value — this reproduced three times in one session
+    /// (QB, WR, then a pre-existing TE instance: LaPorta Δ-54 and Kraft
+    /// Δ-42 both pinned at 84.0). Splitting tiers narrower shrinks the
+    /// blast radius but never eliminates it — any two players whose
+    /// pre-cap value both exceed a tier's cap still tie.
+    ///
+    /// Fix: instead of clamping every overflowing player in a tier to
+    /// the same cap, spread them across a small band immediately below
+    /// the cap, ordered by their pre-cap model value (best player closest
+    /// to the cap, weakest furthest below it). This is the same rank-based
+    /// spreading idea as P2 normalization, just applied locally within a
+    /// guardrail tier instead of globally — it's still a ceiling (nobody
+    /// exceeds `cap`), it just stops erasing the model's within-tier
+    /// ordering. Band width grows gently with the number of players
+    /// being compressed together (more collisions = more room needed to
+    /// keep them distinct) but is kept small so it can't bleed into the
+    /// next tier down. Tunable via the calibration harness.
     /// </summary>
     private void ApplyPositionalGuardrails(
         List<DynastyValuationDocument> valuations,
@@ -523,16 +628,43 @@ public class DfvCalculationService(
             .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
             .ToList();
 
-        for (int i = 0; i < ranked.Count; i++)
+        int i = 0;
+        while (i < ranked.Count)
         {
-            var player = ranked[i];
+            // Walk forward while consecutive ranks share the same tier cap —
+            // that run of players is one guardrail tier.
             var cap = getCap(i + 1);
-            if (rawDfvMap.TryGetValue(player.SleeperPlayerId, out var current) && current > cap)
+            var tierStart = i;
+            while (i < ranked.Count && getCap(i + 1) == cap) i++;
+            var tierEnd = i; // exclusive
+
+            // Within this tier, find the players whose pre-cap value actually
+            // exceeds the ceiling — only those get compressed.
+            var overflow = new List<int>();
+            for (var j = tierStart; j < tierEnd; j++)
             {
-                rawDfvMap[player.SleeperPlayerId] = cap;
+                if (rawDfvMap.TryGetValue(ranked[j].SleeperPlayerId, out var current) && current > cap)
+                    overflow.Add(j);
+            }
+
+            if (overflow.Count == 0) continue;
+
+            // Band width: small and driven by how many players are colliding
+            // at this cap, capped at 4.0 so it never crosses into the next
+            // tier's range.
+            var bandWidth = Math.Min(4.0, 0.4 * overflow.Count);
+
+            for (var k = 0; k < overflow.Count; k++)
+            {
+                var player = ranked[overflow[k]];
+                var rankFraction = overflow.Count > 1 ? (double)k / (overflow.Count - 1) : 0.0;
+                var compressed = Math.Round(cap - rankFraction * bandWidth, 2);
+                var old = rawDfvMap[player.SleeperPlayerId];
+                rawDfvMap[player.SleeperPlayerId] = compressed;
+
                 logger.LogDebug(
-                    "{Label}: {Player} rank {Rank} {Old:F1} → {Cap:F1}",
-                    logLabel, player.PlayerName, i + 1, current, cap);
+                    "{Label}: {Player} rank {Rank} {Old:F1} → {New:F1} (tier ceiling {Cap:F1}, {N} compressed together)",
+                    logLabel, player.PlayerName, overflow[k] + 1, old, compressed, cap, overflow.Count);
             }
         }
     }
