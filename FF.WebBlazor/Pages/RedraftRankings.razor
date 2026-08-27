@@ -73,14 +73,86 @@
         Rankings reflect scoring-adjusted median projections from your simulation engine.
     </MudAlert>
 }
-else if (!_loading && _filtered.Count == 0 && _queried && _error is null)
+else if (!_loading && DisplayCount == 0 && _queried && _error is null)
 {
     <MudAlert Severity="Severity.Info">
-        No projection data found for Season @_season Week @_week.
-        Run projections and simulations from the Admin console first.
+        No Week @_week simulation data AND no ADP data found for Season @_season.
+        Run <code>POST /api/v1/admin/sync-ffc-adp</code> (and, once Week @_week is simulated,
+        <code>POST /api/v1/admin/jobs/run-projections</code>) from the Admin console.
     </MudAlert>
 }
-else if (_filtered.Count > 0)
+else if (_isFallbackMode && _adpFiltered.Count > 0)
+{
+    @* FIX-PRESEASON-001 (2026-08-27): no Week N simulation data yet (preseason,
+       or this week just hasn't been simulated) — showing the ADP-based fallback
+       board instead. Separate table because Floor/Ceiling/Boom/Bust/Spread have
+       no ADP equivalent; showing zeros there would look like real projections. *@
+    <MudAlert Severity="Severity.Info" Class="mb-4" Icon="@Icons.Material.Filled.TrendingUp">
+        Week @_week simulation data isn't in yet — showing live ADP rankings instead
+        (2025 per-game average shown for context where available; blank for rookies).
+    </MudAlert>
+    <MudPaper Elevation="0" Class="fc-table-paper">
+        <MudTable Items="@_adpFiltered" Dense="true" Hover="true" Striped="false"
+                  FixedHeader="true" Height="calc(100vh - 420px)" SortLabel="Sort"
+                  Class="fc-table"
+                  OnRowClick="@((TableRowClickEventArgs<AdpRow> args) => { if (args.Item is not null) _ = OpenAdpPlayerCard(args.Item); })">
+            <HeaderContent>
+                <MudTh Style="width:44px;">#</MudTh>
+                <MudTh>
+                    <MudTableSortLabel SortBy="new Func<AdpRow, object>(x => x.PlayerName)">Player</MudTableSortLabel>
+                </MudTh>
+                <MudTh>Pos</MudTh>
+                <MudTh>Team</MudTh>
+                <MudTh Style="text-align:right;">
+                    <MudTableSortLabel InitialDirection="SortDirection.Ascending" SortBy="new Func<AdpRow, object>(x => x.Adp)">ADP</MudTableSortLabel>
+                </MudTh>
+                <MudTh Style="text-align:right;">Rd</MudTh>
+                <MudTh Style="text-align:right;">
+                    <MudTableSortLabel SortBy="new Func<AdpRow, object>(x => x.SeasonAvgPoints ?? 0)">2025 Avg Pts</MudTableSortLabel>
+                </MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="#">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary font-mono">
+                        @(_adpFiltered.IndexOf(context) + 1)
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Player">
+                    <MudText Typo="Typo.body2" Style="font-weight:600; color:var(--fc-cyan); cursor:pointer;">
+                        @context.PlayerName
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Pos">
+                    <MudChip T="string" Size="Size.Small" Class="@PositionClass(context.Position)">
+                        @context.Position
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Team">
+                    <MudText Typo="Typo.body2">@(context.NflTeam ?? "FA")</MudText>
+                </MudTd>
+                <MudTd DataLabel="ADP" Style="text-align:right;">
+                    <MudText Typo="Typo.body2" Class="font-mono fc-cyan" Style="font-weight:600;">
+                        @context.Adp.ToString("F1")
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Rd" Style="text-align:right;">
+                    <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                        @context.AdpRound
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="2025 Avg Pts" Style="text-align:right;">
+                    <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                        @(context.SeasonAvgPoints?.ToString("F1") ?? "—")
+                    </MudText>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 25, 50, 100, 250 }" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+else if (!_isFallbackMode && _filtered.Count > 0)
 {
     @* ── RANKINGS TABLE ──────────────────────────────────────────── *@
     <MudPaper Elevation="0" Class="fc-table-paper">
@@ -188,6 +260,13 @@ else if (_filtered.Count > 0)
     private List<SimRow> _filtered = [];
     private static readonly string[] Positions = ["", "QB", "RB", "WR", "TE"];
 
+    // FIX-PRESEASON-001 (2026-08-27): preseason ADP-based fallback state —
+    // see LoadRankings().
+    private bool _isFallbackMode = false;
+    private List<AdpRow> _adpAll = [];
+    private List<AdpRow> _adpFiltered = [];
+    private int DisplayCount => _isFallbackMode ? _adpFiltered.Count : _filtered.Count;
+
     // ── Lifecycle ────────────────────────────────────────────────────────
     protected override async Task OnInitializedAsync()
     {
@@ -203,17 +282,37 @@ else if (_filtered.Count > 0)
         _queried = true;
         _error = null;
         _all = [];
+        _adpAll = [];
+        _isFallbackMode = false;
         StateHasChanged();
 
         try
         {
             var position = Positions[_activeTab];
             var posParam = string.IsNullOrEmpty(position) ? "" : $"&position={position}";
-            var rows = await Http.GetFromJsonAsync<List<SimRow>>(
-                $"api/v1/projections/simulations?season={_season}&week={_week}{posParam}");
-            _all = rows ?? [];
+
+            if (_week > 0)
+            {
+                var rows = await Http.GetFromJsonAsync<List<SimRow>>(
+                    $"api/v1/projections/simulations?season={_season}&week={_week}{posParam}");
+                _all = rows ?? [];
+            }
+
             if (_all.Count == 0)
-                Snackbar.Add($"No simulation data for {_season} Week {_week}. Run simulate first.", Severity.Warning);
+            {
+                // FIX-PRESEASON-001 (2026-08-27): no Week N simulation data yet
+                // (preseason, or Week is 0, or this week just hasn't been
+                // simulated) — fall back to the live-ADP redraft board. Requires
+                // POST /api/v1/admin/sync-ffc-adp to have been run at least once.
+                _isFallbackMode = true;
+                var adpRows = await Http.GetFromJsonAsync<List<AdpRow>>(
+                    $"api/v1/drafttools/redraft-board?season={_season}{posParam}");
+                _adpAll = adpRows ?? [];
+                if (_adpAll.Count == 0)
+                    Snackbar.Add($"No simulation or ADP data found for {_season}. Run sync-ffc-adp from the Admin console first.", Severity.Warning);
+                else
+                    Snackbar.Add($"Week {_week} simulation data isn't available yet — showing preseason rankings from live ADP.", Severity.Info);
+            }
         }
         catch (Exception ex)
         {
@@ -230,13 +329,27 @@ else if (_filtered.Count > 0)
     private void ApplyFilters()
     {
         var position = Positions[_activeTab];
-        _filtered = _all
-            .Where(p => string.IsNullOrEmpty(position) || p.Position == position)
-            .Where(p => string.IsNullOrEmpty(_search) ||
-                        p.PlayerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                        p.NflTeam.Contains(_search, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(p => p.Median)
-            .ToList();
+
+        if (_isFallbackMode)
+        {
+            _adpFiltered = _adpAll
+                .Where(p => string.IsNullOrEmpty(position) || p.Position == position)
+                .Where(p => string.IsNullOrEmpty(_search) ||
+                            p.PlayerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                            (p.NflTeam ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(p => p.Adp)
+                .ToList();
+        }
+        else
+        {
+            _filtered = _all
+                .Where(p => string.IsNullOrEmpty(position) || p.Position == position)
+                .Where(p => string.IsNullOrEmpty(_search) ||
+                            p.PlayerName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                            p.NflTeam.Contains(_search, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(p => p.Median)
+                .ToList();
+        }
         StateHasChanged();
     }
 
@@ -292,6 +405,46 @@ else if (_filtered.Count > 0)
         await DialogService.ShowAsync<PlayerCardDialog>(row.PlayerName, parameters, options);
     }
 
+    // FIX-PRESEASON-001 (2026-08-27): player card for the ADP fallback table —
+    // mirrors OpenPlayerCard above but sourced from AdpRow instead of SimRow.
+    private async Task OpenAdpPlayerCard(AdpRow row)
+    {
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: row.SleeperPlayerId,
+            FullName: row.PlayerName,
+            Position: row.Position,
+            NflTeam: row.NflTeam,
+            Age: null,
+            DraftRound: null,
+            DraftPick: null,
+            CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{row.SleeperPlayerId}.jpg",
+            FantasyProsRank: null,
+            FantasyProsTier: null,
+            PffGrade: null,
+            PffRank: null,
+            ConsensusAdp: row.Adp,
+            DynastyScore: row.SeasonAvgPoints.HasValue ? (double)row.SeasonAvgPoints.Value : 0,
+            DraftCapitalScore: 0,
+            PositionalScore: 0,
+            ValuationBlendScore: 0,
+            FantasyProsScore: 0,
+            PffGradeScore: 0,
+            ConsensusAdpScore: 0,
+            AgeMultiplier: 0,
+            AthleticismSignalScore: 0,
+            AthleticismScore: null,
+            SpeedScore: null,
+            FortyYard: null);
+
+        var parameters = new DialogParameters<PlayerCardDialog>
+        {
+            { x => x.Player, data }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(row.PlayerName, parameters, options);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
     private static string PositionClass(string pos) => pos switch
     {
@@ -319,4 +472,15 @@ else if (_filtered.Count > 0)
         string ScoringFormat,
         decimal Spread,
         string GameScript);
+
+    // FIX-PRESEASON-001 (2026-08-27): mirrors RedraftBoardEntryDto from
+    // GetRedraftBoardQuery (api/v1/drafttools/redraft-board).
+    private record AdpRow(
+        string SleeperPlayerId,
+        string PlayerName,
+        string Position,
+        string? NflTeam,
+        double Adp,
+        int AdpRound,
+        decimal? SeasonAvgPoints);
 }
