@@ -33,9 +33,6 @@ public class GetLeagueRosterGradesQueryHandler(
         ["TE"] = 1
     };
 
-    private const double DepthThreshold = 49.0;
-    private const double DynastyThreshold = 21.0;
-
     private static readonly Dictionary<int, double> RoundValue = new()
     {
         [1] = 16.0,
@@ -97,8 +94,10 @@ public class GetLeagueRosterGradesQueryHandler(
         var maxRaw = rawCapitalScores.Values.DefaultIfEmpty(1.0).Max();
         if (maxRaw < 0.001) maxRaw = 1.0;
 
-        // Grade each team
-        var teams = rosters.Select(roster =>
+        // Compute raw scores for each team. Grades are assigned in a second
+        // pass below, RELATIVE to the other teams in this league — see the
+        // note above DepthScoreToGrade for why.
+        var rawTeams = rosters.Select(roster =>
         {
             // Depth Score
             double totalDepthScore = 0;
@@ -159,7 +158,10 @@ public class GetLeagueRosterGradesQueryHandler(
                 playerDynastyBlend = penalisedValues.Average();
             }
 
-            var dynastyScore = (playerDynastyBlend * 0.85) + (draftCapitalScore * 0.35 * 0.15);
+            // Bug fix: this was previously `draftCapitalScore * 0.35 * 0.15`
+            // (≈5.25% weight instead of the intended 15%), leaving draft
+            // capital almost meaningless in the blend.
+            var dynastyScore = (playerDynastyBlend * 0.85) + (draftCapitalScore * 0.15);
 
             // Top assets by sim median (unpenalised — these are raw assets)
             var topAssets = roster.PlayerIds
@@ -180,20 +182,46 @@ public class GetLeagueRosterGradesQueryHandler(
                 })
                 .ToList();
 
-            var profile = ComputeTeamProfile(depthScore, dynastyScore);
+            return (
+                roster.SleeperRosterId, roster.TeamName, roster.OwnerName,
+                DepthScore: depthScore, DynastyScore: dynastyScore,
+                DraftCapitalScore: draftCapitalScore, OwnedPickCount: ownedPickCount,
+                TopAssets: topAssets);
+        })
+        .ToList();
+
+        // ── Grade RELATIVE to this league, not against a fixed score ──────
+        // FAN-95 follow-up (2026-08-26): DepthScoreToGrade/DynastyScoreToGrade
+        // used to be fixed absolute cutoffs. Those were calibrated once
+        // (GRADE-FIX-001, May) against whatever TradeValue/score distribution
+        // existed that day — and drifted every time the DFV pipeline's scale
+        // changed since (P2 exponent 0.6→0.9 on 5/19, guardrails added on
+        // 8/25), silently pushing every team toward the same grade again.
+        // Percentile-within-league is self-correcting: it always reflects
+        // "how does my team compare to the ~10-14 others in THIS league",
+        // which is what the page is actually for, and never needs
+        // recalibrating when the underlying score scale moves.
+        var depthRank = RankByDescending(rawTeams, t => t.DepthScore);
+        var dynastyRank = RankByDescending(rawTeams, t => t.DynastyScore);
+
+        var teams = rawTeams.Select((t, idx) =>
+        {
+            var depthFraction = depthRank[idx];
+            var dynastyFraction = dynastyRank[idx];
+            var profile = ComputeTeamProfile(depthFraction, dynastyFraction);
 
             return new TeamRosterGradeDto(
-                SleeperRosterId: roster.SleeperRosterId,
-                TeamName: roster.TeamName,
-                OwnerName: roster.OwnerName,
-                DepthGrade: DepthScoreToGrade(depthScore),
-                DepthScore: Math.Round(depthScore, 1),
-                DynastyGrade: DynastyScoreToGrade(dynastyScore),
-                DynastyScore: Math.Round(dynastyScore, 1),
+                SleeperRosterId: t.SleeperRosterId,
+                TeamName: t.TeamName,
+                OwnerName: t.OwnerName,
+                DepthGrade: RankFractionToGrade(depthFraction),
+                DepthScore: Math.Round(t.DepthScore, 1),
+                DynastyGrade: RankFractionToGrade(dynastyFraction),
+                DynastyScore: Math.Round(t.DynastyScore, 1),
                 TeamProfile: profile,
-                DraftCapitalScore: draftCapitalScore,
-                OwnedPickCount: ownedPickCount,
-                TopAssets: topAssets);
+                DraftCapitalScore: t.DraftCapitalScore,
+                OwnedPickCount: t.OwnedPickCount,
+                TopAssets: t.TopAssets);
         })
         .OrderByDescending(t => t.DepthScore)
         .ToList();
@@ -205,12 +233,42 @@ public class GetLeagueRosterGradesQueryHandler(
     }
 
     /// <summary>
-    /// Returns a 0.0–1.0 multiplier to apply to TradeValue for dynasty scoring.
-    /// Only penalises TE and RB non-starters. QB/WR unaffected.
-    /// Age gate: if the blocking TE1 is 28+, penalty is softened by 50%
-    /// (the blocker may age out soon, so the backup has more upside).
+    /// Ranks items by a score (descending — best first) and returns each
+    /// item's rank fraction in the SAME ORDER as the input list: 0.0 = best
+    /// in the league, 1.0 = worst. Ties share the same fraction (average
+    /// rank) so two teams with an identical score get the same grade
+    /// instead of an arbitrary tiebreak deciding one is a letter grade
+    /// better than the other.
     /// </summary>
-    
+    private static double[] RankByDescending<T>(List<T> items, Func<T, double> selector)
+    {
+        var n = items.Count;
+        var fractions = new double[n];
+        if (n <= 1) return fractions; // single team in the league — no basis for relative grading
+
+        var order = Enumerable.Range(0, n)
+            .OrderByDescending(i => selector(items[i]))
+            .ToList();
+
+        var i = 0;
+        while (i < n)
+        {
+            var j = i;
+            while (j < n && selector(items[order[j]]).Equals(selector(items[order[i]]))) j++;
+            var avgRank = (i + j - 1) / 2.0; // 0-based average rank across the tied group
+            var fraction = avgRank / (n - 1);
+            for (var k = i; k < j; k++) fractions[order[k]] = fraction;
+            i = j;
+        }
+
+        return fractions;
+    }
+
+    /// <summary>
+    /// Sums pick-round value (round 1 = 16, decaying by round), discounted
+    /// by how many years out the pick is. Used as the draft capital
+    /// component of DynastyScore.
+    /// </summary>
     private static double ComputeRawDraftCapital(List<RosterPickDto> picks, int currentSeason)
     {
         var total = 0.0;
@@ -223,8 +281,14 @@ public class GetLeagueRosterGradesQueryHandler(
         return total;
     }
 
-    private static string ComputeTeamProfile(double depthScore, double dynastyScore) =>
-        (depthScore >= DepthThreshold, dynastyScore >= DynastyThreshold) switch
+    /// <summary>
+    /// Profile is now based on whether a team sits in the top half of ITS
+    /// league on depth (win-now production) vs dynasty (future value) —
+    /// same self-correcting rationale as the grade fractions above, instead
+    /// of comparing against a fixed score that goes stale.
+    /// </summary>
+    private static string ComputeTeamProfile(double depthRankFraction, double dynastyRankFraction) =>
+        (depthRankFraction <= 0.5, dynastyRankFraction <= 0.5) switch
         {
             (true, true) => "Contender",
             (true, false) => "Win-Now",
@@ -232,31 +296,23 @@ public class GetLeagueRosterGradesQueryHandler(
             (false, false) => "Rebuilding"
         };
 
-    private static string DepthScoreToGrade(double score) => score switch
+    /// <summary>
+    /// Maps a within-league rank fraction (0.0 = best team in the league,
+    /// 1.0 = worst) to a letter grade. Replaces the old fixed-score cutoffs
+    /// in DepthScoreToGrade/DynastyScoreToGrade — see the note above where
+    /// this is called. Buckets are sized for a typical 10-14 team dynasty
+    /// league (roughly: top ~1 team A+, next ~2 A, etc.), tunable via the
+    /// calibration harness like everything else in this pipeline.
+    /// </summary>
+    private static string RankFractionToGrade(double rankFraction) => rankFraction switch
     {
-        >= 58 => "A",
-        >= 55 => "A-",
-        >= 52 => "B+",
-        >= 49 => "B",
-        >= 46 => "B-",
-        >= 43 => "C+",
-        >= 40 => "C",
-        >= 35 => "C-",
-        >= 28 => "D",
-        _ => "F"
-    };
-
-    private static string DynastyScoreToGrade(double score) => score switch
-    {
-        >= 35 => "A+",
-        >= 30 => "A",
-        >= 27 => "A-",
-        >= 24 => "B+",
-        >= 21 => "B",
-        >= 18 => "B-",
-        >= 15 => "C+",
-        >= 12 => "C",
-        >= 9 => "D",
+        <= 0.08 => "A+",
+        <= 0.20 => "A",
+        <= 0.35 => "B+",
+        <= 0.50 => "B",
+        <= 0.65 => "C+",
+        <= 0.80 => "C",
+        <= 0.92 => "D",
         _ => "F"
     };
 }
