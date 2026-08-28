@@ -90,10 +90,10 @@
             </div>
         }
 
-        @if (_sessionId is not null && !_isRedraftMode)
+        @if (_sessionId is not null)
         {
             <MudCheckBox Value="_hideDrafted"
-                         ValueChanged="@((bool v) => { _hideDrafted = v; ApplyRookieFilter(); })"
+                         ValueChanged="@((bool v) => { _hideDrafted = v; if (_isRedraftMode) ApplyRedraftFilter(); else ApplyRookieFilter(); })"
                          Label="Hide Drafted" Size="Size.Small" Color="Color.Primary" Class="ml-2" />
         }
 
@@ -179,11 +179,11 @@
 <MudGrid Spacing="3">
 
     @* ── MAIN BOARD ──────────────────────────────────────────────────── *@
-    @* Note: ROSTER NEEDS / BEST AVAILABLE / BEST FIT sidebar (below) stays
-       dynasty-only for now — it's keyed off RookiePlayerDto/DynastyScore and
-       needs its own redraft-typed version rather than a blind reuse. Board
-       goes full-width for redraft even with a live session running. *@
-    <MudItem xs="12" md="@(_sessionId is not null && !_isRedraftMode ? 9 : 12)">
+    @* Sidebar (below) now works in both modes. Roster Needs + My Picks reuse
+       the same session/pick state either way. Best Available / Best Fit are
+       scored off ProjectedPoints (not DynastyScore) in redraft mode — see
+       RecomputeRedraftNeedsAndBestAvailable. *@
+    <MudItem xs="12" md="@(_sessionId is not null ? 9 : 12)">
         <MudPaper Class="fc-card" Elevation="0">
             @if (_loading)
             {
@@ -201,24 +201,65 @@
                 else
                 {
                     <MudTable Items="@_filteredRedraft" Hover="true" Dense="true"
-                              Breakpoint="Breakpoint.Sm" Elevation="0" Class="fc-table">
+                              Breakpoint="Breakpoint.Sm" Elevation="0" Class="fc-table"
+                              RowClassFunc="@RedraftRowClass">
                         <HeaderContent>
                             <MudTh>Rank</MudTh>
                             <MudTh>Player</MudTh>
                             <MudTh>Pos</MudTh>
                             <MudTh>Team</MudTh>
                             <MudTh Style="text-align:right">@(_isPreseasonAdpFallback ? "2025 Avg Pts" : "Proj. Pts (Wk 1)")</MudTh>
+                            <MudTh>Status</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="Rank"><MudText Typo="Typo.body2" Style="color:#9CA3AF;">#@context.Rank</MudText></MudTd>
                             <MudTd DataLabel="Player">
                                 <MudText Typo="Typo.body2" Style="font-weight:600; color:var(--fc-cyan);">@context.PlayerName</MudText>
+                                @if (IsDrafted(context.SleeperPlayerId))
+                                {
+                                    var detail = GetPickDetail(context.SleeperPlayerId);
+                                    <MudText Typo="Typo.caption" Style="display:block; font-style:italic; opacity:0.55;">
+                                        @if (detail is not null)
+                                        {
+                                            @(string.IsNullOrEmpty(detail.PickedByTeamName)
+                                                ? $"Drafted · {detail.Round}.{detail.Slot:D2}"
+                                                : $"Drafted by {detail.PickedByTeamName} · {detail.Round}.{detail.Slot:D2}")
+                                        }
+                                        else
+                                        {
+                                            @("Drafted")
+                                        }
+                                    </MudText>
+                                }
                             </MudTd>
                             <MudTd DataLabel="Pos">
                                 <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(context.Position)" Variant="Variant.Filled">@context.Position</MudChip>
                             </MudTd>
                             <MudTd DataLabel="Team"><MudText Typo="Typo.body2">@(context.NflTeam ?? "FA")</MudText></MudTd>
                             <MudTd DataLabel="@(_isPreseasonAdpFallback ? "2025 Avg Pts" : "Proj. Pts (Wk 1)")" Style="text-align:right; font-family:'JetBrains Mono',monospace; color:var(--fc-cyan);">@context.ProjectedPoints.ToString("F1")</MudTd>
+                            <MudTd DataLabel="Status">
+                                @if (IsDrafted(context.SleeperPlayerId))
+                                {
+                                    @if (IsMyPick(context.SleeperPlayerId))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" Style="font-weight:700;">MY PICK</MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Style="opacity:0.4;">—</MudText>
+                                    }
+                                }
+                                else if (_sessionId is not null)
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.HowToVote"
+                                               OnClick="@(() => MarkDrafted(context))"
+                                               Style="font-size:0.72rem; font-weight:700; height:28px;">
+                                        DRAFT
+                                    </MudButton>
+                                }
+                                else { <MudText Typo="Typo.caption" Class="mud-text-secondary">—</MudText> }
+                            </MudTd>
                         </RowTemplate>
                     </MudTable>
                 }
@@ -338,7 +379,7 @@
     </MudItem>
 
     @* ── RIGHT RAIL: ROSTER NEEDS + MY PICKS + BEST PICK ─────────────── *@
-    @if (_sessionId is not null && !_isRedraftMode)
+    @if (_sessionId is not null)
     {
         <MudItem xs="12" md="3">
             <div style="position:sticky; top:80px; display:flex; flex-direction:column; gap:12px;">
@@ -469,55 +510,89 @@
                             <MudIcon Icon="@Icons.Material.Filled.Info" Style="font-size:0.85rem; color:var(--mud-palette-text-secondary);" />
                         </MudTooltip>
                     </div>
-                    @if (_bestAvailable.Count == 0)
+                    @if (_isRedraftMode)
                     {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">No available players.</MudText>
+                        @if (_bestAvailableRedraft.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">No available players.</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1"
+                                     Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
+                                Best Player Available
+                            </MudText>
+                            @foreach (var rec in _bestAvailableRedraft)
+                            {
+                                bool isNeed = _rosterNeeds.Any(n => n.Position == rec.Position && n.Level == "NEED");
+                                <div class="d-flex align-center gap-2 mb-1">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(rec.Position)"
+                                             Variant="Variant.Filled"
+                                             Style="height:20px; font-size:0.65rem; min-width:32px; flex-shrink:0;">
+                                        @rec.Position
+                                    </MudChip>
+                                    <MudText Typo="Typo.body2"
+                                             Style="font-size:0.75rem; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                        @rec.PlayerName
+                                    </MudText>
+                                    @if (isNeed)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Star"
+                                                 Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
+                                    }
+                                    <MudText Typo="Typo.caption"
+                                             Style="font-family:'JetBrains Mono',monospace; color:var(--fc-cyan); min-width:28px; text-align:right; flex-shrink:0; font-size:0.72rem;">
+                                        @rec.ProjectedPoints.ToString("F1")
+                                    </MudText>
+                                </div>
+                            }
+
+                            @if (_bestFitRedraft.Count > 0)
+                            {
+                                <MudDivider Class="my-2" />
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1"
+                                         Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
+                                    Best Fit (Roster Need)
+                                </MudText>
+                                @foreach (var rec in _bestFitRedraft)
+                                {
+                                    <div class="d-flex align-center gap-2 mb-1">
+                                        <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(rec.Position)"
+                                                 Variant="Variant.Filled"
+                                                 Style="height:20px; font-size:0.65rem; min-width:32px; flex-shrink:0;">
+                                            @rec.Position
+                                        </MudChip>
+                                        <MudText Typo="Typo.body2"
+                                                 Style="font-size:0.75rem; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            @rec.PlayerName
+                                        </MudText>
+                                        <MudIcon Icon="@Icons.Material.Filled.Star"
+                                                 Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
+                                        <MudText Typo="Typo.caption"
+                                                 Style="font-family:'JetBrains Mono',monospace; color:var(--fc-cyan); min-width:28px; text-align:right; flex-shrink:0; font-size:0.72rem;">
+                                            @rec.ProjectedPoints.ToString("F1")
+                                        </MudText>
+                                    </div>
+                                }
+                            }
+                        }
                     }
                     else
                     {
-                        @* BPA header *@
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1"
-                                 Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
-                            Best Player Available
-                        </MudText>
-                        @foreach (var rec in _bestAvailable)
+                        @if (_bestAvailable.Count == 0)
                         {
-                            bool isNeed = _rosterNeeds.Any(n => n.Position == rec.Position && n.Level == "NEED");
-                            <div class="d-flex align-center gap-2 mb-1">
-                                <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(rec.Position)"
-                                         Variant="Variant.Filled"
-                                         Style="height:20px; font-size:0.65rem; min-width:32px; flex-shrink:0;">
-                                    @rec.Position
-                                </MudChip>
-                                <div Style="flex:1; min-width:0; overflow:hidden;">
-                                    <MudButton Variant="Variant.Text" Class="pa-0"
-                                               Style="font-size:0.75rem; font-weight:600; text-transform:none; min-width:0; height:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:100%;"
-                                               OnClick="@(() => OpenPlayerCard(rec))">
-                                        @rec.FullName
-                                    </MudButton>
-                                </div>
-                                @if (isNeed)
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.Star"
-                                             Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
-                                }
-                                <MudText Typo="Typo.caption"
-                                         Style="font-family:'JetBrains Mono',monospace; color:var(--fc-cyan); min-width:24px; text-align:right; flex-shrink:0; font-size:0.72rem;">
-                                    @rec.DynastyScore.ToString("F0")
-                                </MudText>
-                            </div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">No available players.</MudText>
                         }
-
-                        @* Best Fit — only shown when there are NEED positions with available players *@
-                        @if (_bestFit.Count > 0)
+                        else
                         {
-                            <MudDivider Class="my-2" />
+                            @* BPA header *@
                             <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1"
                                      Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
-                                Best Fit (Roster Need)
+                                Best Player Available
                             </MudText>
-                            @foreach (var rec in _bestFit)
+                            @foreach (var rec in _bestAvailable)
                             {
+                                bool isNeed = _rosterNeeds.Any(n => n.Position == rec.Position && n.Level == "NEED");
                                 <div class="d-flex align-center gap-2 mb-1">
                                     <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(rec.Position)"
                                              Variant="Variant.Filled"
@@ -531,13 +606,49 @@
                                             @rec.FullName
                                         </MudButton>
                                     </div>
-                                    <MudIcon Icon="@Icons.Material.Filled.Star"
-                                             Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
+                                    @if (isNeed)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Star"
+                                                 Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
+                                    }
                                     <MudText Typo="Typo.caption"
                                              Style="font-family:'JetBrains Mono',monospace; color:var(--fc-cyan); min-width:24px; text-align:right; flex-shrink:0; font-size:0.72rem;">
                                         @rec.DynastyScore.ToString("F0")
                                     </MudText>
                                 </div>
+                            }
+
+                            @* Best Fit — only shown when there are NEED positions with available players *@
+                            @if (_bestFit.Count > 0)
+                            {
+                                <MudDivider Class="my-2" />
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1"
+                                         Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
+                                    Best Fit (Roster Need)
+                                </MudText>
+                                @foreach (var rec in _bestFit)
+                                {
+                                    <div class="d-flex align-center gap-2 mb-1">
+                                        <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(rec.Position)"
+                                                 Variant="Variant.Filled"
+                                                 Style="height:20px; font-size:0.65rem; min-width:32px; flex-shrink:0;">
+                                            @rec.Position
+                                        </MudChip>
+                                        <div Style="flex:1; min-width:0; overflow:hidden;">
+                                            <MudButton Variant="Variant.Text" Class="pa-0"
+                                                       Style="font-size:0.75rem; font-weight:600; text-transform:none; min-width:0; height:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:100%;"
+                                                       OnClick="@(() => OpenPlayerCard(rec))">
+                                                @rec.FullName
+                                            </MudButton>
+                                        </div>
+                                        <MudIcon Icon="@Icons.Material.Filled.Star"
+                                                 Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
+                                        <MudText Typo="Typo.caption"
+                                                 Style="font-family:'JetBrains Mono',monospace; color:var(--fc-cyan); min-width:24px; text-align:right; flex-shrink:0; font-size:0.72rem;">
+                                            @rec.DynastyScore.ToString("F0")
+                                        </MudText>
+                                    </div>
+                                }
                             }
                         }
                     }
@@ -604,6 +715,8 @@
     private List<RosterNeedEntry> _rosterNeeds = [];
     private List<RookiePlayerDto> _bestAvailable = [];   // pure BPA by score
     private List<RookiePlayerDto> _bestFit = [];          // best available at NEED positions
+    private List<RedraftBoardPlayerDto> _bestAvailableRedraft = [];  // redraft: scored by ProjectedPoints
+    private List<RedraftBoardPlayerDto> _bestFitRedraft = [];
     private Dictionary<string, int>? _liveRosterPositionCounts;
     private bool _rosterNeedsStale = false;
 
@@ -620,7 +733,7 @@
     private bool _startingSession = false;
     private bool _recordingPick = false;
     private bool _showPickDialog = false;
-    private RookiePlayerDto? _pendingPick;
+    private PendingPickInfo? _pendingPick;
     private int _pickRound = 1;
     private int _pickSlot = 1;
     private string? _pickedByTeamName;
@@ -677,6 +790,7 @@
         _redraftPlayers = []; _filteredRedraft = []; _isPreseasonAdpFallback = false;
         _totalPicksInDraft = 0; _remainingPicks = [];
         _rosterNeeds = []; _bestAvailable = []; _bestFit = [];
+        _bestAvailableRedraft = []; _bestFitRedraft = [];
         _liveRosterPositionCounts = null; _rosterNeedsStale = false;
     }
 
@@ -716,7 +830,7 @@
             }
             else
             {
-                RecomputeNeedsAndBestAvailable();
+                if (_isRedraftMode) RecomputeRedraftNeedsAndBestAvailable(); else RecomputeNeedsAndBestAvailable();
                 Snackbar.Add("Draft session resumed (manual mode)", Severity.Info);
             }
 
@@ -781,7 +895,17 @@
             }
 
             if (changed || result.LiveRosterPositionCounts is not null || result.RemainingPicks.Count > 0)
-                RecomputeNeedsAndBestAvailable();
+            {
+                if (_isRedraftMode) RecomputeRedraftNeedsAndBestAvailable(); else RecomputeNeedsAndBestAvailable();
+            }
+
+            // Re-apply the active filter so newly-synced picks actually drop
+            // out of (or get marked drafted in) the visible table — not just
+            // reflected in the Needs/Best Available panels.
+            if (changed)
+            {
+                if (_isRedraftMode) ApplyRedraftFilter(); else ApplyRookieFilter();
+            }
 
             await InvokeAsync(() =>
             {
@@ -808,7 +932,10 @@
         finally { _syncing = false; }
     }
 
-    private void RecomputeNeedsAndBestAvailable()
+    // Shared by both modes — position-count needs only depend on session/pick
+    // state, not on which player pool (dynasty rookies vs redraft board) is
+    // loaded, so this stays mode-agnostic.
+    private List<RosterNeedEntry> ComputeRosterNeeds()
     {
         var combined = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         if (_liveRosterPositionCounts is not null)
@@ -827,12 +954,16 @@
             _    => "OK"
         };
 
-        _rosterNeeds = new[] { "RB", "WR", "TE", "QB" }.Select(pos =>
+        return new[] { "RB", "WR", "TE", "QB" }.Select(pos =>
         {
             int total = combined.TryGetValue(pos, out var c) ? c : 0;
             return new RosterNeedEntry(pos, total, NeedLevel(pos, total));
         }).ToList();
+    }
 
+    private void RecomputeNeedsAndBestAvailable()
+    {
+        _rosterNeeds = ComputeRosterNeeds();
         var needPositions = _rosterNeeds.Where(n => n.Level == "NEED").Select(n => n.Position).ToHashSet();
 
         var available = _allRookies.Where(r => !_picks.Contains(r.SleeperPlayerId)).ToList();
@@ -854,6 +985,36 @@
                 .Where(r => r is not null)
                 .Select(r => r!)
                 .OrderByDescending(r => r.DynastyScore)
+                .Take(3)
+                .ToList();
+
+        _rosterNeedsStale = false;
+    }
+
+    // Redraft counterpart — same needs calc, but Best Available / Best Fit
+    // score off ProjectedPoints (Week-N sim median, or ADP-fallback season
+    // avg pts) since redraft players don't carry a DynastyScore.
+    private void RecomputeRedraftNeedsAndBestAvailable()
+    {
+        _rosterNeeds = ComputeRosterNeeds();
+        var needPositions = _rosterNeeds.Where(n => n.Level == "NEED").Select(n => n.Position).ToHashSet();
+
+        var available = _redraftPlayers.Where(r => !_picks.Contains(r.SleeperPlayerId)).ToList();
+
+        _bestAvailableRedraft = available
+            .OrderByDescending(r => r.ProjectedPoints)
+            .Take(3)
+            .ToList();
+
+        _bestFitRedraft = needPositions.Count == 0
+            ? []
+            : needPositions
+                .Select(pos => available.Where(r => r.Position == pos)
+                                        .OrderByDescending(r => r.ProjectedPoints)
+                                        .FirstOrDefault())
+                .Where(r => r is not null)
+                .Select(r => r!)
+                .OrderByDescending(r => r.ProjectedPoints)
                 .Take(3)
                 .ToList();
 
@@ -950,6 +1111,7 @@
                     Snackbar.Add("No Week 1 sim or ADP data found — run sync-ffc-adp from the Admin console.", Severity.Warning);
             }
             ApplyRedraftFilter();
+            RecomputeRedraftNeedsAndBestAvailable();
         }
         catch { Snackbar.Add("Failed to load redraft rankings.", Severity.Error); _redraftPlayers = []; _filteredRedraft = []; }
         finally { _loading = false; }
@@ -969,6 +1131,7 @@
     private void ApplyRedraftFilter()
     {
         var q = _redraftPlayers.AsEnumerable();
+        if (_hideDrafted) q = q.Where(r => !_picks.Contains(r.SleeperPlayerId));
         if (!string.IsNullOrWhiteSpace(_searchText))
             q = q.Where(r => r.PlayerName.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
                 || (r.NflTeam?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false));
@@ -1017,7 +1180,13 @@
         finally { _startingSession = false; }
     }
 
-    private void MarkDrafted(RookiePlayerDto player)
+    private void MarkDrafted(RookiePlayerDto player) =>
+        MarkDrafted(new PendingPickInfo(player.SleeperPlayerId, player.FullName, player.Position, player.NflTeam));
+
+    private void MarkDrafted(RedraftBoardPlayerDto player) =>
+        MarkDrafted(new PendingPickInfo(player.SleeperPlayerId, player.PlayerName, player.Position, player.NflTeam));
+
+    private void MarkDrafted(PendingPickInfo player)
     {
         _pendingPick = player;
         var league = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId);
@@ -1049,7 +1218,8 @@
                     _myPickIds.Add(_pendingPick.SleeperPlayerId);
                     _myPicksList.Add(new MyPickEntry(_pendingPick.SleeperPlayerId, _pendingPick.FullName, _pendingPick.Position, _pendingPick.NflTeam, _pickRound, _pickSlot));
                 }
-                ApplyRookieFilter(); RecomputeNeedsAndBestAvailable();
+                if (_isRedraftMode) { ApplyRedraftFilter(); RecomputeRedraftNeedsAndBestAvailable(); }
+                else { ApplyRookieFilter(); RecomputeNeedsAndBestAvailable(); }
                 _showPickDialog = false;
                 Snackbar.Add($"{_pendingPick.FullName} marked as drafted.", Severity.Success);
             }
@@ -1090,6 +1260,7 @@
     }
 
     private string RowClass(RookiePlayerDto row, int _) => IsDrafted(row.SleeperPlayerId) ? "fc-row-drafted" : string.Empty;
+    private string RedraftRowClass(RedraftBoardPlayerDto row, int _) => IsDrafted(row.SleeperPlayerId) ? "fc-row-drafted" : string.Empty;
 
     private static Color GetPositionColor(string pos) => pos switch
     {
@@ -1134,6 +1305,10 @@
     // FIX-PRESEASON-001 (2026-08-27): mirrors RedraftBoardEntryDto from
     // GetRedraftBoardQuery (api/v1/drafttools/redraft-board) — the preseason fallback.
     private record RedraftBoardEntryDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, double Adp, int AdpRound, decimal? SeasonAvgPoints);
+    // Common shape for the Mark-Drafted dialog — built from either
+    // RookiePlayerDto (dynasty) or RedraftBoardPlayerDto (redraft) so the
+    // dialog/ConfirmPick flow doesn't need to know which mode triggered it.
+    private record PendingPickInfo(string SleeperPlayerId, string FullName, string Position, string? NflTeam);
     private record MyPickEntry(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, int Round, int Slot);
     private record PickDetailEntry(string PlayerName, int Round, int Slot, string? PickedByTeamName);
     private record RemainingPickEntry(int Round, int Slot, string TeamName, string SleeperRosterId, bool IsMyPick);
