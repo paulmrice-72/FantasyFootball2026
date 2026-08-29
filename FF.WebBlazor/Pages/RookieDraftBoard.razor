@@ -214,7 +214,11 @@
                         <RowTemplate>
                             <MudTd DataLabel="Rank"><MudText Typo="Typo.body2" Style="color:#9CA3AF;">#@context.Rank</MudText></MudTd>
                             <MudTd DataLabel="Player">
-                                <MudText Typo="Typo.body2" Style="font-weight:600; color:var(--fc-cyan);">@context.PlayerName</MudText>
+                                <MudButton Variant="Variant.Text" Class="pa-0"
+                                           Style="@($"font-weight:600; text-transform:none; min-width:0; color:var(--fc-cyan); {(IsDrafted(context.SleeperPlayerId) ? "opacity:0.55;" : "")}")"
+                                           OnClick="@(() => OpenPlayerCard(context))">
+                                    @context.PlayerName
+                                </MudButton>
                                 @if (IsDrafted(context.SleeperPlayerId))
                                 {
                                     var detail = GetPickDetail(context.SleeperPlayerId);
@@ -391,7 +395,7 @@
                                  Style="font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--fc-cyan); font-size:0.7rem;">
                             ROSTER NEEDS
                         </MudText>
-                        <MudTooltip Text="Current dynasty roster + picks in this draft">
+                        <MudTooltip Text="Current roster + picks in this draft">
                             <MudIcon Icon="@Icons.Material.Filled.Info" Style="font-size:0.85rem; color:var(--mud-palette-text-secondary);" />
                         </MudTooltip>
                     </div>
@@ -473,6 +477,14 @@
                                             @pick.PlayerName
                                         </MudButton>
                                     }
+                                    else if (_redraftPlayers.FirstOrDefault(r => r.SleeperPlayerId == pick.SleeperPlayerId) is { } redraftCardPlayer)
+                                    {
+                                        <MudButton Variant="Variant.Text" Class="pa-0"
+                                                   Style="font-weight:600; text-transform:none; min-width:0; height:auto; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;"
+                                                   OnClick="@(() => OpenPlayerCard(redraftCardPlayer))">
+                                            @pick.PlayerName
+                                        </MudButton>
+                                    }
                                     else
                                     {
                                         <MudText Typo="Typo.body2" Style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@pick.PlayerName</MudText>
@@ -531,10 +543,13 @@
                                              Style="height:20px; font-size:0.65rem; min-width:32px; flex-shrink:0;">
                                         @rec.Position
                                     </MudChip>
-                                    <MudText Typo="Typo.body2"
-                                             Style="font-size:0.75rem; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                        @rec.PlayerName
-                                    </MudText>
+                                    <div Style="flex:1; min-width:0; overflow:hidden;">
+                                        <MudButton Variant="Variant.Text" Class="pa-0"
+                                                   Style="font-size:0.75rem; font-weight:600; text-transform:none; min-width:0; height:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:100%;"
+                                                   OnClick="@(() => OpenPlayerCard(rec))">
+                                            @rec.PlayerName
+                                        </MudButton>
+                                    </div>
                                     @if (isNeed)
                                     {
                                         <MudIcon Icon="@Icons.Material.Filled.Star"
@@ -562,10 +577,13 @@
                                                  Style="height:20px; font-size:0.65rem; min-width:32px; flex-shrink:0;">
                                             @rec.Position
                                         </MudChip>
-                                        <MudText Typo="Typo.body2"
-                                                 Style="font-size:0.75rem; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                            @rec.PlayerName
-                                        </MudText>
+                                        <div Style="flex:1; min-width:0; overflow:hidden;">
+                                            <MudButton Variant="Variant.Text" Class="pa-0"
+                                                       Style="font-size:0.75rem; font-weight:600; text-transform:none; min-width:0; height:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:100%;"
+                                                       OnClick="@(() => OpenPlayerCard(rec))">
+                                                @rec.PlayerName
+                                            </MudButton>
+                                        </div>
                                         <MudIcon Icon="@Icons.Material.Filled.Star"
                                                  Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
                                         <MudText Typo="Typo.caption"
@@ -1233,7 +1251,7 @@
     private bool IsMyPick(string id) => _myPickIds.Contains(id);
     private PickDetailEntry? GetPickDetail(string id) => _pickDetails.TryGetValue(id, out var d) ? d : null;
 
-    private async Task OpenPlayerCard(RookiePlayerDto player)
+    private Task OpenPlayerCard(RookiePlayerDto player)
     {
         var cardData = new PlayerCardDialog.PlayerCardData(
             SleeperPlayerId: player.SleeperPlayerId, FullName: player.FullName,
@@ -1250,12 +1268,42 @@
             SpeedScore: player.SpeedScore, FortyYard: player.FortyYard,
             LeagueId: LeagueState.ActiveLeagueId);
 
+        return ShowPlayerCardDialog(cardData);
+    }
+
+    // Redraft mode: RedraftBoardPlayerDto carries only the ADP/projection fields
+    // (no dynasty scoring inputs). PlayerCardDialog lazy-loads everything else
+    // itself from /api/v1/players/{id}/... by SleeperPlayerId, so the missing
+    // fields below just default and the card still populates.
+    private Task OpenPlayerCard(RedraftBoardPlayerDto player)
+    {
+        var cardData = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: player.SleeperPlayerId, FullName: player.PlayerName,
+            Position: player.Position, NflTeam: player.NflTeam, Age: null,
+            DraftRound: null, DraftPick: null,
+            CollegeTeam: null, HeadshotUrl: null,
+            FantasyProsRank: null, FantasyProsTier: null,
+            PffGrade: null, PffRank: null, ConsensusAdp: null,
+            DynastyScore: 0, DraftCapitalScore: 0,
+            PositionalScore: 0, ValuationBlendScore: 0,
+            FantasyProsScore: 0, PffGradeScore: 0,
+            ConsensusAdpScore: 0, AgeMultiplier: 0,
+            AthleticismSignalScore: 0, AthleticismScore: null,
+            SpeedScore: null, FortyYard: null,
+            LeagueId: LeagueState.ActiveLeagueId,
+            IsRedraftContext: true);
+
+        return ShowPlayerCardDialog(cardData);
+    }
+
+    private async Task ShowPlayerCardDialog(PlayerCardDialog.PlayerCardData cardData)
+    {
         var parameters = new DialogParameters<PlayerCardDialog>
         {
             { x => x.Player, cardData },
             { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Overview }
         };
-        await DialogService.ShowAsync<PlayerCardDialog>(player.FullName, parameters,
+        await DialogService.ShowAsync<PlayerCardDialog>(cardData.FullName, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, BackdropClick = true });
     }
 

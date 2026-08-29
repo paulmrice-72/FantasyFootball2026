@@ -40,7 +40,8 @@ public class SyncRedraftAdpJob(
             {
                 SleeperPlayerId = p.SleeperPlayerId,
                 PlayerName = p.PlayerName,
-                Position = p.Position
+                Position = p.Position,
+                NflTeam = p.NflTeam
             })
             .ToListAsync(ct);
 
@@ -89,6 +90,14 @@ public class SyncRedraftAdpJob(
                 .Set(x => x.SleeperPlayerId, match.SleeperPlayerId!)
                 .Set(x => x.PlayerName, entry.Name)
                 .Set(x => x.Position, entry.Position)
+                // FFC's own ADP feed leaves "team" null/empty for a chunk of
+                // established veterans (offseason data gap on their end) —
+                // fall back to the roster team we already have on file from
+                // dynasty_valuations (kept current by PlayerSyncJob) rather
+                // than showing those players as free agents.
+                .Set(x => x.NflTeam, string.IsNullOrEmpty(entry.Team)
+                    ? (string.IsNullOrEmpty(match.NflTeam) ? null : match.NflTeam)
+                    : entry.Team)
                 .Set(x => x.Adp, entry.Adp)
                 .Set(x => x.AdpRound, entry.AdpRound)
                 .Set(x => x.Season, season)
@@ -122,5 +131,6 @@ public class SyncRedraftAdpJob(
         public string? SleeperPlayerId { get; set; }
         public string? PlayerName { get; set; }
         public string? Position { get; set; }
+        public string? NflTeam { get; set; }
     }
 }
