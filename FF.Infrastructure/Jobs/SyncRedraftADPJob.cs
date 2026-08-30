@@ -63,6 +63,16 @@ public class SyncRedraftAdpJob(
 
         int matched = 0, unmatched = 0;
 
+        // Stale-entry cleanup (2026-08-30, FAN-105 follow-up): a player who
+        // matched in a prior run but drops out of FFC's feed — or stops
+        // matching by name — used to leave a permanent zombie document
+        // behind (no upsert ever touches it again, so it just sits at
+        // whatever ADP/team it last had, sometimes months stale). Track
+        // everyone who matches THIS run and prune anything else for this
+        // Season/ScoringFormat afterward, so the cache always reflects only
+        // the current FFC pull.
+        var matchedSleeperIds = new HashSet<string>();
+
         foreach (var entry in adpEntries)
         {
             if (entry.Position is "K" or "DST") continue;
@@ -109,11 +119,21 @@ public class SyncRedraftAdpJob(
                 new UpdateOptions { IsUpsert = true }, ct);
 
             matched++;
+            matchedSleeperIds.Add(match.SleeperPlayerId!);
         }
 
+        // ── 4. Prune stale entries not matched this run ──────────────────────
+        var staleFilter = Builders<RedraftAdpCacheDocument>.Filter.And(
+            Builders<RedraftAdpCacheDocument>.Filter.Eq(x => x.Season, season),
+            Builders<RedraftAdpCacheDocument>.Filter.Eq(x => x.ScoringFormat, "ppr"),
+            Builders<RedraftAdpCacheDocument>.Filter.Nin(x => x.SleeperPlayerId, matchedSleeperIds));
+
+        var pruneResult = await adpCollection.DeleteManyAsync(staleFilter, ct);
+
         logger.LogInformation(
-            "SyncRedraftAdpJob complete: {Matched} matched, {Unmatched} unmatched of {Total}",
-            matched, unmatched, adpEntries.Count);
+            "SyncRedraftAdpJob complete: {Matched} matched, {Unmatched} unmatched of {Total}, " +
+            "{Pruned} stale entries pruned",
+            matched, unmatched, adpEntries.Count, pruneResult.DeletedCount);
     }
 
     private static string NormalizeName(string name)
