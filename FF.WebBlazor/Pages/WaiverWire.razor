@@ -40,7 +40,8 @@ else
 
     <MudTabs Elevation="0"
              Rounded="true"
-             Class="mb-4">
+             Class="mb-4"
+             ActivePanelIndexChanged="OnTabChangedAsync">
 
         <!-- ── Tab 1: VORP Recommendations ── -->
         <MudTabPanel Text="Available Players (VORP)">
@@ -78,9 +79,21 @@ else
             else if (_isOffSeason && _offSeasonRecs.Count > 0)
             {
                 <MudAlert Severity="Severity.Info" Class="mb-3">
-                    Off-season mode — players ranked by dynasty trade value. Rankings will reflect
-                    real valuations after the NFL Draft (April 24–26) and post-draft simulation jobs run.
-                    In-season VORP available once Week 1 projections are calculated.
+                    @if (_offSeasonValueLabel == "ADP")
+                    {
+                        <text>
+                            Pre-season mode — players ranked by consensus redraft ADP (lower = drafted
+                            earlier). In-season VORP available once Week 1 projections are calculated.
+                        </text>
+                    }
+                    else
+                    {
+                        <text>
+                            Off-season mode — players ranked by dynasty trade value. Rankings will reflect
+                            real valuations after the NFL Draft (April 24–26) and post-draft simulation jobs run.
+                            In-season VORP available once Week 1 projections are calculated.
+                        </text>
+                    }
                 </MudAlert>
                 <MudTable Items="@FilteredOffSeason" Dense="true" Hover="true" Striped="true"
                           Style="background: var(--fc-navy-card);">
@@ -90,7 +103,7 @@ else
                         <MudTh>Pos</MudTh>
                         <MudTh>Team</MudTh>
                         <MudTh>Age</MudTh>
-                        <MudTh Style="text-align:right">Dynasty Value</MudTh>
+                        <MudTh Style="text-align:right">@_offSeasonValueLabel</MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         @{
@@ -120,7 +133,7 @@ else
                             <MudText Typo="Typo.body2">@context.Age</MudText>
                         </MudTd>
                         <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:var(--fc-cyan);">
-                            @context.TradeValue.ToString("F1")
+                            @context.Value.ToString("F1")
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -153,13 +166,76 @@ else
             {
                 <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
             }
-            else if (_fitRecs.Count == 0 && _fitQueried)
+            else if (_isOffSeason && _offSeasonFitRecs.Count == 0 && _fitQueried)
+            {
+                <MudAlert Severity="Severity.Info">
+                    No available players found. Ensure @(_offSeasonValueLabel == "ADP" ? "redraft ADP data" : "dynasty valuations") have been calculated.
+                </MudAlert>
+            }
+            else if (_isOffSeason && _offSeasonFitRecs.Count > 0)
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-3">
+                    Pre-season mode — fit-adjusted @_offSeasonValueLabel (positions where you are thin are
+                    boosted, positions where you are stacked are discounted). In-season VORP-based fit
+                    available once Week 1 projections are calculated.
+                </MudAlert>
+                <MudTable Items="@FilteredOffSeasonFit" Dense="true" Hover="true" Striped="true"
+                          Style="background: var(--fc-navy-card);">
+                    <HeaderContent>
+                        <MudTh>Fit Rank</MudTh>
+                        <MudTh>Player</MudTh>
+                        <MudTh>Pos</MudTh>
+                        <MudTh>Team</MudTh>
+                        <MudTh>Need</MudTh>
+                        <MudTh Style="text-align:right">@_offSeasonValueLabel</MudTh>
+                        <MudTh Style="text-align:right">Fit Score</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudText Typo="Typo.body2"
+                                     Style="font-family:'JetBrains Mono',monospace; color: var(--mud-palette-text-secondary);">
+                                #@context.FitRank
+                            </MudText>
+                        </MudTd>
+                        @{
+                            var offFitContext = context;
+                        }
+                        <MudTd>
+                            <MudButton Variant="Variant.Text"
+                                       Style="font-weight:600; color: var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                       OnClick="@(() => _ = OpenPlayerCard(offFitContext.Base.SleeperPlayerId, offFitContext.Base.PlayerName, offFitContext.Base.Position, offFitContext.Base.NflTeam, offFitContext.Base.CollegeTeam))">
+                                @context.Base.PlayerName
+                            </MudButton>
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Style="@GetPositionStyle(context.Base.Position)">
+                                @context.Base.Position
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>@(context.Base.NflTeam ?? "FA")</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small"
+                                     Style="@GetNeedStyle(context.PositionNeed)">
+                                @context.PositionNeed
+                            </MudChip>
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color: var(--fc-cyan);">
+                            @context.Base.Value.ToString("F1")
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:600; color: var(--fc-cyan);">
+                            @context.FitScore.ToString("F1")
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else if (!_isOffSeason && _fitRecs.Count == 0 && _fitQueried)
             {
                 <MudAlert Severity="Severity.Info">
                     No recommendations found. Load VORP first, then switch to this tab.
                 </MudAlert>
             }
-            else if (_fitRecs.Count > 0)
+            else if (!_isOffSeason && _fitRecs.Count > 0)
             {
                 <MudTable Items="@FilteredFit" Dense="true" Hover="true" Striped="true"
                           Style="background: var(--fc-navy-card);">
@@ -297,6 +373,21 @@ else
     private UserContext? _context;
     private bool _contextLoading = true;
 
+    // FAN-113 fix: the API globally serializes enums as strings
+    // (FF.API/Program.cs -> AddJsonOptions -> JsonStringEnumConverter), but
+    // Blazor's HttpClient.GetFromJsonAsync doesn't inherit that and expects
+    // the numeric default, so any DTO carrying RosterNeed (a string like
+    // "Need") throws on deserialize — silently swallowed by our catch
+    // blocks, hence no error in DevTools/VS Output despite a 200 response.
+    // Same pattern already fixed once in MyTeam.razor's _enumJsonOptions
+    // (TEAM-005). Use this for any GetFromJsonAsync call whose payload
+    // includes RosterNeed.
+    private static readonly System.Text.Json.JsonSerializerOptions _enumJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
     // Shared controls
     private string _selectedLeagueId = string.Empty;
     private int _currentSeason;
@@ -314,6 +405,9 @@ else
     private bool _fitQueried;
     private string _fitPosition = string.Empty;
 
+    // FAN-113: pre-season fit fallback (same ADP/Dynasty pool as Tab 1, need-adjusted)
+    private List<OffSeasonFitDto> _offSeasonFitRecs = [];
+
     // Emergence state
     private List<EmergenceAlertDocument> _alerts = [];
     private bool _emergenceLoading = true;
@@ -321,6 +415,9 @@ else
 
     private bool _isOffSeason;
     private List<OffSeasonDto> _offSeasonRecs = [];
+    // FAN-112: "Dynasty Value" for dynasty leagues, "ADP" for redraft leagues —
+    // set from whatever the API actually returned, not assumed here.
+    private string _offSeasonValueLabel = "Dynasty Value";
 
     private IEnumerable<VorpRecommendationDocument> FilteredVorp =>
         string.IsNullOrEmpty(_vorpPosition)
@@ -342,6 +439,15 @@ else
         ? _offSeasonRecs
         : _offSeasonRecs.Where(r => r.Position == _vorpPosition);
 
+    private IEnumerable<OffSeasonFitDto> FilteredOffSeasonFit =>
+        string.IsNullOrEmpty(_fitPosition)
+        ? _offSeasonFitRecs
+        : _offSeasonFitRecs.Where(r => r.Base.Position == _fitPosition);
+
+    // Which tab is showing — bound to MudTabs so tab switches can trigger a
+    // just-in-time load (see OnTabChangedAsync) without requiring "LOAD".
+    private int _activeTabIndex;
+
     protected override async Task OnInitializedAsync()
     {
         // Subscribe first — event may fire during or after LoadContextAsync
@@ -350,12 +456,14 @@ else
         await LoadContextAsync();
         await LoadAlertsAsync();
 
-        // Initial load attempt — if league was already known, fire now
-        // Handler will also fire if LeagueState settles after this point
-        if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId)
-            && _offSeasonRecs.Count == 0)
+        // Paul (2026-08-31): no more requiring a manual LOAD click — load
+        // both tabs' data as soon as the league/week/user context is known,
+        // using whatever Week value LoadContextAsync already defaulted to
+        // (current NFL week, honoring any admin override). Handler below
+        // does the same if LeagueState settles after this point instead.
+        if (!string.IsNullOrEmpty(_selectedLeagueId))
         {
-            await LoadOffSeasonAsync();
+            await LoadAllAsync();
         }
     }
 
@@ -371,18 +479,39 @@ else
             _offSeasonRecs = [];
             _vorpRecs = [];
             _fitRecs = [];
+            _offSeasonFitRecs = [];
             _vorpQueried = false;
+            _fitQueried = false;
         }
 
         _ = InvokeAsync(async () =>
         {
-            if (_isOffSeason && !string.IsNullOrEmpty(_selectedLeagueId)
-                && _offSeasonRecs.Count == 0 && !_vorpLoading)
+            if (!string.IsNullOrEmpty(_selectedLeagueId) && !_vorpLoading && !_fitLoading)
             {
-                await LoadOffSeasonAsync();
+                await LoadAllAsync();
             }
             StateHasChanged();
         });
+    }
+
+    // Safety net for the auto-load above: if a tab is opened before its data
+    // has finished loading (or a load failed and _*Queried never got set),
+    // clicking the tab retries instead of leaving it stuck empty.
+    private async Task OnTabChangedAsync(int index)
+    {
+        _activeTabIndex = index;
+
+        if (string.IsNullOrEmpty(_selectedLeagueId)) return;
+
+        switch (index)
+        {
+            case 0 when !_vorpQueried && !_vorpLoading:
+                await LoadVorpAsync();
+                break;
+            case 1 when !_fitQueried && !_fitLoading && _context?.SleeperUserId is not null:
+                await LoadFitAsync();
+                break;
+        }
     }
 
     public void Dispose()
@@ -436,10 +565,13 @@ else
             var url = $"api/v1/waiver/available/offseason?leagueId={_selectedLeagueId}&top=50{posParam}";
             var result = await Http.GetFromJsonAsync<List<OffSeasonDto>>(url);
             _offSeasonRecs = result ?? [];
+            _offSeasonValueLabel = _offSeasonRecs.Count > 0
+                ? _offSeasonRecs[0].ValueLabel
+                : "Dynasty Value";
         }
-        catch
+        catch (Exception ex)
         {
-            Snackbar.Add("Failed to load off-season available players.", Severity.Error);
+            Snackbar.Add($"Failed to load off-season available players: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -451,6 +583,12 @@ else
     {
         if (_context?.SleeperUserId is null) return;
 
+        if (_isOffSeason)
+        {
+            await LoadOffSeasonFitAsync();
+            return;
+        }
+
         _fitLoading = true;
         _fitQueried = true;
         try
@@ -458,12 +596,41 @@ else
             var url = $"api/v1/waiver/recommendations/roster-aware"
                 + $"?leagueId={_selectedLeagueId}&sleeperUserId={_context.SleeperUserId}"
                 + $"&season={_currentSeason}&week={_week}&top=30";
-            var result = await Http.GetFromJsonAsync<List<RosterAwareRecommendation>>(url);
+            var result = await Http.GetFromJsonAsync<List<RosterAwareRecommendation>>(url, _enumJsonOptions);
             _fitRecs = result ?? [];
         }
-        catch
+        catch (Exception ex)
         {
-            Snackbar.Add("Failed to load roster-aware recommendations", Severity.Error);
+            Snackbar.Add($"Failed to load roster-aware recommendations: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _fitLoading = false;
+        }
+    }
+
+    // FAN-113: pre-season counterpart to LoadFitAsync — reuses the same
+    // off-season pool as Tab 1 (ADP or Dynasty Value, per league type) with
+    // the Need/Neutral/Strength fit multiplier applied server-side.
+    private async Task LoadOffSeasonFitAsync()
+    {
+        if (_context?.SleeperUserId is null) return;
+
+        _fitLoading = true;
+        _fitQueried = true;
+        try
+        {
+            var posParam = string.IsNullOrEmpty(_fitPosition) ? "" : $"&position={_fitPosition}";
+            var url = $"api/v1/waiver/recommendations/roster-aware/offseason"
+                + $"?leagueId={_selectedLeagueId}&sleeperUserId={_context.SleeperUserId}&top=30{posParam}";
+            var result = await Http.GetFromJsonAsync<List<OffSeasonFitDto>>(url, _enumJsonOptions);
+            _offSeasonFitRecs = result ?? [];
+            if (_offSeasonFitRecs.Count > 0)
+                _offSeasonValueLabel = _offSeasonFitRecs[0].Base.ValueLabel;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load pre-season roster fit: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -479,9 +646,9 @@ else
             var result = await Http.GetFromJsonAsync<List<EmergenceAlertDocument>>(
                 $"api/v1/emergence/alerts?season={_currentSeason}");
         }
-        catch
+        catch (Exception ex)
         {
-            Snackbar.Add("Failed to load emergence alerts", Severity.Error);
+            Snackbar.Add($"Failed to load emergence alerts: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -591,7 +758,17 @@ private record OffSeasonDto(
         string Position,
         string? NflTeam,
         int Age,
-        double TradeValue,
+        double Value,
+        string ValueLabel,
         int Rank,
         string? CollegeTeam);
+
+    // FAN-113 — mirrors FF.Application's OffSeasonRosterAwareRecommendation.
+    // RosterNeed comes straight from FF.Domain.Documents (already @using'd
+    // above), same as the in-season RosterAwareRecommendation record does.
+    private record OffSeasonFitDto(
+        OffSeasonDto Base,
+        decimal FitScore,
+        RosterNeed PositionNeed,
+        int FitRank);
 }

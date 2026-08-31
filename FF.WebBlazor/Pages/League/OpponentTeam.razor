@@ -141,7 +141,7 @@ else
                         </MudPaper>
                     </MudItem>
                 }
-                @if (_dynastyGrade is not null)
+                @if (_isDynastyLeague && _dynastyGrade is not null)
                 {
                     <MudItem xs="12" md="6">
                         <MudPaper Class="pa-4" Elevation="1" Style="height:100%">
@@ -389,14 +389,25 @@ else
                 $"api/v1/league/teams/{rosterId}/roster?sleeperLeagueId={leagueId}");
             var depthTask = http.GetFromJsonAsync<PositionalDepthGradesDto>(
                 $"api/v1/league/teams/{rosterId}/depth-grades?sleeperLeagueId={leagueId}&season={season}");
-            var dynastyTask = http.GetFromJsonAsync<DynastyTeamGradeDto>(
-                $"api/v1/league/teams/{rosterId}/dynasty-grade?sleeperLeagueId={leagueId}");
 
-            await Task.WhenAll(rosterTask, depthTask, dynastyTask);
+            // FAN-107 follow-up (2026-08-30): Dynasty Value has no meaning in a
+            // redraft league — don't even fetch it there. Same _isDynastyLeague
+            // gate already used below for the Draft Picks panel; this endpoint
+            // was the one place on this page that wasn't gated on league type.
+            if (_isDynastyLeague)
+            {
+                var dynastyTask = http.GetFromJsonAsync<DynastyTeamGradeDto>(
+                    $"api/v1/league/teams/{rosterId}/dynasty-grade?sleeperLeagueId={leagueId}");
+                await Task.WhenAll(rosterTask, depthTask, dynastyTask);
+                _dynastyGrade = await dynastyTask;
+            }
+            else
+            {
+                await Task.WhenAll(rosterTask, depthTask);
+            }
 
             _roster = await rosterTask;
             _depthGrades = await depthTask;
-            _dynastyGrade = await dynastyTask;
         }
         catch { }
         finally { _rosterLoading = false; }

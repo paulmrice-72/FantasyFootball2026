@@ -106,4 +106,27 @@ public class RosterPlayerRepository(
             .Find(x => x.SleeperUserId == sleeperUserId &&
                        x.SleeperLeagueId == sleeperLeagueId)
             .FirstOrDefaultAsync(ct);
+
+    public async Task<long> DeleteStaleRostersAsync(
+        string sleeperLeagueId,
+        IEnumerable<string> currentRosterIds,
+        CancellationToken ct = default)
+    {
+        var currentIds = currentRosterIds as ICollection<string> ?? currentRosterIds.ToList();
+
+        var filter = Builders<RosterPlayerDocument>.Filter.And(
+            Builders<RosterPlayerDocument>.Filter.Eq(x => x.SleeperLeagueId, sleeperLeagueId),
+            Builders<RosterPlayerDocument>.Filter.Nin(x => x.SleeperRosterId, currentIds));
+
+        var result = await _collection.DeleteManyAsync(filter, ct);
+
+        if (result.DeletedCount > 0)
+        {
+            logger.LogInformation(
+                "RosterPlayerRepository pruned {Count} stale roster document(s) for league {LeagueId}",
+                result.DeletedCount, sleeperLeagueId);
+        }
+
+        return result.DeletedCount;
+    }
 }

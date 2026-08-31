@@ -1,4 +1,4 @@
-﻿// FF.Application/Features/Leagues/Queries/GetLeagueRosterGrades/GetLeagueRosterGradesQueryHandler.cs
+// FF.Application/Features/Leagues/Queries/GetLeagueRosterGrades/GetLeagueRosterGradesQueryHandler.cs
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Services;
@@ -17,22 +17,6 @@ public class GetLeagueRosterGradesQueryHandler(
     ILogger<GetLeagueRosterGradesQueryHandler> logger)
     : IRequestHandler<GetLeagueRosterGradesQuery, LeagueRosterGradesDto?>
 {
-    private static readonly Dictionary<string, double> PositionBaseline = new()
-    {
-        ["QB"] = 19.3,
-        ["RB"] = 15.1,
-        ["WR"] = 13.1,
-        ["TE"] = 12.1
-    };
-
-    private static readonly Dictionary<string, int> StarterSlots = new()
-    {
-        ["QB"] = 1,
-        ["RB"] = 2,
-        ["WR"] = 3,
-        ["TE"] = 1
-    };
-
     private static readonly Dictionary<int, double> RoundValue = new()
     {
         [1] = 16.0,
@@ -96,41 +80,14 @@ public class GetLeagueRosterGradesQueryHandler(
 
         // Compute raw scores for each team. Grades are assigned in a second
         // pass below, RELATIVE to the other teams in this league — see the
-        // note above DepthScoreToGrade for why.
+        // note above where RosterStrengthCalculator.RankFractionToGrade is
+        // called for why.
         var rawTeams = rosters.Select(roster =>
         {
-            // Depth Score
-            double totalDepthScore = 0;
-            int positionsGraded = 0;
-
-            foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
-            {
-                var baseline = PositionBaseline[pos];
-                var slots = StarterSlots[pos];
-
-                var posPlayers = roster.PlayerIds
-                    .Where(id =>
-                    {
-                        playerLookup.TryGetValue(id, out var p);
-                        return p?.Position.ToString() == pos;
-                    })
-                    .Select(id => simLookup.TryGetValue(id, out var m) ? m : 0.0)
-                    .OrderByDescending(m => m)
-                    .ToList();
-
-                var starterScore = posPlayers.Take(slots).DefaultIfEmpty(0).Average();
-
-                // GRADE-FIX-002: position contributes 0 if starter quality < 50% of baseline
-                var starterQualityFloor = baseline * 0.50;
-                if (starterScore >= starterQualityFloor)
-                {
-                    var starterNorm = baseline > 0 ? (starterScore / baseline) * 50.0 : 0;
-                    totalDepthScore += Math.Clamp(starterNorm, 0, 100);
-                }
-                positionsGraded++;
-            }
-
-            var depthScore = positionsGraded > 0 ? totalDepthScore / positionsGraded : 0.0;
+            // Depth Score — FAN-107: shared with the redraft handler via
+            // RosterStrengthCalculator so the two can't drift apart.
+            var depthScore = RosterStrengthCalculator.ComputeRawDepthScore(
+                roster.PlayerIds, playerLookup, simLookup);
 
             // Draft Capital Score
             var rawCapital = rawCapitalScores[roster.SleeperRosterId];
@@ -197,12 +154,10 @@ public class GetLeagueRosterGradesQueryHandler(
         // existed that day — and drifted every time the DFV pipeline's scale
         // changed since (P2 exponent 0.6→0.9 on 5/19, guardrails added on
         // 8/25), silently pushing every team toward the same grade again.
-        // Percentile-within-league is self-correcting: it always reflects
-        // "how does my team compare to the ~10-14 others in THIS league",
-        // which is what the page is actually for, and never needs
-        // recalibrating when the underlying score scale moves.
-        var depthRank = RankByDescending(rawTeams, t => t.DepthScore);
-        var dynastyRank = RankByDescending(rawTeams, t => t.DynastyScore);
+        // Percentile-within-league is self-correcting — see
+        // RosterStrengthCalculator.RankFractionToGrade.
+        var depthRank = RosterStrengthCalculator.RankByDescending(rawTeams, t => t.DepthScore);
+        var dynastyRank = RosterStrengthCalculator.RankByDescending(rawTeams, t => t.DynastyScore);
 
         var teams = rawTeams.Select((t, idx) =>
         {
@@ -214,9 +169,9 @@ public class GetLeagueRosterGradesQueryHandler(
                 SleeperRosterId: t.SleeperRosterId,
                 TeamName: t.TeamName,
                 OwnerName: t.OwnerName,
-                DepthGrade: RankFractionToGrade(depthFraction),
+                DepthGrade: RosterStrengthCalculator.RankFractionToGrade(depthFraction),
                 DepthScore: Math.Round(t.DepthScore, 1),
-                DynastyGrade: RankFractionToGrade(dynastyFraction),
+                DynastyGrade: RosterStrengthCalculator.RankFractionToGrade(dynastyFraction),
                 DynastyScore: Math.Round(t.DynastyScore, 1),
                 TeamProfile: profile,
                 DraftCapitalScore: t.DraftCapitalScore,
@@ -230,38 +185,6 @@ public class GetLeagueRosterGradesQueryHandler(
             SleeperLeagueId: request.SleeperLeagueId,
             Season: request.Season,
             Teams: teams);
-    }
-
-    /// <summary>
-    /// Ranks items by a score (descending — best first) and returns each
-    /// item's rank fraction in the SAME ORDER as the input list: 0.0 = best
-    /// in the league, 1.0 = worst. Ties share the same fraction (average
-    /// rank) so two teams with an identical score get the same grade
-    /// instead of an arbitrary tiebreak deciding one is a letter grade
-    /// better than the other.
-    /// </summary>
-    private static double[] RankByDescending<T>(List<T> items, Func<T, double> selector)
-    {
-        var n = items.Count;
-        var fractions = new double[n];
-        if (n <= 1) return fractions; // single team in the league — no basis for relative grading
-
-        var order = Enumerable.Range(0, n)
-            .OrderByDescending(i => selector(items[i]))
-            .ToList();
-
-        var i = 0;
-        while (i < n)
-        {
-            var j = i;
-            while (j < n && selector(items[order[j]]).Equals(selector(items[order[i]]))) j++;
-            var avgRank = (i + j - 1) / 2.0; // 0-based average rank across the tied group
-            var fraction = avgRank / (n - 1);
-            for (var k = i; k < j; k++) fractions[order[k]] = fraction;
-            i = j;
-        }
-
-        return fractions;
     }
 
     /// <summary>
@@ -282,7 +205,7 @@ public class GetLeagueRosterGradesQueryHandler(
     }
 
     /// <summary>
-    /// Profile is now based on whether a team sits in the top half of ITS
+    /// Profile is based on whether a team sits in the top half of ITS
     /// league on depth (win-now production) vs dynasty (future value) —
     /// same self-correcting rationale as the grade fractions above, instead
     /// of comparing against a fixed score that goes stale.
@@ -295,24 +218,4 @@ public class GetLeagueRosterGradesQueryHandler(
             (false, true) => "Transitioning",
             (false, false) => "Rebuilding"
         };
-
-    /// <summary>
-    /// Maps a within-league rank fraction (0.0 = best team in the league,
-    /// 1.0 = worst) to a letter grade. Replaces the old fixed-score cutoffs
-    /// in DepthScoreToGrade/DynastyScoreToGrade — see the note above where
-    /// this is called. Buckets are sized for a typical 10-14 team dynasty
-    /// league (roughly: top ~1 team A+, next ~2 A, etc.), tunable via the
-    /// calibration harness like everything else in this pipeline.
-    /// </summary>
-    private static string RankFractionToGrade(double rankFraction) => rankFraction switch
-    {
-        <= 0.08 => "A+",
-        <= 0.20 => "A",
-        <= 0.35 => "B+",
-        <= 0.50 => "B",
-        <= 0.65 => "C+",
-        <= 0.80 => "C",
-        <= 0.92 => "D",
-        _ => "F"
-    };
 }
