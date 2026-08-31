@@ -1,4 +1,4 @@
-﻿@page "/league/standings"
+@page "/league/standings"
 @attribute [Authorize]
 @implements IDisposable
 @using Microsoft.AspNetCore.Authorization
@@ -173,99 +173,173 @@ else
             {
                 <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
             }
-            else if (_grades is null)
+            else if (_isDynastyLeague)
             {
-                <MudAlert Severity="Severity.Info" Class="mt-4">
-                    No grade data available. Make sure dynasty valuations have been generated.
-                </MudAlert>
+                @* ── Dynasty leagues: unchanged from before FAN-107 ── *@
+                @if (_grades is null)
+                {
+                    <MudAlert Severity="Severity.Info" Class="mt-4">
+                        No grade data available. Make sure dynasty valuations have been generated.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudPaper Class="fc-table-paper mt-2" Elevation="0">
+                        <MudTable Items="@_grades.Teams" Class="fc-table" Hover="true" Dense="true"
+                                  Elevation="0" T="TeamRosterGradeDto" AllowUnsorted="false">
+                            <HeaderContent>
+                                <MudTh><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.TeamName)">Team</MudTableSortLabel></MudTh>
+                                <MudTh Style="text-align:center;"><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<TeamRosterGradeDto, object>(t => t.DepthScore)">Roster Strength</MudTableSortLabel></MudTh>
+                                <MudTh Style="text-align:center; width:70px;">Score</MudTh>
+                                <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.DynastyScore)">Dynasty</MudTableSortLabel></MudTh>
+                                <MudTh Style="text-align:center; width:70px;">Score</MudTh>
+                                <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.TeamProfile)">Profile</MudTableSortLabel></MudTh>
+                                <MudTh Style="text-align:center;">
+                                    <MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.DraftCapitalScore)">
+                                        Draft Capital
+                                    </MudTableSortLabel>
+                                </MudTh>
+                                <MudTh>Top Assets</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <div @onclick="@(() => Nav.NavigateTo($"/league/teams?rosterId={context.SleeperRosterId}"))"
+                                            style="cursor:pointer;">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600;" Class="fc-link-hover">@context.TeamName</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerName</MudText>
+                                    </div>
+                                </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <MudText Typo="Typo.h6" Style="@(GradeStyle(context.DepthGrade) + "font-weight:800;")">
+                                        @context.DepthGrade
+                                    </MudText>
+                                </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                                        @context.DepthScore.ToString("F1")
+                                    </MudText>
+                                </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <MudText Typo="Typo.h6" Style="@(GradeStyle(context.DynastyGrade) + "font-weight:800;")">
+                                        @context.DynastyGrade
+                                    </MudText>
+                                </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                                        @context.DynastyScore.ToString("F1")
+                                    </MudText>
+                                </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Style="@ProfileChipStyle(context.TeamProfile)"
+                                             Variant="Variant.Filled">
+                                        @context.TeamProfile
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <MudTooltip Text="@($"{context.OwnedPickCount} future picks owned — normalized 0–100 across league")">
+                                        <MudText Typo="Typo.body2" Class="font-mono" Style="@DraftCapitalStyle(context.DraftCapitalScore)">
+                                            @context.DraftCapitalScore.ToString("F0")
+                                        </MudText>
+                                    </MudTooltip>
+                                </MudTd>
+                                <MudTd>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach (var asset in context.TopAssets.Take(3))
+                                        {
+                                            <MudTooltip Text="@($"TV: {asset.TradeValue:F0} · BK: {asset.BreakoutScore:F0} · Age: {asset.Age?.ToString() ?? "—"}")">
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                                         Color="@PositionColor(asset.Position)">
+                                                    @asset.PlayerName.Split(' ').Last() (@asset.Position)
+                                                </MudChip>
+                                            </MudTooltip>
+                                        }
+                                    </div>
+                                </MudTd>
+                            </RowTemplate>
+                            <NoRecordsContent>
+                                <MudText Class="mud-text-secondary pa-4">No teams found.</MudText>
+                            </NoRecordsContent>
+                        </MudTable>
+                    </MudPaper>
+
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
+                        Roster Strength: sim-median production vs. positional baselines.
+                        Dynasty: trade value (42.5%) · breakout score (25.5%) · years of prime (17%) · draft capital (15%).
+                        Draft Capital: future picks normalized 0–100 across league (R1=16pts, R2=8pts, 15% yearly discount).
+                        Profile: Contender · Win-Now · Transitioning · Rebuilding.
+                    </MudText>
+                }
             }
             else
             {
-                <MudPaper Class="fc-table-paper mt-2" Elevation="0">
-                    <MudTable Items="@_grades.Teams" Class="fc-table" Hover="true" Dense="true"
-                              Elevation="0" T="TeamRosterGradeDto" AllowUnsorted="false">
-                        <HeaderContent>
-                            <MudTh><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.TeamName)">Team</MudTableSortLabel></MudTh>
-                            <MudTh Style="text-align:center;"><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<TeamRosterGradeDto, object>(t => t.DepthScore)">Roster Strength</MudTableSortLabel></MudTh>
-                            <MudTh Style="text-align:center; width:70px;">Score</MudTh>
-                            <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.DynastyScore)">Dynasty</MudTableSortLabel></MudTh>
-                            <MudTh Style="text-align:center; width:70px;">Score</MudTh>
-                            <MudTh Style="text-align:center;"><MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.TeamProfile)">Profile</MudTableSortLabel></MudTh>
-                            <MudTh Style="text-align:center;">
-                                <MudTableSortLabel SortBy="new Func<TeamRosterGradeDto, object>(t => t.DraftCapitalScore)">
-                                    Draft Capital
-                                </MudTableSortLabel>
-                            </MudTh>
-                            <MudTh>Top Assets</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd>
-                                <div @onclick="@(() => Nav.NavigateTo($"/league/teams?rosterId={context.SleeperRosterId}"))"
-                                        style="cursor:pointer;">
-                                    <MudText Typo="Typo.body2" Style="font-weight:600;" Class="fc-link-hover">@context.TeamName</MudText>
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerName</MudText>
-                                </div>
-                            </MudTd>
-                            <MudTd Style="text-align:center;">
-                                <MudText Typo="Typo.h6" Style="@(GradeStyle(context.DepthGrade) + "font-weight:800;")">
-                                    @context.DepthGrade
-                                </MudText>
-                            </MudTd>
-                            <MudTd Style="text-align:center;">
-                                <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
-                                    @context.DepthScore.ToString("F1")
-                                </MudText>
-                            </MudTd>
-                            <MudTd Style="text-align:center;">
-                                <MudText Typo="Typo.h6" Style="@(GradeStyle(context.DynastyGrade) + "font-weight:800;")">
-                                    @context.DynastyGrade
-                                </MudText>
-                            </MudTd>
-                            <MudTd Style="text-align:center;">
-                                <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
-                                    @context.DynastyScore.ToString("F1")
-                                </MudText>
-                            </MudTd>
-                            <MudTd Style="text-align:center;">
-                                <MudChip T="string" Size="Size.Small"
-                                         Style="@ProfileChipStyle(context.TeamProfile)"
-                                         Variant="Variant.Filled">
-                                    @context.TeamProfile
-                                </MudChip>
-                            </MudTd>
-                            <MudTd Style="text-align:center;">
-                                <MudTooltip Text="@($"{context.OwnedPickCount} future picks owned — normalized 0–100 across league")">
-                                    <MudText Typo="Typo.body2" Class="font-mono" Style="@DraftCapitalStyle(context.DraftCapitalScore)">
-                                        @context.DraftCapitalScore.ToString("F0")
+                @* ── FAN-107: redraft leagues — Depth/Rank only, no dynasty concepts ── *@
+                @if (_redraftGrades is null)
+                {
+                    <MudAlert Severity="Severity.Info" Class="mt-4">
+                        No grade data available yet.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudPaper Class="fc-table-paper mt-2" Elevation="0">
+                        <MudTable Items="@_redraftGrades.Teams" Class="fc-table" Hover="true" Dense="true"
+                                  Elevation="0" T="RedraftTeamRosterGradeDto" AllowUnsorted="false">
+                            <HeaderContent>
+                                <MudTh Style="width:40px;"><MudTableSortLabel SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.Rank)">#</MudTableSortLabel></MudTh>
+                                <MudTh><MudTableSortLabel SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.TeamName)">Team</MudTableSortLabel></MudTh>
+                                <MudTh Style="text-align:center;"><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.DepthScore)">Roster Strength</MudTableSortLabel></MudTh>
+                                <MudTh Style="text-align:center; width:70px;">Score</MudTh>
+                                <MudTh>Top Assets</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <MudText Typo="Typo.body2" Class="font-mono" Style="@RankStyle(context.Rank)">
+                                        @context.Rank
                                     </MudText>
-                                </MudTooltip>
-                            </MudTd>
-                            <MudTd>
-                                <div class="d-flex flex-wrap gap-1">
-                                    @foreach (var asset in context.TopAssets.Take(3))
-                                    {
-                                        <MudTooltip Text="@($"TV: {asset.TradeValue:F0} · BK: {asset.BreakoutScore:F0} · Age: {asset.Age?.ToString() ?? "—"}")">
-                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                                     Color="@PositionColor(asset.Position)">
-                                                @asset.PlayerName.Split(' ').Last() (@asset.Position)
-                                            </MudChip>
-                                        </MudTooltip>
-                                    }
-                                </div>
-                            </MudTd>
-                        </RowTemplate>
-                        <NoRecordsContent>
-                            <MudText Class="mud-text-secondary pa-4">No teams found.</MudText>
-                        </NoRecordsContent>
-                    </MudTable>
-                </MudPaper>
+                                </MudTd>
+                                <MudTd>
+                                    <div @onclick="@(() => Nav.NavigateTo($"/league/teams?rosterId={context.SleeperRosterId}"))"
+                                            style="cursor:pointer;">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600;" Class="fc-link-hover">@context.TeamName</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerName</MudText>
+                                    </div>
+                                </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <MudText Typo="Typo.h6" Style="@(GradeStyle(context.DepthGrade) + "font-weight:800;")">
+                                        @context.DepthGrade
+                                    </MudText>
+                                </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <MudText Typo="Typo.body2" Class="font-mono mud-text-secondary">
+                                        @context.DepthScore.ToString("F1")
+                                    </MudText>
+                                </MudTd>
+                                <MudTd>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach (var asset in context.TopAssets.Take(3))
+                                        {
+                                            <MudTooltip Text="@($"Proj: {asset.SeasonAvgPoints:F1} pts")">
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                                         Color="@PositionColor(asset.Position)">
+                                                    @asset.PlayerName.Split(' ').Last() (@asset.Position)
+                                                </MudChip>
+                                            </MudTooltip>
+                                        }
+                                    </div>
+                                </MudTd>
+                            </RowTemplate>
+                            <NoRecordsContent>
+                                <MudText Class="mud-text-secondary pa-4">No teams found.</MudText>
+                            </NoRecordsContent>
+                        </MudTable>
+                    </MudPaper>
 
-                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
-                    Roster Strength: sim-median production vs. positional baselines.
-                    Dynasty: trade value (42.5%) · breakout score (25.5%) · years of prime (17%) · draft capital (15%).
-                    Draft Capital: future picks normalized 0–100 across league (R1=16pts, R2=8pts, 15% yearly discount).
-                    Profile: Contender · Win-Now · Transitioning · Rebuilding.
-                </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
+                        Roster Strength: sim-median production vs. positional baselines, ranked within your league.
+                        Rank #1 = strongest roster in the league right now.
+                    </MudText>
+                }
             }
         </MudTabPanel>
     </MudTabs>
@@ -278,6 +352,11 @@ else
     private LeagueStandingsDto? _standings;
     private string _topProjected = "—";
     private bool _seasonFinalized = false;
+
+    // FAN-107: which Roster Grades table to show. Set from the active
+    // league's LeagueType, same convention MyTeam.razor/OpponentTeam.razor
+    // already use — anything not explicitly "Redraft" is treated as Dynasty.
+    private bool _isDynastyLeague = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -301,6 +380,7 @@ else
         _standings = null;
         _topProjected = "—";
         _grades = null;
+        _redraftGrades = null;
 
         var http = HttpClientFactory.CreateClient("AuthAPI");
         (_season, _week) = await NflContext.GetContextAsync();
@@ -309,6 +389,16 @@ else
         var leagueId = LeagueState.ActiveLeagueId;
         if (!string.IsNullOrEmpty(leagueId))
         {
+            // FAN-107: resolve league type up front so the Roster Grades tab
+            // knows which table/endpoint to use once the user clicks into it.
+            try
+            {
+                var context = await http.GetFromJsonAsync<UserContextResponse>("api/v1/identity/context");
+                var activeLeague = context?.Leagues?.FirstOrDefault(l => l.LeagueId == leagueId);
+                _isDynastyLeague = activeLeague?.LeagueType != "Redraft";
+            }
+            catch { }
+
             try
             {
                 _standings = await http.GetFromJsonAsync<LeagueStandingsDto>(
@@ -355,10 +445,12 @@ else
     // ── Grades state ──────────────────────────────────────────────────
     private bool _gradesLoading = false;
     private LeagueRosterGradesDto? _grades;
+    private RedraftLeagueRosterGradesDto? _redraftGrades;
 
     private async Task OnTabChanged(int index)
     {
-        if (index == 1 && _grades is null && !_gradesLoading)
+        var needsLoad = _isDynastyLeague ? _grades is null : _redraftGrades is null;
+        if (index == 1 && needsLoad && !_gradesLoading)
             await LoadGradesAsync();
     }
 
@@ -373,8 +465,16 @@ else
         {
             try
             {
-                _grades = await http.GetFromJsonAsync<LeagueRosterGradesDto>(
-                    $"api/v1/leagues/{leagueId}/roster-grades?season={_season}");
+                if (_isDynastyLeague)
+                {
+                    _grades = await http.GetFromJsonAsync<LeagueRosterGradesDto>(
+                        $"api/v1/leagues/{leagueId}/roster-grades?season={_season}");
+                }
+                else
+                {
+                    _redraftGrades = await http.GetFromJsonAsync<RedraftLeagueRosterGradesDto>(
+                        $"api/v1/leagues/{leagueId}/redraft-roster-grades?season={_season}");
+                }
             }
             catch { }
         }
@@ -454,4 +554,37 @@ else
         double TradeValue,
         double BreakoutScore,
         int? Age);
+
+    // FAN-107: redraft-specific counterparts — no Dynasty/TeamProfile/DraftCapital fields.
+    private record RedraftLeagueRosterGradesDto(
+        string SleeperLeagueId,
+        int Season,
+        List<RedraftTeamRosterGradeDto> Teams);
+
+    private record RedraftTeamRosterGradeDto(
+        string SleeperRosterId,
+        string TeamName,
+        string OwnerName,
+        int Rank,
+        string DepthGrade,
+        double DepthScore,
+        List<RedraftTeamAssetDto> TopAssets);
+
+    private record RedraftTeamAssetDto(
+        string PlayerName,
+        string Position,
+        double SeasonAvgPoints);
+
+    private record UserContextResponse(
+        bool IsSleeperLinked,
+        string? ActiveLeagueId,
+        List<LeagueItem>? Leagues);
+
+    private record LeagueItem(
+        string LeagueId,
+        string LeagueName,
+        int Season,
+        string Role,
+        bool IsActive = false,
+        string LeagueType = "Redraft");
 }

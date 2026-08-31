@@ -54,4 +54,19 @@ public class WaiverController(IMediator mediator) : ControllerBase
             new GetOffSeasonAvailablePlayersQuery(leagueId, position, top), ct);
         return Ok(result);
     }
+
+    // FAN-113 (2026-08-30): pre-season counterpart to recommendations/roster-aware,
+    // for the same reason available/offseason exists — no VORP data yet.
+    [HttpGet("recommendations/roster-aware/offseason")]
+    public async Task<IActionResult> GetOffSeasonRosterAwareRecommendations(
+    [FromQuery] string leagueId,
+    [FromQuery] string sleeperUserId,
+    [FromQuery] string? position = null,
+    [FromQuery] int top = 30,
+    CancellationToken ct = default)
+    {
+        var result = await mediator.Send(
+            new GetOffSeasonRosterAwareRecommendationsQuery(leagueId, sleeperUserId, position, top), ct);
+        return Ok(result);
+    }
 }

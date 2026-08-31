@@ -1,5 +1,6 @@
-﻿// FF.Application/Features/Leagues/Queries/GetLeagueStandings/GetLeagueStandingsQueryHandler.cs
+// FF.Application/Features/Leagues/Queries/GetLeagueStandings/GetLeagueStandingsQueryHandler.cs
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Services;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -8,6 +9,7 @@ namespace FF.Application.Features.Leagues.Queries.GetLeagueStandings;
 public class GetLeagueStandingsQueryHandler(
     IRosterPlayerRepository rosterPlayerRepository,
     ISimulationResultRepository simulationRepository,
+    IPlayerRepository playerRepository,
     ILeagueRepository leagueRepository,
     ILogger<GetLeagueStandingsQueryHandler> logger)
     : IRequestHandler<GetLeagueStandingsQuery, LeagueStandingsDto?>
@@ -45,46 +47,67 @@ public class GetLeagueStandingsQueryHandler(
         var totalTeams    = league?.TotalTeams ?? rosters.Count;
         var playoffCutoff = PlayoffTeams(totalTeams);
 
-        // 3 — Bulk load projected points for all starters across all rosters
-        var allStarterIds = rosters
-            .SelectMany(r => r.StarterIds)
-            .Distinct()
-            .ToList();
+        // 3 — Bulk load sim medians. Two different consumers need two
+        // different slices of the same data:
+        //   - starters only, for the displayed "Proj Pts This Week" figure
+        //   - the FULL roster (every rostered player, not just starters),
+        //     because RosterStrengthCalculator.ComputeRawDepthScore needs
+        //     bench-eligible depth at each position, same as Roster Grades.
+        var allStarterIds = rosters.SelectMany(r => r.StarterIds).Distinct().ToList();
+        var allRosterIds  = rosters.SelectMany(r => r.PlayerIds).Distinct().ToList();
 
         var simResults = await simulationRepository
-            .GetLatestBySleeperIdsAsync(
-                allStarterIds, request.Season, cancellationToken);
+            .GetLatestBySleeperIdsAsync(allRosterIds, request.Season, cancellationToken);
 
         var simLookup = simResults
             .Where(s => s.SleeperPlayerId != null)
             .ToDictionary(s => s.SleeperPlayerId!, s => s);
 
+        var simMedianLookup = simLookup.ToDictionary(kv => kv.Key, kv => (double)kv.Value.Median);
+
+        var players = await playerRepository.GetBySleeperIdsAsync(allRosterIds, cancellationToken);
+        var playerLookup = players
+            .Where(p => p.SleeperPlayerId != null)
+            .ToDictionary(p => p.SleeperPlayerId!, p => p);
+
         // 4 — Build standings rows
-        // TO:
         var teams = rosters.Select(roster =>
         {
             var projectedPoints = roster.StarterIds
                 .Where(id => simLookup.ContainsKey(id))
                 .Sum(id => simLookup[id].Median);
 
+            // FAN-108: pre-season ranking now uses the SAME Depth Score as
+            // Roster Grades (RosterStrengthCalculator), instead of a raw sum
+            // of starter medians. The raw sum isn't normalized per position,
+            // so it rewards whichever roster happens to have the highest-
+            // scoring positions in its starting lineup rather than reflecting
+            // overall roster strength — which is exactly why an "A" Roster
+            // Grade team could show up ranked below a "D" team in Standings.
+            // Using the shared calculator means the two tabs always agree
+            // pre-season, per Paul's decision (2026-08-30 session).
+            var depthScore = RosterStrengthCalculator.ComputeRawDepthScore(
+                roster.PlayerIds, playerLookup, simMedianLookup);
+
             return new
             {
                 Roster = roster,
-                ProjectedPoints = projectedPoints
+                ProjectedPoints = projectedPoints,
+                DepthScore = depthScore
             };
         }).ToList();
 
-        // 5 — Sort: wins desc, then projected points desc as tiebreaker
+        // 5 — Sort: wins desc, then win% desc, then Depth Score desc as the
+        // pre-season / no-games-yet tiebreaker (was: summed ProjectedPoints).
         var ranked = teams
             .OrderByDescending(t => t.Roster.Wins)
             .ThenByDescending(t => t.Roster.Losses == 0
                 ? 999 : t.Roster.Wins / (double)(t.Roster.Wins + t.Roster.Losses))
-            .ThenByDescending(t => t.ProjectedPoints)
+            .ThenByDescending(t => t.DepthScore)
             .Select((t, index) =>
             {
                 var rank = index + 1;
 
-                // NEW
                 var isFinalized = request.Week >= 15 || request.Season < DateTime.UtcNow.Year;
                 var playoffProjection = isFinalized
                     ? (rank <= playoffCutoff ? "Clinched" : "Eliminated")

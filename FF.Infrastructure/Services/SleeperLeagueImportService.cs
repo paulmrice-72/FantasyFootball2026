@@ -301,6 +301,16 @@ public class SleeperLeagueImportService(
             "Persisted {Count} roster documents with pick ownership for league {LeagueId}",
             rosterDocs.Count, sleeperLeagueId);
 
+        // Prune any roster documents Sleeper no longer returns for this
+        // league — e.g. a team removed, or roster_ids renumbered after the
+        // league's team count changed. Upsert alone never removes these, so
+        // without this they hang around forever and get counted as extra
+        // "teams" everywhere roster documents are read (Standings, Roster
+        // Grades, League Teams). Same shape as the FAN-105 zombie-cache fix.
+        var currentRosterIds = sleeperRosters.Select(r => r.RosterId.ToString()).ToList();
+        await _rosterPlayerRepository.DeleteStaleRostersAsync(
+            sleeperLeagueId, currentRosterIds, cancellationToken);
+
         return (rostersImported, playersTracked);
     }
 

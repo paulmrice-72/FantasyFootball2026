@@ -1,4 +1,5 @@
 using FF.Application.Features.Leagues.Queries.GetLeagueRosterGrades;
+using FF.Application.Features.Leagues.Queries.GetRedraftRosterGrades;
 using FF.Application.Features.Leagues.Queries.GetLeagueStandings;
 using FF.Application.Leagues.Commands.SetLeagueVisibility;
 using FF.Application.Features.Leagues.Commands.SyncUserLeagues;
@@ -109,6 +110,7 @@ public class LeaguesController(IMediator mediator) : ControllerBase
             : Ok(result);
     }
 
+    /// <summary>Returns dynasty-style roster grades for a league (DynastyGrade, TeamProfile, DraftCapitalScore, etc).</summary>
     [HttpGet("{sleeperLeagueId}/roster-grades")]
     public async Task<IActionResult> GetRosterGrades(
     string sleeperLeagueId,
@@ -120,5 +122,22 @@ public class LeaguesController(IMediator mediator) : ControllerBase
 
         return result is null ? NotFound() : Ok(result);
     }
+
+    /// <summary>
+    /// FAN-107: redraft-specific roster grades — Depth Score/Grade + Rank
+    /// only, no dynasty concepts (DynastyScore, TeamProfile, DraftCapital).
+    /// </summary>
+    [HttpGet("{sleeperLeagueId}/redraft-roster-grades")]
+    public async Task<IActionResult> GetRedraftRosterGrades(
+        string sleeperLeagueId,
+        [FromQuery] int season,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetRedraftRosterGradesQuery(sleeperLeagueId, season), ct);
+
+        return result is null ? NotFound() : Ok(result);
+    }
+
     public record SetLeagueVisibilityRequest(bool IsHidden);
 }
