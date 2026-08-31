@@ -207,13 +207,13 @@ else
                     <MudTh>Player</MudTh>
                     <MudTh>Team</MudTh>
                     <MudTh>Age</MudTh>
-                    <MudTh>Status</MudTh>
+                    <MudTh Style="text-align:center;">Status</MudTh>
                     <MudTh>Proj Pts</MudTh>
                     <MudTh>Bye</MudTh>
-                    <MudTh>Role</MudTh>
+                    <MudTh Style="text-align:center;">Role</MudTh>
                 </HeaderContent>
                 <GroupHeaderTemplate>
-                    <MudTh colspan="6" Class="fc-group-header">
+                    <MudTh colspan="7" Class="fc-group-header">
                         <strong>@context.Key</strong>
                     </MudTh>
                 </GroupHeaderTemplate>
@@ -221,7 +221,19 @@ else
                     <MudTd>@context.PlayerName</MudTd>
                     <MudTd>@context.NflTeam</MudTd>
                     <MudTd>@(context.Age?.ToString() ?? "—")</MudTd>
-                    <MudTd>
+                    <MudTd Style="text-align:center;">
+                        @if (!string.IsNullOrEmpty(context.InjuryDesignation))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error">@context.InjuryDesignation</MudChip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Active</MudText>
+                        }
+                    </MudTd>
+                    <MudTd>@(context.MedianProjectedPoints.HasValue ? context.MedianProjectedPoints.Value.ToString("F1") : "—")</MudTd>
+                    <MudTd>@(context.ByeWeek ?? "—")</MudTd>
+                    <MudTd Style="text-align:center;">
                         @if (context.IsStarter)
                         {
                             <MudChip T="string" Size="Size.Small" Color="Color.Primary">Starter</MudChip>
@@ -237,13 +249,6 @@ else
                         else
                         {
                             <MudChip T="string" Size="Size.Small" Color="Color.Default">Bench</MudChip>
-                        }
-                    </MudTd>
-                    <MudTd>@(context.MedianProjectedPoints.HasValue ? context.MedianProjectedPoints.Value.ToString("F1") : "—")</MudTd>
-                    <MudTd>
-                        @if (!string.IsNullOrEmpty(context.InjuryDesignation))
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Error">@context.InjuryDesignation</MudChip>
                         }
                     </MudTd>
                 </RowTemplate>
