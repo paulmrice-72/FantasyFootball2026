@@ -1,4 +1,12 @@
-﻿namespace FF.Application.Services;
+// FF.Application/Services/FantasyPointsCalculator.cs
+//
+// Legacy entry point, kept so existing call sites compile unchanged.
+// The math now lives in FantasyScoringService (L1 of Epic 20) — this class only
+// adapts loose parameters into a LeagueScoringSettings. New code should call
+// FantasyScoringService directly with the league's own settings.
+using FF.Domain.ValueObjects;
+
+namespace FF.Application.Services;
 
 public static class FantasyPointsCalculator
 {
@@ -21,25 +29,25 @@ public static class FantasyPointsCalculator
         decimal passingTdPoints = 4m,
         decimal bonusRecTe = 0m)
     {
-        var points = 0m;
+        var settings = LeagueScoringSettings.From(
+            recPointsPerReception, passingTdPoints, bonusRecTe);
 
-        points += passingYards * 0.04m;
-        points += passingTds * passingTdPoints;
-        points += interceptions * -2m;
-
-        points += rushingYards * 0.1m;
-        points += rushingTds * 6m;
-
-        points += receptions * recPointsPerReception;
-        points += receivingYards * 0.1m;
-        points += receivingTds * 6m;
-        points += receptions * bonusRecTe;
-
-        points += fumblesLost * -2m;
-        points += twoPointConversions * 2m;
-        points += specialTeamsTds * 6m;
-
-        return Math.Round(points, 2);
+        return FantasyScoringService.Score(
+            settings,
+            passingYards: passingYards,
+            passingTds: passingTds,
+            interceptions: interceptions,
+            rushingYards: rushingYards,
+            rushingTds: rushingTds,
+            receptions: receptions,
+            receivingYards: receivingYards,
+            receivingTds: receivingTds,
+            fumblesLost: fumblesLost,
+            twoPointConversions: twoPointConversions,
+            specialTeamsTds: specialTeamsTds,
+            // Legacy behaviour: the caller decided whether the TE bonus applies,
+            // so pass it through verbatim rather than gating on position.
+            bonusRecTeOverride: bonusRecTe);
     }
 
     /// <summary>
@@ -52,13 +60,11 @@ public static class FantasyPointsCalculator
         decimal passingTdPoints = 4m,
         decimal bonusRecTe = 0m)
     {
-        // Aggregate fumbles lost across all categories
         var totalFumblesLost =
             log.RushingFumblesLost +
             log.ReceivingFumblesLost +
             log.SackFumblesLost;
 
-        // Aggregate 2pt conversions across all categories
         var total2Pt =
             log.Passing2PtConversions +
             log.Rushing2PtConversions +

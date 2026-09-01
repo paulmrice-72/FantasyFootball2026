@@ -1,4 +1,4 @@
-﻿// FF.API/Controllers/ProjectionsController.cs
+// FF.API/Controllers/ProjectionsController.cs
 using FF.Application.Features.Lineups.Commands.OptimizeLineup;
 using FF.Application.Features.Projections.Commands.CalculateProjections;
 using FF.Application.Features.Projections.Commands.SaveWeightProfile;
@@ -21,34 +21,68 @@ namespace FF.API.Controllers
     ISimulationResultRepository simulationRepo,
     IMediator mediator) : ControllerBase
     {
+        /// <summary>
+        /// Highest real NFL week. Week 0 is NOT invalid — it is the season-average
+        /// sentinel written by SeedSeasonAverageSims and by preseason projection
+        /// runs, and it is the only week that exists before Week 1 is played.
+        /// </summary>
+        private const int MinWeek = 0;
+        private const int MaxWeek = 22;
+
+        /// <summary>
+        /// Validates season/week for every endpoint on this controller.
+        ///
+        /// Every one of these endpoints previously guarded with
+        /// <c>if (season == 0 || week == 0) return BadRequest(...)</c>, which
+        /// conflates "not supplied" with "zero". Week 0 is a legitimate, meaningful
+        /// value — it is the preseason / season-average projection — so asking for
+        /// it returned 400 and the League page rendered "Projected Players 0" while
+        /// 950 Week-0 simulation rows sat in the database. Nullable parameters
+        /// separate absence from zero properly.
+        /// </summary>
+        private static string? ValidateSeasonWeek(int? season, int? week)
+        {
+            if (season is null or <= 0)
+                return "season is required and must be a four-digit year.";
+
+            if (week is null)
+                return "week is required. Use week=0 for the preseason / season-average projection.";
+
+            if (week < MinWeek || week > MaxWeek)
+                return $"week must be between {MinWeek} and {MaxWeek}. " +
+                       "Week 0 is the preseason / season-average projection.";
+
+            return null;
+        }
+
         [HttpGet]
         public async Task<IActionResult> Get(
-            [FromQuery] int season,
-            [FromQuery] int week,
+            [FromQuery] int? season,
+            [FromQuery] int? week,
             [FromQuery] string? position,
             CancellationToken ct)
         {
-            if (season == 0 || week == 0)
-                return BadRequest("season and week are required.");
+            if (ValidateSeasonWeek(season, week) is { } error)
+                return BadRequest(error);
 
             var results = string.IsNullOrWhiteSpace(position)
-                ? await repo.GetByWeekAsync(season, week, ct)
-                : await repo.GetByPositionAsync(season, week, position.ToUpper(), ct);
+                ? await repo.GetByWeekAsync(season!.Value, week!.Value, ct)
+                : await repo.GetByPositionAsync(season!.Value, week!.Value, position.ToUpper(), ct);
 
             return Ok(results);
         }
 
         [HttpPost("calculate")]
         public async Task<IActionResult> Calculate(
-            [FromQuery] int season,
-            [FromQuery] int week,
+            [FromQuery] int? season,
+            [FromQuery] int? week,
             CancellationToken ct)
         {
-            if (season == 0 || week == 0)
-                return BadRequest("season and week are required.");
+            if (ValidateSeasonWeek(season, week) is { } error)
+                return BadRequest(error);
 
             var result = await mediator.Send(
-                new CalculateProjectionsCommand(season, week), ct);
+                new CalculateProjectionsCommand(season!.Value, week!.Value), ct);
 
             return result.IsSuccess
                 ? Ok(result.Value)
@@ -57,15 +91,15 @@ namespace FF.API.Controllers
 
         [HttpPost("simulate")]
         public async Task<IActionResult> Simulate(
-    [FromQuery] int season,
-    [FromQuery] int week,
-    CancellationToken ct)
+            [FromQuery] int? season,
+            [FromQuery] int? week,
+            CancellationToken ct)
         {
-            if (season == 0 || week == 0)
-                return BadRequest("season and week are required.");
+            if (ValidateSeasonWeek(season, week) is { } error)
+                return BadRequest(error);
 
             var result = await mediator.Send(
-                new RunSimulationsCommand(season, week), ct);
+                new RunSimulationsCommand(season!.Value, week!.Value), ct);
 
             return result.IsSuccess
                 ? Ok(result.Value)
@@ -74,36 +108,36 @@ namespace FF.API.Controllers
 
         [HttpGet("simulations")]
         public async Task<IActionResult> GetSimulations(
-            [FromQuery] int season,
-            [FromQuery] int week,
+            [FromQuery] int? season,
+            [FromQuery] int? week,
             [FromQuery] string? position,
             CancellationToken ct)
         {
-            if (season == 0 || week == 0)
-                return BadRequest("season and week are required.");
+            if (ValidateSeasonWeek(season, week) is { } error)
+                return BadRequest(error);
 
             var results = string.IsNullOrWhiteSpace(position)
-                ? await simulationRepo.GetByWeekAsync(season, week, ct)
-                : await simulationRepo.GetByPositionAsync(season, week, position.ToUpper(), ct);
+                ? await simulationRepo.GetByWeekAsync(season!.Value, week!.Value, ct)
+                : await simulationRepo.GetByPositionAsync(season!.Value, week!.Value, position.ToUpper(), ct);
 
             return Ok(results);
         }
 
         [HttpPost("optimize")]
         public async Task<IActionResult> Optimize(
-           [FromQuery] int season,
-           [FromQuery] int week,
+           [FromQuery] int? season,
+           [FromQuery] int? week,
            [FromQuery] OptimizationMode mode = OptimizationMode.Median,
            [FromQuery] RiskProfile? riskProfile = null,
            [FromBody] OptimizeLineupRequest? request = null,
            CancellationToken ct = default)
         {
-            if (season == 0 || week == 0)
-                return BadRequest("season and week are required.");
+            if (ValidateSeasonWeek(season, week) is { } error)
+                return BadRequest(error);
 
             var result = await mediator.Send(new OptimizeLineupCommand(
-                season,
-                week,
+                season!.Value,
+                week!.Value,
                 mode,
                 riskProfile,
                 request?.LockedPlayerIds,

@@ -1,0 +1,72 @@
+[{
+  "pff_draft_grades": [
+    {
+      "_id": 2025,
+      "rows": 6580,
+      "matched": 6536
+    },
+    {
+      "_id": 2024,
+      "rows": 5785,
+      "matched": 5777
+    },
+    {
+      "_id": 2023,
+      "rows": 5293,
+      "matched": 5292
+    },
+    {
+      "_id": 2022,
+      "rows": 5250,
+      "matched": 5249
+    }
+  ],
+  "fantasyPros_rookie_rankings": [
+    {
+      "_id": {
+        "season": 2025
+      },
+      "rows": 6580,
+      "matched": 6536
+    },
+    {
+      "_id": {
+        "season": 2024
+      },
+      "rows": 5785,
+      "matched": 5777
+    },
+    {
+      "_id": {
+        "season": 2023
+      },
+      "rows": 5293,
+      "matched": 5292
+    },
+    {
+      "_id": {
+        "season": 2022
+      },
+      "rows": 5250,
+      "matched": 5249
+    }
+  ],
+  "combine_results": [
+    {
+      "_id": 2025,
+      "rows": 6580
+    },
+    {
+      "_id": 2024,
+      "rows": 5785
+    },
+    {
+      "_id": 2023,
+      "rows": 5293
+    },
+    {
+      "_id": 2022,
+      "rows": 5250
+    }
+  ]
+}]
