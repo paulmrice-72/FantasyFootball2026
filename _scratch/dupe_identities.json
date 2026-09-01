@@ -1,0 +1,127 @@
+[{
+  "ids": [
+    "00-0038542",
+    "00-0037746"
+  ],
+  "sleeperIds": [
+    "9509",
+    "8154"
+  ],
+  "teams": [
+    "ATL",
+    "SF"
+  ],
+  "rows": 34,
+  "name": "B.Robinson",
+  "pos": "RB",
+  "idCount": 2
+},
+{
+  "ids": [
+    "00-0036997",
+    "00-0040429"
+  ],
+  "sleeperIds": [
+    "12787",
+    "7588"
+  ],
+  "teams": [
+    "TB",
+    "DAL"
+  ],
+  "rows": 18,
+  "name": "J.Williams",
+  "pos": "RB",
+  "idCount": 2
+},
+{
+  "ids": [
+    "00-0039874",
+    "00-0040067"
+  ],
+  "sleeperIds": [
+    null,
+    "11643"
+  ],
+  "teams": [
+    "MIA",
+    "SEA"
+  ],
+  "rows": 10,
+  "name": "J.Wright",
+  "pos": "RB",
+  "idCount": 2
+},
+{
+  "ids": [
+    "00-0036973",
+    "00-0040644"
+  ],
+  "sleeperIds": [
+    "12531",
+    "7543"
+  ],
+  "teams": [
+    "CAR",
+    "JAX"
+  ],
+  "rows": 34,
+  "name": "T.Etienne",
+  "pos": "RB",
+  "idCount": 2
+},
+{
+  "ids": [
+    "00-0033589",
+    "00-0034827"
+  ],
+  "sleeperIds": [
+    "4983",
+    "4274"
+  ],
+  "teams": [
+    "CHI",
+    "CAR"
+  ],
+  "rows": 20,
+  "name": "D.Moore",
+  "pos": "WR",
+  "idCount": 2
+},
+{
+  "ids": [
+    "00-0040131",
+    "00-0040534"
+  ],
+  "sleeperIds": [
+    "12547",
+    null
+  ],
+  "teams": [
+    "PIT",
+    "CIN",
+    "NE"
+  ],
+  "rows": 25,
+  "name": "K.Williams",
+  "pos": "WR",
+  "idCount": 2
+},
+{
+  "ids": [
+    "00-0040237",
+    "00-0036427"
+  ],
+  "sleeperIds": [
+    "6960",
+    "12485"
+  ],
+  "teams": [
+    "NYJ",
+    "TB"
+  ],
+  "rows": 24,
+  "name": "T.Johnson",
+  "pos": "WR",
+  "idCount": 2
+}]

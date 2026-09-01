@@ -1,4 +1,4 @@
-﻿// FF.Infrastructure/Persistence/Mongo/Repositories/SimulationResultRepository.cs
+// FF.Infrastructure/Persistence/Mongo/Repositories/SimulationResultRepository.cs
 using FF.Application.Interfaces.Persistence;
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
@@ -12,6 +12,34 @@ public class SimulationResultRepository(
 {
     private readonly IMongoCollection<SimulationResultDocument> _collection =
         database.GetCollection<SimulationResultDocument>("simulation_results");
+
+    // ── Week selection policy (PROJ-006 / FAN-121) ────────────────────────
+    //
+    // Week 0 is the season-average sentinel. The previous rule sorted it as
+    // int.MaxValue, so it beat every real week in its season, unconditionally.
+    //
+    // That was harmless while the only Week 0 rows were true averages of a
+    // COMPLETED season. It stopped being harmless on 2026-09-01, when the
+    // projection engine began writing a Season 2026 Week 0 row whose contents are
+    // a 2025 carryover: that stale preseason snapshot would have outranked every
+    // real 2026 week for the whole season, with live results sitting unused in the
+    // collection beside it.
+    //
+    // The rule is now: prefer the highest REAL week; fall back to Week 0 only when
+    // the player has no real week in that season. Preseason still resolves to the
+    // Week 0 carryover, because that is all that exists.
+    private static SimulationResultDocument SelectBest(
+        IEnumerable<SimulationResultDocument> playerDocs)
+    {
+        var docs = playerDocs as ICollection<SimulationResultDocument> ?? playerDocs.ToList();
+
+        var latestRealWeek = docs
+            .Where(d => d.Week > 0)
+            .OrderByDescending(d => d.Week)
+            .FirstOrDefault();
+
+        return latestRealWeek ?? docs.OrderByDescending(d => d.Week).First();
+    }
 
     public async Task UpsertAsync(
         SimulationResultDocument document,
@@ -158,16 +186,36 @@ public class SimulationResultRepository(
             Builders<SimulationResultDocument>.Filter.Eq(x => x.SleeperPlayerId, sleeperPlayerId),
             Builders<SimulationResultDocument>.Filter.Eq(x => x.Season, season));
 
-        return await _collection
-            .Find(filter)
-            .SortByDescending(x => x.Week)
-            .FirstOrDefaultAsync(ct);
+        var docs = await _collection.Find(filter).ToListAsync(ct);
+
+        return docs.Count == 0 ? null : SelectBest(docs);
     }
 
+    /// <summary>
+    /// Latest simulation per player for the requested season, falling back to the
+    /// prior season PER PLAYER when that player has nothing for the requested one.
+    ///
+    /// The old implementation checked <c>results.Count == 0</c> — a batch-level test.
+    /// Once ANY player in the request had current-season data the fallback stopped
+    /// firing for everyone, so every player without a row silently vanished from the
+    /// result and rendered as zero downstream. That was masked for as long as the
+    /// current season was completely empty; it surfaced the moment the projection
+    /// engine started writing 2026 rows, and it hit exactly the players most likely
+    /// to be misvalued — rookies and anyone with a short prior season.
+    ///
+    /// Returned documents carry their own <c>Season</c> and <c>Week</c>, so callers
+    /// can tell a current-season number from a carried-forward one and surface that
+    /// in the UI rather than presenting stale data as live.
+    /// </summary>
     public async Task<IReadOnlyList<SimulationResultDocument>> GetLatestBySleeperIdsAsync(
         IEnumerable<string> sleeperPlayerIds, int season, CancellationToken ct = default)
     {
-        var ids = sleeperPlayerIds.ToList();
+        var ids = sleeperPlayerIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0) return [];
 
         var filter = Builders<SimulationResultDocument>.Filter.And(
             Builders<SimulationResultDocument>.Filter.In(x => x.SleeperPlayerId, ids),
@@ -175,32 +223,64 @@ public class SimulationResultRepository(
 
         var docs = await _collection.Find(filter).ToListAsync(ct);
 
-        var results = docs
-            .GroupBy(d => d.SleeperPlayerId)
-            .Select(g => g.OrderByDescending(d => d.Week == 0 ? int.MaxValue : d.Week).First())
-            .ToList();
+        var resolved = docs
+            .Where(d => !string.IsNullOrEmpty(d.SleeperPlayerId))
+            .GroupBy(d => d.SleeperPlayerId!)
+            .ToDictionary(g => g.Key, g => SelectBest(g));
 
-        if (results.Count == 0 && season >= DateTime.UtcNow.Year && season > 2020)
+        // Only the ids that found nothing fall back — one player at a time.
+        var missing = ids.Where(id => !resolved.ContainsKey(id)).ToList();
+
+        var currentSeasonCount = resolved.Count;
+        var canFallBack = season >= DateTime.UtcNow.Year && season > 2020;
+
+        if (missing.Count > 0 && canFallBack)
         {
-            logger.LogInformation(
-                "No sim data found for season {Season} — falling back to {FallbackSeason}",
-                season, season - 1);
-
             var fallbackFilter = Builders<SimulationResultDocument>.Filter.And(
-                Builders<SimulationResultDocument>.Filter.In(x => x.SleeperPlayerId, ids),
+                Builders<SimulationResultDocument>.Filter.In(x => x.SleeperPlayerId, missing),
                 Builders<SimulationResultDocument>.Filter.Eq(x => x.Season, season - 1));
 
             var fallbackDocs = await _collection.Find(fallbackFilter).ToListAsync(ct);
 
-            return fallbackDocs
-                .GroupBy(d => d.SleeperPlayerId)
-                .Select(g => g.OrderByDescending(d => d.Week == 0 ? int.MaxValue : d.Week).First())
-                .ToList();
+            var recovered = fallbackDocs
+                .Where(d => !string.IsNullOrEmpty(d.SleeperPlayerId))
+                .GroupBy(d => d.SleeperPlayerId!)
+                .ToDictionary(g => g.Key, g => SelectBest(g));
+
+            foreach (var kvp in recovered)
+                resolved[kvp.Key] = kvp.Value;
+
+            logger.LogInformation(
+                "Sim lookup for season {Season}: {Current} resolved from the requested season, " +
+                "{Recovered} of {Missing} recovered from {FallbackSeason}, {Unresolved} still have no data",
+                season, currentSeasonCount, recovered.Count, missing.Count,
+                season - 1, missing.Count - recovered.Count);
+        }
+        else if (missing.Count > 0)
+        {
+            logger.LogInformation(
+                "Sim lookup for season {Season}: {Missing} of {Total} players have no data " +
+                "and no fallback applies",
+                season, missing.Count, ids.Count);
         }
 
-        return results;
+        return resolved.Values.ToList();
     }
 
+    /// <summary>
+    /// Fallback lookup by player name + position when the SleeperPlayerId → GSIS
+    /// bridge is missing (e.g. rookies whose GSIS ids aren't yet in Sleeper).
+    ///
+    /// CAUTION: <c>PlayerName</c> is stored abbreviated ("B.Robinson", "T.Etienne"),
+    /// so a name can refer to more than one real player. Position does NOT make it
+    /// safe, and neither would team: Bijan and Brian Robinson are both RBs and can
+    /// sit on the same roster. There is no attribute combination that reliably
+    /// separates two people who share an abbreviated name.
+    ///
+    /// So this does not try to pick the right one. If the name resolves to more
+    /// than one distinct <c>PlayerId</c> in a season, it REFUSES — returning no
+    /// data is correct, returning another player's projection is not. See FAN-122.
+    /// </summary>
     public async Task<SimulationResultDocument?> GetMostRecentByNameAsync(
        string playerName, string position, int season, CancellationToken ct = default)
     {
@@ -217,9 +297,31 @@ public class SimulationResultRepository(
 
             if (results.Count == 0) continue;
 
-            // Prefer Week=0 season average; otherwise take highest-week result
-            var best = results.FirstOrDefault(r => r.Week == 0)
-                ?? results.OrderByDescending(r => r.Week).First();
+            // Ambiguity check. Multiple weeks for one player share a PlayerId, so
+            // more than one distinct PlayerId here means the name genuinely maps
+            // to more than one human. Bail out rather than pick.
+            var distinctPlayers = results
+                .Select(r => r.PlayerId)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Distinct()
+                .ToList();
+
+            if (distinctPlayers.Count > 1)
+            {
+                logger.LogWarning(
+                    "Name fallback for {Player} ({Pos}) in season {Season} is ambiguous — " +
+                    "{Count} distinct players share that abbreviated name ({Ids}). " +
+                    "Returning no data rather than guessing. Fix the Sleeper→GSIS mapping " +
+                    "for this player (FAN-122).",
+                    playerName, position, s, distinctPlayers.Count,
+                    string.Join(", ", distinctPlayers));
+
+                return null;
+            }
+
+            // Same policy as everywhere else: newest real week wins, Week 0 only
+            // when nothing real exists for that season.
+            var best = SelectBest(results);
 
             if (best.Median > 0)
             {

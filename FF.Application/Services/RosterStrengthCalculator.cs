@@ -4,15 +4,27 @@ using FF.Domain.Entities;
 namespace FF.Application.Services;
 
 /// <summary>
-/// Shared "roster strength" (Depth Score) calculation, plus the generic
-/// within-league percentile ranking and letter-grade mapping, used by both
-/// the dynasty (GetLeagueRosterGradesQueryHandler) and redraft
+/// Shared "roster strength" calculation, plus the generic within-league
+/// percentile ranking and letter-grade mapping, used by both the dynasty
+/// (GetLeagueRosterGradesQueryHandler) and redraft
 /// (GetRedraftRosterGradesQueryHandler) Roster Grades handlers.
 ///
 /// FAN-107 (2026-08-30): extracted out of GetLeagueRosterGradesQueryHandler
 /// so the two handlers can't drift into two separate depth-scoring
 /// implementations over time. FAN-108 plans to reuse RankByDescending /
 /// RankFractionToGrade again for the Standings pre-season tiebreaker.
+///
+/// 2026-09-01: the per-position breakdown behind the overall score is now
+/// exposed (<see cref="ComputePositionStrengths"/>) so the Standings table can
+/// show a positional grade per team without a round-trip per team, and both the
+/// overall score and the breakdown are computed from one implementation.
+///
+/// NAMING CAUTION: this is a STARTERS score, not a depth score. It looks only at
+/// each position's best N players (N = starter slots) and ignores the bench
+/// entirely. That is a different measure from
+/// GetPositionalDepthGradesQueryHandler, which does weight bench players. Two
+/// pages can legitimately disagree about the same roster because they are
+/// answering two different questions.
 /// </summary>
 public static class RosterStrengthCalculator
 {
@@ -32,26 +44,41 @@ public static class RosterStrengthCalculator
         ["TE"] = 1
     };
 
+    public static readonly string[] GradedPositions = ["QB", "RB", "WR", "TE"];
+
     /// <summary>
-    /// Raw Depth Score (0-100, not yet league-relative) for one roster:
-    /// average, across QB/RB/WR/TE, of each position's starter-quality
-    /// (best N sim-median players at that position, N = starter slots)
-    /// normalised against a fixed positional baseline.
-    ///
-    /// GRADE-FIX-002: a position contributes 0 if its starter quality is
-    /// below 50% of baseline — keeps a handful of filler players from
-    /// inflating a thin position's grade.
+    /// Positional baseline used to normalise sim medians — roughly a startable
+    /// starter's per-game production at that position. Exposed so callers can
+    /// compare players across positions without re-declaring the numbers.
     /// </summary>
-    public static double ComputeRawDepthScore(
+    public static double GetBaseline(string position) =>
+        PositionBaseline.TryGetValue(position, out var b) ? b : 0.0;
+
+    /// <summary>One position's contribution to a roster's overall strength.</summary>
+    /// <param name="StarterPoints">Average sim median of the best N at the position.</param>
+    /// <param name="NormalizedScore">
+    /// StarterPoints against the positional baseline, scaled to a 50-point axis.
+    /// Zero when starter quality is below half of baseline (GRADE-FIX-002).
+    /// </param>
+    public readonly record struct PositionStrength(
+        string Position,
+        double StarterPoints,
+        double NormalizedScore);
+
+    /// <summary>
+    /// Per-position starter strength for one roster. This is the breakdown that
+    /// <see cref="ComputeRawDepthScore"/> averages, so a team's overall number and
+    /// its positional numbers can never disagree.
+    /// </summary>
+    public static IReadOnlyList<PositionStrength> ComputePositionStrengths(
         IEnumerable<string> rosterPlayerIds,
         IReadOnlyDictionary<string, Player> playerLookup,
         IReadOnlyDictionary<string, double> simMedianLookup)
     {
         var playerIds = rosterPlayerIds as ICollection<string> ?? rosterPlayerIds.ToList();
-        double totalDepthScore = 0;
-        var positionsGraded = 0;
+        var result = new List<PositionStrength>(GradedPositions.Length);
 
-        foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
+        foreach (var pos in GradedPositions)
         {
             var baseline = PositionBaseline[pos];
             var slots = StarterSlots[pos];
@@ -68,16 +95,31 @@ public static class RosterStrengthCalculator
 
             var starterScore = posPlayers.Take(slots).DefaultIfEmpty(0).Average();
 
+            // GRADE-FIX-002: a position contributes 0 if its starter quality is
+            // below 50% of baseline — keeps a handful of filler players from
+            // inflating a thin position's grade.
             var starterQualityFloor = baseline * 0.50;
-            if (starterScore >= starterQualityFloor)
-            {
-                var starterNorm = baseline > 0 ? (starterScore / baseline) * 50.0 : 0;
-                totalDepthScore += Math.Clamp(starterNorm, 0, 100);
-            }
-            positionsGraded++;
+            var normalized = starterScore >= starterQualityFloor && baseline > 0
+                ? Math.Clamp((starterScore / baseline) * 50.0, 0, 100)
+                : 0.0;
+
+            result.Add(new PositionStrength(pos, starterScore, normalized));
         }
 
-        return positionsGraded > 0 ? totalDepthScore / positionsGraded : 0.0;
+        return result;
+    }
+
+    /// <summary>
+    /// Raw roster score (0-100, not yet league-relative) for one roster: the
+    /// average across QB/RB/WR/TE of each position's normalised starter quality.
+    /// </summary>
+    public static double ComputeRawDepthScore(
+        IEnumerable<string> rosterPlayerIds,
+        IReadOnlyDictionary<string, Player> playerLookup,
+        IReadOnlyDictionary<string, double> simMedianLookup)
+    {
+        var strengths = ComputePositionStrengths(rosterPlayerIds, playerLookup, simMedianLookup);
+        return strengths.Count > 0 ? strengths.Sum(s => s.NormalizedScore) / strengths.Count : 0.0;
     }
 
     /// <summary>
@@ -113,12 +155,44 @@ public static class RosterStrengthCalculator
     }
 
     /// <summary>
+    /// Integer placing (1 = best) for each item, in the SAME ORDER as the input
+    /// list. Ties share the better placing. Used for the per-position "3rd of 12"
+    /// figure, which is far more legible than a letter when the underlying scores
+    /// are tightly bunched.
+    /// </summary>
+    public static int[] PlacingByDescending<T>(List<T> items, Func<T, double> selector)
+    {
+        var n = items.Count;
+        var placings = new int[n];
+        if (n == 0) return placings;
+
+        var order = Enumerable.Range(0, n)
+            .OrderByDescending(i => selector(items[i]))
+            .ToList();
+
+        var i = 0;
+        while (i < n)
+        {
+            var j = i;
+            while (j < n && selector(items[order[j]]).Equals(selector(items[order[i]]))) j++;
+            for (var k = i; k < j; k++) placings[order[k]] = i + 1;
+            i = j;
+        }
+
+        return placings;
+    }
+
+    /// <summary>
     /// Maps a within-league rank fraction (0.0 = best team in the league,
     /// 1.0 = worst) to a letter grade. Percentile-within-league is
     /// self-correcting — it always reflects "how does my team compare to
     /// the ~10-14 others in THIS league" and never needs recalibrating when
     /// the underlying score scale moves (see FAN-95 follow-up notes on the
     /// old fixed-cutoff approach this replaced).
+    ///
+    /// The trade-off worth remembering: because this is purely relative, a league
+    /// of twelve near-identical rosters still produces an A+ and an F. The letter
+    /// says where you place, not how good you are.
     /// </summary>
     public static string RankFractionToGrade(double rankFraction) => rankFraction switch
     {

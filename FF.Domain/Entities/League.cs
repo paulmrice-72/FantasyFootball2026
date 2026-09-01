@@ -1,4 +1,4 @@
-﻿// FF.Domain/Entities/League.cs
+// FF.Domain/Entities/League.cs
 using FF.Domain.ValueObjects;
 using FF.SharedKernel;
 
@@ -108,6 +108,15 @@ public class League : Entity
             ? RosterConfiguration.Standard
             : RosterConfiguration.FromSleeperPositions(
                 RosterPositions.Split(','));
+
+    /// <summary>
+    /// Returns this league's scoring rules for the L1 layer of the projection
+    /// engine (Epic 20). Pair with a ProjectedStatLine to get fantasy points in
+    /// THIS league's format — full PPR, half PPR, TE premium, 6-point passing TDs,
+    /// whatever Sleeper reported. Mirrors GetRosterConfiguration().
+    /// </summary>
+    public LeagueScoringSettings GetScoringSettings() =>
+        LeagueScoringSettings.From(RecPerReception, PassingTdPoints, BonusRecTe);
 
     public void SetActiveStatus(bool isActive)
     {

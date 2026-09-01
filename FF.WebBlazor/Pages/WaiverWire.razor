@@ -527,10 +527,15 @@ else
             _selectedLeagueId = !string.IsNullOrEmpty(LeagueState.ActiveLeagueId)
                 ? LeagueState.ActiveLeagueId
                 : _context?.ActiveLeagueId ?? string.Empty;
-            _isOffSeason = DateTime.UtcNow.Month is >= 3 and < 9;
-
             // Honour admin override
             (_currentSeason, _week) = await NflContext.GetContextAsync();
+
+            // Pre-season is a DATA condition, not a calendar one. Week 0 means no
+            // games have been played, whatever the date says. The old month-only
+            // test flipped to "in season" on 1 September while the league was still
+            // 0-0 at Week 0, which sent this page down the VORP path — where there
+            // is no VORP data until real games exist.
+            _isOffSeason = _week <= 0 || DateTime.UtcNow.Month is >= 3 and < 9;
         }
         catch { }
         finally { _contextLoading = false; }
@@ -552,7 +557,26 @@ else
 
         _vorpLoading = true;
         _vorpQueried = true;
-        // ... existing code unchanged ...
+        try
+        {
+            // Position is filtered client-side (see FilteredVorpRecs), so the
+            // request deliberately fetches the whole list rather than re-querying
+            // every time the position chip changes.
+            var url = $"api/v1/waiver/recommendations"
+                    + $"?leagueId={_selectedLeagueId}"
+                    + $"&season={_currentSeason}&week={_week}&top=30";
+
+            var result = await Http.GetFromJsonAsync<List<VorpRecommendationDocument>>(url);
+            _vorpRecs = result ?? [];
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load waiver recommendations: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _vorpLoading = false;
+        }
     }
 
     private async Task LoadOffSeasonAsync()

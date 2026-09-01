@@ -1,4 +1,4 @@
-﻿// FF.Application/Features/Team/Queries/GetPositionalDepthGradesQueryHandler.cs
+// FF.Application/Features/Team/Queries/GetPositionalDepthGradesQueryHandler.cs
 using FF.Application.Interfaces.Persistence;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -14,6 +14,16 @@ public class GetPositionalDepthGradesQueryHandler(
     : IRequestHandler<GetPositionalDepthGradesQuery, PositionalDepthGradesDto?>
 {
     private static readonly double[] DepthWeights = [1.0, 0.60, 0.35, 0.20, 0.10];
+
+    /// <summary>
+    /// Sum of the depth weights (2.25). Used as the depth normalisation reference:
+    /// a position stocked with baseline-quality players across every weighted slot
+    /// scores exactly the full 30 depth points.
+    /// </summary>
+    private static readonly double DepthWeightTotal = DepthWeights.Sum();
+
+    private const double MaxDepthPoints = 30.0;
+    private const double StarterPointScale = 50.0;
 
     private static readonly (double Min, string Grade, string Label)[] GradeTable =
     [
@@ -101,18 +111,12 @@ public class GetPositionalDepthGradesQueryHandler(
                     injuryLookup.TryGetValue(id, out var injury);
 
                     var designation = injury?.Designation;
-                    var isOut = designation is "IR" or "Out";
+                    var isOut = IsOut(designation);
                     var median = sim is not null ? (double)sim.Median : 0.0;
-                    var injuryFactor = designation switch
-                    {
-                        "Q" or "Doubtful" => 0.80,
-                        "IR" or "Out" => 0.0,
-                        _ => 1.0
-                    };
 
                     return new
                     {
-                        Median = median * injuryFactor,
+                        Median = median * InjuryFactor(designation),
                         RawMedian = median,
                         IsOut = isOut,
                         Designation = designation
@@ -139,9 +143,43 @@ public class GetPositionalDepthGradesQueryHandler(
 
             // GRADE-FIX-002: if starter quality is below 50% of baseline,
             // position contributes nothing — prevents filler inflation
-            var starterQualityFloor = baseline * 0.50;
-            var starterNorm = baseline > 0 ? (starterScore / baseline) * 50.0 : 0;
-            var depthNorm = baseline > 0 ? (depthScore / (baseline * starterSlots)) * 30.0 : 0;
+            var starterQualityFloor = baseline * FillerFloorFraction;
+
+            // Starter component is intentionally UNCAPPED. An elite starter scoring
+            // well above baseline is how a room reaches A+; clamping this at 50
+            // would make the A+ tier unreachable.
+            var starterNorm = baseline > 0
+                ? (starterScore / baseline) * StarterPointScale
+                : 0;
+
+            // ── Depth normalisation (fixed 2026-09-01) ────────────────────────
+            //
+            // This previously divided by (baseline * starterSlots), which made the
+            // denominator depend on how many STARTERS a position requires rather
+            // than on how much depth was actually being measured. The numerator
+            // sums every rostered player against the depth weights, so the two
+            // sides were measuring different things.
+            //
+            // The effect was a systematic bias toward single-starter positions.
+            // Verified against a live roster on 2026-09-01:
+            //
+            //   QB  2 players -> depth component 41.5   (of a documented max of 30)
+            //   TE  2 players -> depth component 40.0
+            //   RB  4 players -> depth component 31.5
+            //   WR  6 players -> depth component 21.7
+            //
+            // So a two-man TE room scored 40 depth points and graded A, while a
+            // six-man WR room scored 21.7 and graded B+ — the "A's on positions
+            // with no depth beyond the starter" reported on 2026-08-31. It was not
+            // rewarding quantity over quality; it was dividing by the wrong number.
+            //
+            // Normalising against the weight total means a position filled with
+            // baseline-quality players across every weighted slot earns exactly the
+            // documented 30 points, regardless of how many starters it requires.
+            var depthNorm = baseline > 0
+                ? Math.Min((depthScore / (baseline * DepthWeightTotal)) * MaxDepthPoints, MaxDepthPoints)
+                : 0;
+
             var rawScore = starterScore < starterQualityFloor
                 ? 0.0
                 : Math.Clamp(starterNorm + depthNorm, 0, 100);
@@ -165,6 +203,43 @@ public class GetPositionalDepthGradesQueryHandler(
         }
 
         return new PositionalDepthGradesDto(Grades: grades);
+    }
+
+    // ── Injury designation handling ──────────────────────────────────────
+    //
+    // The designation string is matched loosely on purpose. The previous version
+    // compared against exactly "Q", "Doubtful", "IR" and "Out"; grades computed on
+    // 2026-09-01 reproduce exactly only when NO injury factor is applied to three
+    // players the UI displayed as "Questionable", so the comparison was not
+    // matching the stored values. Matching on a normalised prefix makes the check
+    // work for "Q" and "Questionable" alike.
+    //
+    // NOTE: this being a string mismatch is inferred, not proven — an empty injury
+    // lookup would produce the same symptom. If grades still ignore injuries after
+    // this change, check what GetActiveAlertsAsync actually returns.
+
+    private static double InjuryFactor(string? designation) =>
+        Normalise(designation) switch
+        {
+            "OUT" => 0.0,
+            "DOUBTFUL" => 0.80,
+            "QUESTIONABLE" => 0.80,
+            _ => 1.0
+        };
+
+    private static bool IsOut(string? designation) => Normalise(designation) == "OUT";
+
+    private static string Normalise(string? designation)
+    {
+        if (string.IsNullOrWhiteSpace(designation)) return string.Empty;
+
+        var d = designation.Trim().ToUpperInvariant();
+
+        if (d is "IR" or "O" or "OUT" || d.StartsWith("OUT")) return "OUT";
+        if (d is "D" || d.StartsWith("DOUBT")) return "DOUBTFUL";
+        if (d is "Q" || d.StartsWith("QUEST")) return "QUESTIONABLE";
+
+        return d;
     }
 
     private static (string Grade, string Label) MapGrade(int score)

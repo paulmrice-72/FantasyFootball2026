@@ -25,9 +25,28 @@ public record RedraftTeamRosterGradeDto(
     int Rank,                    // 1 = strongest roster in the league — "where do I stand" ask
     string DepthGrade,           // A / B / C / D / F
     double DepthScore,           // 0–100 normalised, league-relative
-    List<RedraftTeamAssetDto> TopAssets);
+    List<RedraftTeamAssetDto> TopAssets,
+    List<TeamPositionGradeDto> PositionGrades);
 
 public record RedraftTeamAssetDto(
     string PlayerName,
     string Position,
     double SeasonAvgPoints);      // sim-median projected points — no TradeValue/BreakoutScore (dynasty-only concepts)
+
+/// <summary>
+/// One position's standing for one team, so the league table can show the
+/// positional breakdown inline instead of requiring a click into each team
+/// (Paul's ask, 2026-09-01).
+///
+/// Graded the same way as the overall roster score on this page — ranked WITHIN
+/// the league rather than against an absolute scale — so "B+ at WR" here means
+/// "this league's 4th-best WR room", not "a good WR room in the abstract".
+/// <paramref name="Placing"/> is the plain version of that and is usually the
+/// more useful number to show: "3rd of 12".
+/// </summary>
+public record TeamPositionGradeDto(
+    string Position,
+    string Grade,
+    int Placing,                  // 1 = best room at this position in the league
+    int TeamCount,
+    double StarterPoints);        // avg sim median of the starters at this position

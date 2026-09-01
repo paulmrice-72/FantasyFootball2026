@@ -1,0 +1,396 @@
+[{
+  "_id": {
+    "name": "B.Robinson",
+    "pos": "RB"
+  },
+  "identities": [
+    {
+      "playerId": "00-0037746",
+      "sleeperId": [
+        "8154"
+      ],
+      "games": 17,
+      "weeks": [
+        4,
+        18,
+        17,
+        7,
+        3,
+        8,
+        15,
+        2,
+        13,
+        9,
+        10,
+        1,
+        16,
+        6,
+        5,
+        11,
+        12
+      ],
+      "targets": 12,
+      "carries": 92,
+      "recYds": 25
+    },
+    {
+      "playerId": "00-0038542",
+      "sleeperId": [
+        "9509"
+      ],
+      "games": 17,
+      "weeks": [
+        4,
+        3,
+        8,
+        16,
+        7,
+        13,
+        9,
+        15,
+        2,
+        17,
+        6,
+        10,
+        1,
+        11,
+        14,
+        12,
+        18
+      ],
+      "targets": 103,
+      "carries": 287,
+      "recYds": 820
+    }
+  ],
+  "n": 2
+},
+{
+  "_id": {
+    "name": "J.Williams",
+    "pos": "RB"
+  },
+  "identities": [
+    {
+      "playerId": "00-0036997",
+      "sleeperId": [
+        "7588"
+      ],
+      "games": 16,
+      "weeks": [
+        4,
+        7,
+        15,
+        8,
+        3,
+        2,
+        16,
+        9,
+        13,
+        1,
+        17,
+        6,
+        14,
+        5,
+        11,
+        12
+      ],
+      "targets": 51,
+      "carries": 252,
+      "recYds": 137
+    },
+    {
+      "playerId": "00-0040429",
+      "sleeperId": [
+        "12787"
+      ],
+      "games": 2,
+      "weeks": [
+        5,
+        8
+      ],
+      "targets": 0,
+      "carries": 4,
+      "recYds": 0
+    }
+  ],
+  "n": 2
+},
+{
+  "_id": {
+    "name": "J.Wright",
+    "pos": "RB"
+  },
+  "identities": [
+    {
+      "playerId": "00-0039874",
+      "sleeperId": [
+        "11643"
+      ],
+      "games": 9,
+      "weeks": [
+        15,
+        17,
+        8,
+        16,
+        18,
+        13,
+        10,
+        14,
+        11
+      ],
+      "targets": 9,
+      "carries": 70,
+      "recYds": 44
+    },
+    {
+      "playerId": "00-0040067",
+      "sleeperId": [
+        null
+      ],
+      "games": 1,
+      "weeks": [
+        3
+      ],
+      "targets": 0,
+      "carries": 5,
+      "recYds": 0
+    }
+  ],
+  "n": 2
+},
+{
+  "_id": {
+    "name": "T.Etienne",
+    "pos": "RB"
+  },
+  "identities": [
+    {
+      "playerId": "00-0036973",
+      "sleeperId": [
+        "7543"
+      ],
+      "games": 17,
+      "weeks": [
+        4,
+        2,
+        13,
+        9,
+        17,
+        7,
+        3,
+        15,
+        5,
+        14,
+        16,
+        11,
+        10,
+        1,
+        6,
+        18,
+        12
+      ],
+      "targets": 52,
+      "carries": 260,
+      "recYds": 292
+    },
+    {
+      "playerId": "00-0040644",
+      "sleeperId": [
+        "12531"
+      ],
+      "games": 17,
+      "weeks": [
+        4,
+        9,
+        13,
+        2,
+        8,
+        3,
+        15,
+        7,
+        11,
+        16,
+        17,
+        5,
+        6,
+        1,
+        10,
+        18,
+        12
+      ],
+      "targets": 3,
+      "carries": 20,
+      "recYds": 13
+    }
+  ],
+  "n": 2
+},
+{
+  "_id": {
+    "name": "D.Moore",
+    "pos": "WR"
+  },
+  "identities": [
+    {
+      "playerId": "00-0033589",
+      "sleeperId": [
+        "4274"
+      ],
+      "games": 3,
+      "weeks": [
+        4,
+        1,
+        3
+      ],
+      "targets": 1,
+      "carries": 1,
+      "recYds": 5
+    },
+    {
+      "playerId": "00-0034827",
+      "sleeperId": [
+        "4983"
+      ],
+      "games": 17,
+      "weeks": [
+        4,
+        18,
+        17,
+        15,
+        7,
+        8,
+        3,
+        2,
+        13,
+        9,
+        10,
+        1,
+        16,
+        6,
+        14,
+        11,
+        12
+      ],
+      "targets": 85,
+      "carries": 15,
+      "recYds": 682
+    }
+  ],
+  "n": 2
+},
+{
+  "_id": {
+    "name": "K.Williams",
+    "pos": "WR"
+  },
+  "identities": [
+    {
+      "playerId": "00-0040534",
+      "sleeperId": [
+        null
+      ],
+      "games": 11,
+      "weeks": [
+        8,
+        16,
+        18,
+        11,
+        10,
+        6,
+        13,
+        9,
+        17,
+        7,
+        12
+      ],
+      "targets": 1,
+      "carries": 2,
+      "recYds": 5
+    },
+    {
+      "playerId": "00-0040131",
+      "sleeperId": [
+        "12547"
+      ],
+      "games": 14,
+      "weeks": [
+        10,
+        9,
+        13,
+        7,
+        15,
+        16,
+        3,
+        12,
+        17,
+        11,
+        18,
+        1,
+        4,
+        6
+      ],
+      "targets": 21,
+      "carries": 2,
+      "recYds": 209
+    }
+  ],
+  "n": 2
+},
+{
+  "_id": {
+    "name": "T.Johnson",
+    "pos": "WR"
+  },
+  "identities": [
+    {
+      "playerId": "00-0036427",
+      "sleeperId": [
+        "6960"
+      ],
+      "games": 9,
+      "weeks": [
+        8,
+        16,
+        10,
+        1,
+        6,
+        2,
+        17,
+        7,
+        3
+      ],
+      "targets": 18,
+      "carries": 0,
+      "recYds": 197
+    },
+    {
+      "playerId": "00-0040237",
+      "sleeperId": [
+        "12485"
+      ],
+      "games": 15,
+      "weeks": [
+        15,
+        17,
+        8,
+        16,
+        7,
+        3,
+        13,
+        4,
+        12,
+        18,
+        1,
+        10,
+        6,
+        5,
+        11
+      ],
+      "targets": 44,
+      "carries": 7,
+      "recYds": 322
+    }
+  ],
+  "n": 2
+}]
