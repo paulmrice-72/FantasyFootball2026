@@ -290,6 +290,7 @@ else
                                 <MudTh><MudTableSortLabel SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.TeamName)">Team</MudTableSortLabel></MudTh>
                                 <MudTh Style="text-align:center;"><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.DepthScore)">Roster Strength</MudTableSortLabel></MudTh>
                                 <MudTh Style="text-align:center; width:70px;">Score</MudTh>
+                                <MudTh Style="text-align:center;">Positions</MudTh>
                                 <MudTh>Top Assets</MudTh>
                             </HeaderContent>
                             <RowTemplate>
@@ -315,6 +316,18 @@ else
                                         @context.DepthScore.ToString("F1")
                                     </MudText>
                                 </MudTd>
+                                <MudTd Style="text-align:center;">
+                                    <div class="d-flex flex-wrap gap-1 justify-center">
+                                        @foreach (var pg in context.PositionGrades)
+                                        {
+                                            <MudTooltip Text="@($"{pg.Position}: {Ordinal(pg.Placing)} of {pg.TeamCount} in the league · starters average {pg.StarterPoints:F1} pts")">
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                                    <span class="font-mono" style="@GradeStyle(pg.Grade)">@pg.Position&nbsp;@pg.Grade</span>
+                                                </MudChip>
+                                            </MudTooltip>
+                                        }
+                                    </div>
+                                </MudTd>
                                 <MudTd>
                                     <div class="d-flex flex-wrap gap-1">
                                         @foreach (var asset in context.TopAssets.Take(3))
@@ -337,6 +350,8 @@ else
 
                     <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
                         Roster Strength: sim-median production vs. positional baselines, ranked within your league.
+                        Positional grades are ranked the same way — "WR B+" means this league's 4th-best WR room,
+                        not a verdict in the abstract. Hover a chip for the exact placing.
                         Rank #1 = strongest roster in the league right now.
                     </MudText>
                 }
@@ -568,12 +583,32 @@ else
         int Rank,
         string DepthGrade,
         double DepthScore,
-        List<RedraftTeamAssetDto> TopAssets);
+        List<RedraftTeamAssetDto> TopAssets,
+        List<TeamPositionGradeDto> PositionGrades);
+
+    // 2026-09-01: per-position standing, so the league table shows the breakdown
+    // inline instead of needing a click into every team.
+    private record TeamPositionGradeDto(
+        string Position,
+        string Grade,
+        int Placing,
+        int TeamCount,
+        double StarterPoints);
 
     private record RedraftTeamAssetDto(
         string PlayerName,
         string Position,
         double SeasonAvgPoints);
+
+    // 1 -> "1st", 2 -> "2nd", 11 -> "11th"
+    private static string Ordinal(int n)
+    {
+        if (n <= 0) return "\u2014";
+        var suffix = (n % 100) is >= 11 and <= 13
+            ? "th"
+            : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
+        return $"{n}{suffix}";
+    }
 
     private record UserContextResponse(
         bool IsSleeperLinked,

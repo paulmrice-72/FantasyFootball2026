@@ -1,0 +1,511 @@
+[{
+  "_id": {
+    "season": 2025,
+    "week": 1
+  },
+  "players": 387
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 2
+  },
+  "players": 382
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 3
+  },
+  "players": 386
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 4
+  },
+  "players": 387
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 5
+  },
+  "players": 346
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 6
+  },
+  "players": 351
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 7
+  },
+  "players": 368
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 8
+  },
+  "players": 317
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 9
+  },
+  "players": 341
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 10
+  },
+  "players": 340
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 11
+  },
+  "players": 362
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 12
+  },
+  "players": 339
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 13
+  },
+  "players": 381
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 14
+  },
+  "players": 354
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 15
+  },
+  "players": 376
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 16
+  },
+  "players": 395
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 17
+  },
+  "players": 387
+},
+{
+  "_id": {
+    "season": 2025,
+    "week": 18
+  },
+  "players": 381
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 0
+  },
+  "players": 559
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 1
+  },
+  "players": 303
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 2
+  },
+  "players": 302
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 3
+  },
+  "players": 311
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 4
+  },
+  "players": 294
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 5
+  },
+  "players": 258
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 6
+  },
+  "players": 271
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 7
+  },
+  "players": 297
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 8
+  },
+  "players": 312
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 9
+  },
+  "players": 291
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 10
+  },
+  "players": 265
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 11
+  },
+  "players": 282
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 12
+  },
+  "players": 252
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 13
+  },
+  "players": 303
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 14
+  },
+  "players": 245
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 15
+  },
+  "players": 312
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 16
+  },
+  "players": 303
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 17
+  },
+  "players": 317
+},
+{
+  "_id": {
+    "season": 2024,
+    "week": 18
+  },
+  "players": 308
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 1
+  },
+  "players": 307
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 2
+  },
+  "players": 307
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 3
+  },
+  "players": 303
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 4
+  },
+  "players": 315
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 5
+  },
+  "players": 281
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 6
+  },
+  "players": 294
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 7
+  },
+  "players": 247
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 8
+  },
+  "players": 306
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 9
+  },
+  "players": 277
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 10
+  },
+  "players": 282
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 11
+  },
+  "players": 270
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 12
+  },
+  "players": 307
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 13
+  },
+  "players": 252
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 14
+  },
+  "players": 288
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 15
+  },
+  "players": 326
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 16
+  },
+  "players": 312
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 17
+  },
+  "players": 304
+},
+{
+  "_id": {
+    "season": 2023,
+    "week": 18
+  },
+  "players": 315
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 1
+  },
+  "players": 310
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 2
+  },
+  "players": 307
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 3
+  },
+  "players": 300
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 4
+  },
+  "players": 305
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 5
+  },
+  "players": 309
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 6
+  },
+  "players": 266
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 7
+  },
+  "players": 273
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 8
+  },
+  "players": 289
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 9
+  },
+  "players": 263
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 10
+  },
+  "players": 277
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 11
+  },
+  "players": 269
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 12
+  },
+  "players": 300
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 13
+  },
+  "players": 301
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 14
+  },
+  "players": 259
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 15
+  },
+  "players": 311
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 16
+  },
+  "players": 298
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 17
+  },
+  "players": 293
+},
+{
+  "_id": {
+    "season": 2022,
+    "week": 18
+  },
+  "players": 320
+}]
