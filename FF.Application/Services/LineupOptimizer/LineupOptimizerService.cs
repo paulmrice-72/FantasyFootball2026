@@ -172,6 +172,7 @@ public static class LineupOptimizerService
                 Position = players[i].Position,
                 SlotType = slotType,
                 ProjectedPoints = GetEffectiveScore(players[i], input.Mode, input.RiskProfile),
+                HasProjection = players[i].HasProjection,
                 RiskScore = input.RiskProfile.HasValue
                     ? GetRiskScore(players[i], input.RiskProfile.Value)
                     : null

@@ -170,13 +170,29 @@ public class SimulationResultRepository(
             .ToListAsync(ct);
     }
 
+    /// <summary>
+    /// Sorted in memory, deliberately — do NOT restore <c>SortByDescending</c> here.
+    ///
+    /// The driver's default decimal serializer persists <c>decimal</c> as a BSON
+    /// STRING, so a server-side sort on Median is LEXICOGRAPHIC: "9.93" ranks above
+    /// "19.44" because '9' &gt; '1'. Verified against dev on 2026-09-01 — the top of
+    /// the WR list was every player whose median happened to begin with a 9, while
+    /// Nacua, St. Brown and Chase sat below them. Every consumer of this method has
+    /// been showing a wrong order.
+    ///
+    /// Materialising first and ordering on the deserialised decimal is correct and
+    /// cheap: one position for one week is a small result set. Revert to a
+    /// server-side sort only once the fields are actually stored as Decimal128 —
+    /// see FAN-127.
+    /// </summary>
     public async Task<IReadOnlyList<SimulationResultDocument>> GetByPositionAsync(
         int season, int week, string position, CancellationToken ct = default)
     {
-        return await _collection
+        var docs = await _collection
             .Find(x => x.Season == season && x.Week == week && x.Position == position)
-            .SortByDescending(x => x.Median)
             .ToListAsync(ct);
+
+        return docs.OrderByDescending(d => d.Median).ToList();
     }
 
     public async Task<SimulationResultDocument?> GetMostRecentBySleeperIdAsync(

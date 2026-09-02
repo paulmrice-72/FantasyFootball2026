@@ -49,6 +49,14 @@ public class EmergenceAlertRepository : IEmergenceAlertRepository
         }
     }
 
+    /// <summary>
+    /// Sorted in memory, deliberately — do NOT restore <c>SortByDescending</c> here.
+    ///
+    /// <c>Delta</c> is a <c>decimal</c>, which the driver's default serializer
+    /// persists as a BSON string, so a server-side sort is lexicographic: an alert
+    /// with a delta of "9.1" outranks one at "22.6". Ordering after deserialization
+    /// compares real decimals. Permanent fix tracked as FAN-129.
+    /// </summary>
     public async Task<IReadOnlyList<EmergenceAlertDocument>> GetBySeasonWeekAsync(
         int season, int week, string? position = null, CancellationToken ct = default)
     {
@@ -59,9 +67,9 @@ public class EmergenceAlertRepository : IEmergenceAlertRepository
         if (!string.IsNullOrEmpty(position))
             filter &= Builders<EmergenceAlertDocument>.Filter.Eq(x => x.Position, position);
 
-        return await _collection.Find(filter)
-            .SortByDescending(x => x.Delta)
-            .ToListAsync(ct);
+        var docs = await _collection.Find(filter).ToListAsync(ct);
+
+        return docs.OrderByDescending(d => d.Delta).ToList();
     }
 
     public async Task<IReadOnlyList<EmergenceAlertDocument>> GetLatestBySeasonAsync(

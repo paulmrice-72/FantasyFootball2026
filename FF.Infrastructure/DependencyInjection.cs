@@ -22,6 +22,7 @@ using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Persistence.Mongo;
 using FF.Infrastructure.Persistence.Mongo.Repositories;
+using FF.Infrastructure.Persistence.Mongo.Serialization;
 using FF.Infrastructure.Persistence.Sql.Repositories;
 using FF.Infrastructure.Persistence.SQL;
 using FF.Infrastructure.Persistence.SQL.Repositories;
@@ -48,6 +49,13 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.Configure<HistoricalDataSettings>(configuration.GetSection(HistoricalDataSettings.SectionName));
+
+        // FAN-129 — MUST stay ahead of RegisterBsonClassMaps(). Registering a class
+        // map freezes it, and freezing resolves a serializer for every member; any
+        // decimal member frozen before this line would keep the driver's default
+        // string serializer for the life of the process, silently defeating the fix.
+        // Serializer registration first, class maps second. Do not reorder.
+        MongoSerializationConfig.Register();
 
         RegisterBsonClassMaps();
 
@@ -84,6 +92,8 @@ public static class DependencyInjection
         services.AddScoped<IWarRoomBriefRepository, WarRoomBriefRepository>();
         services.AddScoped<VegasLineSyncJob>();
         services.AddScoped<WarRoomBriefJob>();
+        // FAN-118 — schedule AFTER the projection and simulation jobs; it reads what they write.
+        services.AddScoped<VorpCalculationJob>();
         // Game-day refresh jobs
         services.AddScoped<ProjectionRefreshJob>();
         services.AddScoped<TnfRefreshJob>();

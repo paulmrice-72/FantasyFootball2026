@@ -1,5 +1,6 @@
 ﻿// FF.API/Controllers/WaiverController.cs
 using FF.Application.Features.RosterAwareRecommendations.Queries;
+using FF.Application.Features.Vorp.Commands.CalculateVorp;
 using FF.Application.Features.WaiverRecommendations.Queries.GetWaiverRecommendations;
 using FF.Application.Features.WaiverRecommendations.Queries.OffSeasonAvailablePlayer;
 using MediatR;
@@ -24,6 +25,34 @@ public class WaiverController(IMediator mediator) : ControllerBase
     {
         var result = await mediator.Send(
             new GetWaiverRecommendationsQuery(leagueId, season, week, position, top), ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// FAN-118 — computes and stores the VORP board for one league and week.
+    ///
+    /// Separated from the GET above, which used to do this on every read. VORP is
+    /// league-scoped: both baselines depend on this league's roster configuration
+    /// and its rostered set, so it has to be computed per league, not globally.
+    /// </summary>
+    [HttpPost("vorp/calculate")]
+    public async Task<IActionResult> CalculateVorp(
+        [FromQuery] string leagueId,
+        [FromQuery] int season,
+        [FromQuery] int week,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(leagueId))
+            return BadRequest(new { error = "leagueId is required." });
+
+        // Week 0 is the preseason sentinel and a legitimate value here — do not add
+        // a `week <= 0` guard, which is the bug FAN-126 fixed on ProjectionsController.
+        if (week < 0)
+            return BadRequest(new { error = "week must be 0 or greater." });
+
+        var result = await mediator.Send(
+            new CalculateVorpCommand(leagueId, season, week), ct);
+
         return Ok(result);
     }
 

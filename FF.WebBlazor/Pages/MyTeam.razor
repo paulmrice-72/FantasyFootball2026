@@ -284,9 +284,11 @@
                                     </div>
                                     <div class="fc-slot-pts">
                                         <MudText Typo="Typo.h6" Class="fc-stat fc-cyan">
-                                            @slot.ProjectedPoints.ToString("F1")
+                                            @(slot.HasProjection ? slot.ProjectedPoints.ToString("F1") : "—")
                                         </MudText>
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">proj</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @(slot.HasProjection ? "proj" : "no proj")
+                                        </MudText>
                                     </div>
                                 </div>
                             }
@@ -434,6 +436,14 @@
             }
             else if (_lineupCard?.Starters is { Count: > 0 })
             {
+                @* ── FAN-121: say what these numbers are actually made of ── *@
+                @if (_lineupCard.Provenance is { NeedsDisclosure: true } prov)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4 mb-1">
+                        <span style="font-size:0.78rem;">@BuildProvenanceMessage(prov)</span>
+                    </MudAlert>
+                }
+
                 @* Only show slots not already covered by a decision card above *@
                 var lockedToShow = _lineupCard.Starters
                     .Where(s => !decisionSlotLabels.Contains(s.SlotLabel))
@@ -496,9 +506,9 @@
                                     @GetLockedSlotNote(slot)
                                 </span>
 
-                                @* Pts *@
-                                <span style="font-weight:600; font-size:0.82rem; width:34px; text-align:right; flex-shrink:0;">
-                                    @slot.ProjectedPoints.ToString("F1")
+                                @* Pts — FAN-124: "—" when the player was never projected *@
+                                <span style="@($"font-weight:600; font-size:0.82rem; width:34px; text-align:right; flex-shrink:0; {(slot.HasProjection ? "" : "color:#9CA3AF;")}")">
+                                    @(slot.HasProjection ? slot.ProjectedPoints.ToString("F1") : "—")
                                 </span>
 
                                 @* LOCKED chip *@
@@ -982,7 +992,8 @@ else if (_roster is null)
         string Position,
         string SlotType,
         decimal ProjectedPoints,
-        decimal? RiskScore);
+        decimal? RiskScore,
+        bool HasProjection = true);
 
     // ── FAN-66: Lineup Card DTO ──────────────────────────────────────
     private record LineupCardDto(
@@ -990,7 +1001,8 @@ else if (_roster is null)
         int Season,
         decimal TotalProjectedPoints,
         List<LineupCardSlotDto> Starters,
-        List<LineupCardSlotDto> Bench);
+        List<LineupCardSlotDto> Bench,
+        ProjectionProvenanceDto? Provenance = null);
 
     private record LineupCardSlotDto(
         string SlotLabel,
@@ -1002,7 +1014,19 @@ else if (_roster is null)
         double? BoomProbability,
         double? BustProbability,
         string? InjuryDesignation,
-        bool IsLocked);
+        bool IsLocked,
+        bool HasProjection = true);
+
+    // ── FAN-121: where the card's numbers came from ──────────────────
+    private record ProjectionProvenanceDto(
+        int Projected,
+        int Unprojected,
+        int Carryover,
+        int? CarryoverSeason,
+        int RookiePrior)
+    {
+        public bool NeedsDisclosure => Unprojected > 0 || Carryover > 0 || RookiePrior > 0;
+    }
 
     private async Task LoadRosterAsync()
     {
@@ -1283,14 +1307,38 @@ else if (_roster is null)
         _    => "#9E9E9E"
     };
 
+    // ── FAN-121: one sentence describing the card's projection basis ──
+    private static string BuildProvenanceMessage(ProjectionProvenanceDto p)
+    {
+        var parts = new List<string>();
+
+        if (p.Carryover > 0)
+        {
+            var season = p.CarryoverSeason is > 0 ? $"{p.CarryoverSeason} " : "prior-season ";
+            parts.Add($"{p.Carryover} carried over from {season}game logs");
+        }
+
+        if (p.RookiePrior > 0)
+            parts.Add($"{p.RookiePrior} from a rookie prior (no NFL games yet)");
+
+        if (p.Unprojected > 0)
+            parts.Add($"{p.Unprojected} not projected at all");
+
+        return parts.Count == 0
+            ? string.Empty
+            : $"Projection basis — {string.Join("; ", parts)}. Treat these as estimates, not current-season form.";
+    }
+
     private static string GetLockedSlotNote(LineupCardSlotDto slot)
     {
         if (slot.InjuryDesignation is "Q" or "Questionable")
             return "Q tag noted · cleared to play";
         if (slot.InjuryDesignation is "D" or "Doubtful")
             return "Doubtful — monitor";
-        if (slot.ProjectedPoints == 0)
-            return "No projection available";
+        if (!slot.HasProjection)
+            return slot.Position is "K" or "DEF" or "DST"
+                ? $"{slot.Position} not projected yet"
+                : "No projection available";
         if (slot.BoomProbability.HasValue && slot.BoomProbability > 0.25)
             return $"Boom upside {slot.BoomProbability:P0}";
         return "No viable challenger";

@@ -2,6 +2,7 @@
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Services.LineupOptimizer;
+using FF.Domain.Enums;
 using FF.Domain.ValueObjects;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,8 @@ public record LineupCardDto(
     int Season,
     decimal TotalProjectedPoints,
     List<LineupCardSlotDto> Starters,
-    List<LineupCardSlotDto> Bench);
+    List<LineupCardSlotDto> Bench,
+    ProjectionProvenanceDto Provenance);
 
 public record LineupCardSlotDto(
     string SlotLabel,
@@ -33,7 +35,28 @@ public record LineupCardSlotDto(
     double? BoomProbability,
     double? BustProbability,
     string? InjuryDesignation,
-    bool IsLocked);
+    bool IsLocked,
+    bool HasProjection);
+
+/// <summary>
+/// FAN-121: what the numbers on this card are actually made of.
+///
+/// Sourced from player_projections, which stamps <see cref="FF.Domain.Enums.ProjectionBasis"/>
+/// per row. simulation_results does not carry provenance yet, so the counts are
+/// resolved against the projection documents for the same roster/season/week.
+/// </summary>
+public record ProjectionProvenanceDto(
+    int Projected,
+    int Unprojected,
+    int Carryover,
+    int? CarryoverSeason,
+    int RookiePrior)
+{
+    /// <summary>True when anything on this card is stale or missing — drives the UI banner.</summary>
+    public bool NeedsDisclosure => Unprojected > 0 || Carryover > 0 || RookiePrior > 0;
+
+    public static readonly ProjectionProvenanceDto Empty = new(0, 0, 0, null, 0);
+}
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +64,7 @@ public class GetLineupCardQueryHandler(
     IRosterPlayerRepository rosterPlayerRepository,
     IPlayerRepository playerRepository,
     ISimulationResultRepository simulationRepository,
+    IPlayerProjectionRepository projectionRepository,
     IInjuryAlertRepository injuryAlertRepository,
     ILeagueRepository leagueRepository,
     ILogger<GetLineupCardQueryHandler> logger)
@@ -121,6 +145,11 @@ public class GetLineupCardQueryHandler(
                     ?? sim?.Position
                     ?? "?";
 
+                // FAN-124: a missing simulation is not a zero-point forecast.
+                // The solver still sorts on 0m, but the flag travels with it so
+                // the card can say "—" instead of inventing a 0.0.
+                var hasProjection = sim is not null && sim.Median > 0m;
+
                 return new PlayerSlot
                 {
                     PlayerId = id,
@@ -130,6 +159,7 @@ public class GetLineupCardQueryHandler(
                     ProjectedMedian = sim?.Median ?? 0m,
                     ProjectedFloor = sim?.Floor ?? 0m,
                     ProjectedCeiling = sim?.Ceiling ?? 0m,
+                    HasProjection = hasProjection,
                     BoomProbability = sim?.BoomProbability,
                     BustProbability = sim?.BustProbability,
                     IsLocked = false,
@@ -190,7 +220,8 @@ public class GetLineupCardQueryHandler(
                     BoomProbability: (double?)p?.BoomProbability,
                     BustProbability: (double?)p?.BustProbability,
                     InjuryDesignation: inj?.Designation,
-                    IsLocked: true);
+                    IsLocked: true,
+                    HasProjection: slot.HasProjection);
             })
             .ToList();
 
@@ -213,15 +244,68 @@ public class GetLineupCardQueryHandler(
                     BoomProbability: (double?)p.BoomProbability,
                     BustProbability: (double?)p.BustProbability,
                     InjuryDesignation: inj?.Designation,
-                    IsLocked: false);
+                    IsLocked: false,
+                    HasProjection: p.HasProjection);
             })
             .ToList();
+
+        // 10 — FAN-121: provenance for the whole card
+        var provenance = await BuildProvenanceAsync(
+            rosterDoc.PlayerIds, request.Season, request.Week, players, cancellationToken);
 
         return new LineupCardDto(
             Week: request.Week,
             Season: request.Season,
             TotalProjectedPoints: result.TotalProjectedPoints,
             Starters: starterSlots,
-            Bench: benchSlots);
+            Bench: benchSlots,
+            Provenance: provenance);
+    }
+
+    /// <summary>
+    /// FAN-121 — reads the basis stamped on player_projections so the card can say
+    /// where its numbers came from. Deliberately non-fatal: provenance is a
+    /// disclosure, and failing to load it must never take down the lineup card.
+    /// </summary>
+    private async Task<ProjectionProvenanceDto> BuildProvenanceAsync(
+        IReadOnlyList<string> rosterPlayerIds,
+        int season,
+        int week,
+        IReadOnlyList<PlayerSlot> players,
+        CancellationToken cancellationToken)
+    {
+        var unprojected = players.Count(p => !p.HasProjection);
+
+        try
+        {
+            var projections = await projectionRepository.GetBySleeperIdsAsync(
+                rosterPlayerIds, season, week, cancellationToken);
+
+            var carryover = projections
+                .Where(p => p.Basis == nameof(ProjectionBasis.PriorSeasonCarryover))
+                .ToList();
+
+            return new ProjectionProvenanceDto(
+                Projected: players.Count - unprojected,
+                Unprojected: unprojected,
+                Carryover: carryover.Count,
+                CarryoverSeason: carryover.Count > 0
+                    ? carryover.Max(p => p.BasisSeason)
+                    : null,
+                RookiePrior: projections.Count(p => p.Basis == nameof(ProjectionBasis.RookieProjection)));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Could not resolve projection provenance for season {Season} week {Week}; " +
+                "card will render without the basis banner", season, week);
+
+            return new ProjectionProvenanceDto(
+                Projected: players.Count - unprojected,
+                Unprojected: unprojected,
+                Carryover: 0,
+                CarryoverSeason: null,
+                RookiePrior: 0);
+        }
     }
 }
