@@ -1,0 +1,330 @@
+{
+  "types": {
+    "projections": [
+      {
+        "_id": {
+          "usageTrend": "string",
+          "halfPpr": "string",
+          "ppr": "string",
+          "statLineTgt": "string"
+        },
+        "rows": 1424
+      }
+    ],
+    "simulations": [
+      {
+        "_id": {
+          "median": "string",
+          "floor": "string",
+          "base": "string"
+        },
+        "rows": 1398
+      }
+    ]
+  },
+  "inventory": [
+    {
+      "_id": {
+        "week": 0,
+        "basis": "PriorSeasonCarryover"
+      },
+      "rows": 476
+    },
+    {
+      "_id": {
+        "week": 0,
+        "basis": "RookieProjection"
+      },
+      "rows": 236
+    },
+    {
+      "_id": {
+        "week": 1,
+        "basis": "PriorSeasonCarryover"
+      },
+      "rows": 476
+    },
+    {
+      "_id": {
+        "week": 1,
+        "basis": "RookieProjection"
+      },
+      "rows": 236
+    }
+  ],
+  "usageTrend": [
+    {
+      "_id": "PriorSeasonCarryover",
+      "rows": 476,
+      "min": 0.9,
+      "max": 1.15,
+      "avg": 1.0080827731092437,
+      "belowFloor": 0,
+      "aboveCeil": 0,
+      "pinnedAt1": 97
+    },
+    {
+      "_id": "RookieProjection",
+      "rows": 236,
+      "min": 1,
+      "max": 1,
+      "avg": 1,
+      "belowFloor": 0,
+      "aboveCeil": 0,
+      "pinnedAt1": 236
+    }
+  ],
+  "simSkew": [
+    {
+      "_id": "QB",
+      "n": 53,
+      "skew": 1.4695814814377262
+    },
+    {
+      "_id": "RB",
+      "n": 67,
+      "skew": 1.9098515445625757
+    },
+    {
+      "_id": "TE",
+      "n": 44,
+      "skew": 1.6626480341615384
+    },
+    {
+      "_id": "WR",
+      "n": 110,
+      "skew": 1.4849990533989175
+    }
+  ],
+  "sortProbe": {
+    "serverSorted": [
+      {
+        "PlayerName": "K.Allen",
+        "Median": "9.93"
+      },
+      {
+        "PlayerName": "K.Shakir",
+        "Median": "9.87"
+      },
+      {
+        "PlayerName": "J.Jennings",
+        "Median": "9.56"
+      },
+      {
+        "PlayerName": "Carnell Tate",
+        "Median": "9.54"
+      },
+      {
+        "PlayerName": "M.Pittman",
+        "Median": "9.53"
+      },
+      {
+        "PlayerName": "T.Tucker",
+        "Median": "9.42"
+      },
+      {
+        "PlayerName": "R.Flournoy",
+        "Median": "9.36"
+      },
+      {
+        "PlayerName": "E.Egbuka",
+        "Median": "9.28"
+      },
+      {
+        "PlayerName": "G.Olszewski",
+        "Median": "8.99"
+      },
+      {
+        "PlayerName": "J.Reed",
+        "Median": "8.78"
+      },
+      {
+        "PlayerName": "D.Vele",
+        "Median": "8.68"
+      },
+      {
+        "PlayerName": "L.McConkey",
+        "Median": "8.66"
+      },
+      {
+        "PlayerName": "M.Harrison",
+        "Median": "8.52"
+      },
+      {
+        "PlayerName": "M.Evans",
+        "Median": "8.49"
+      },
+      {
+        "PlayerName": "D.Slayton",
+        "Median": "8.25"
+      }
+    ],
+    "clientSorted": [
+      {
+        "PlayerName": "P.Nacua",
+        "m": 22.64
+      },
+      {
+        "PlayerName": "A.St. Brown",
+        "m": 20.73
+      },
+      {
+        "PlayerName": "J.Smith-Njigba",
+        "m": 20.72
+      },
+      {
+        "PlayerName": "J.Chase",
+        "m": 18.16
+      },
+      {
+        "PlayerName": "R.Rice",
+        "m": 17.67
+      },
+      {
+        "PlayerName": "C.Olave",
+        "m": 17.48
+      },
+      {
+        "PlayerName": "W.Robinson",
+        "m": 16
+      },
+      {
+        "PlayerName": "M.Wilson",
+        "m": 14.85
+      },
+      {
+        "PlayerName": "A.Brown",
+        "m": 14.81
+      },
+      {
+        "PlayerName": "G.Pickens",
+        "m": 14.32
+      },
+      {
+        "PlayerName": "Z.Flowers",
+        "m": 13.65
+      },
+      {
+        "PlayerName": "P.Washington",
+        "m": 13.57
+      },
+      {
+        "PlayerName": "D.London",
+        "m": 13.47
+      },
+      {
+        "PlayerName": "T.Hill",
+        "m": 13.3
+      },
+      {
+        "PlayerName": "T.Higgins",
+        "m": 12.95
+      }
+    ]
+  },
+  "zeroCensus": [
+    {
+      "_id": {
+        "pos": "QB",
+        "basis": "PriorSeasonCarryover"
+      },
+      "rows": 69,
+      "zeroPts": 1,
+      "noStatLine": 0
+    },
+    {
+      "_id": {
+        "pos": "QB",
+        "basis": "RookieProjection"
+      },
+      "rows": 23,
+      "zeroPts": 12,
+      "noStatLine": 0
+    },
+    {
+      "_id": {
+        "pos": "RB",
+        "basis": "PriorSeasonCarryover"
+      },
+      "rows": 115,
+      "zeroPts": 0,
+      "noStatLine": 0
+    },
+    {
+      "_id": {
+        "pos": "RB",
+        "basis": "RookieProjection"
+      },
+      "rows": 46,
+      "zeroPts": 0,
+      "noStatLine": 0
+    },
+    {
+      "_id": {
+        "pos": "TE",
+        "basis": "PriorSeasonCarryover"
+      },
+      "rows": 103,
+      "zeroPts": 0,
+      "noStatLine": 0
+    },
+    {
+      "_id": {
+        "pos": "TE",
+        "basis": "RookieProjection"
+      },
+      "rows": 52,
+      "zeroPts": 0,
+      "noStatLine": 0
+    },
+    {
+      "_id": {
+        "pos": "WR",
+        "basis": "PriorSeasonCarryover"
+      },
+      "rows": 189,
+      "zeroPts": 0,
+      "noStatLine": 0
+    },
+    {
+      "_id": {
+        "pos": "WR",
+        "basis": "RookieProjection"
+      },
+      "rows": 115,
+      "zeroPts": 0,
+      "noStatLine": 0
+    }
+  ],
+  "rosteredUnprojected": [
+    {
+      "_id": "QB",
+      "n": 2,
+      "sample": [
+        "J.Garoppolo",
+        "D.Lock"
+      ]
+    },
+    {
+      "_id": "TE",
+      "n": 39,
+      "sample": [
+        "B.Whiteheart",
+        "P.Durham",
+        "Tanner Arkin",
+        "Dallen Bentley",
+        "Ethan Conner",
+        "Josh Cuevas",
+        "Chase Curtis",
+        "Khalil Dinkins"
+      ]
+    },
+    {
+      "_id": "WR",
+      "n": 1,
+      "sample": [
+        "J.Mingo"
+      ]
+    }
+  ]
+}
