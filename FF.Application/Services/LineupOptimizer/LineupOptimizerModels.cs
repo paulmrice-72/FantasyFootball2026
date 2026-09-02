@@ -26,6 +26,17 @@ public record PlayerSlot
     public decimal ProjectedCeiling { get; init; }
     public bool IsLocked { get; init; }
     public bool IsExcluded { get; init; }
+
+    /// <summary>
+    /// False when no projection exists for this player — K and DEF today (FAN-124),
+    /// plus anyone the engine could not build a stat line for.
+    ///
+    /// The solver still needs a number to sort on, so ProjectedMedian stays 0m for
+    /// these. This flag is what keeps the UI from presenting that 0 as a forecast:
+    /// "0.0 projected" and "not projected" are different claims, and only one of
+    /// them is true.
+    /// </summary>
+    public bool HasProjection { get; init; } = true;
     /// <summary>From Monte Carlo output — fraction 0-1.</summary>
     public decimal? BoomProbability { get; init; }
     /// <summary>From Monte Carlo output — fraction 0-1.</summary>
@@ -56,6 +67,8 @@ public class OptimizedSlot
     public decimal ProjectedPoints { get; init; }
     /// <summary>Risk-adjusted score used by solver. Null when using legacy Mode.</summary>
     public decimal? RiskScore { get; init; }
+    /// <summary>Carried through from <see cref="PlayerSlot.HasProjection"/> — see FAN-124.</summary>
+    public bool HasProjection { get; init; } = true;
 }
 
 public enum OptimizationMode

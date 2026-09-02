@@ -24,12 +24,16 @@ public class GetRosterAwareRecommendationsQueryHandlerTests
         string playerId, string name, string position, decimal vorp) =>
         new()
         {
+            // FAN-118: the board is league-scoped, and it now stores rostered players
+            // too. IsRostered stays false here — these fixtures are waiver candidates.
+            SleeperLeagueId = "league1",
             PlayerId = playerId,
             PlayerName = name,
             Position = position,
             NflTeam = "KC",
             Season = 2026,
             Week = 5,
+            IsRostered = false,
             ProjectedPoints = vorp + 5m,
             Vorp = vorp,
             VorpRank = 1
@@ -57,7 +61,7 @@ public class GetRosterAwareRecommendationsQueryHandlerTests
         };
 
         _vorpRepo
-            .Setup(r => r.GetByWeekAsync(2026, 5, null, 90, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByWeekAsync("league1", 2026, 5, null, 180, It.IsAny<CancellationToken>()))
             .ReturnsAsync(vorpRecs);
 
         // No roster found for this user
@@ -89,7 +93,7 @@ public class GetRosterAwareRecommendationsQueryHandlerTests
         };
 
         _vorpRepo
-            .Setup(r => r.GetByWeekAsync(2026, 5, null, 90, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByWeekAsync("league1", 2026, 5, null, 180, It.IsAny<CancellationToken>()))
             .ReturnsAsync(vorpRecs);
 
         // User roster has 5 WRs (Strength) but 0 RBs (Need)
@@ -138,7 +142,7 @@ public class GetRosterAwareRecommendationsQueryHandlerTests
         };
 
         _vorpRepo
-            .Setup(r => r.GetByWeekAsync(2026, 5, null, 90, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByWeekAsync("league1", 2026, 5, null, 180, It.IsAny<CancellationToken>()))
             .ReturnsAsync(vorpRecs);
 
         // User has 6 WRs — above depth target of 5 = Strength
@@ -180,7 +184,7 @@ public class GetRosterAwareRecommendationsQueryHandlerTests
         };
 
         _vorpRepo
-            .Setup(r => r.GetByWeekAsync(2026, 5, null, 90, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByWeekAsync("league1", 2026, 5, null, 180, It.IsAny<CancellationToken>()))
             .ReturnsAsync(vorpRecs);
 
         // User has exactly 2 TEs — depth target = 2 = Neutral
@@ -224,7 +228,7 @@ public class GetRosterAwareRecommendationsQueryHandlerTests
         };
 
         _vorpRepo
-            .Setup(r => r.GetByWeekAsync(2026, 5, null, 90, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByWeekAsync("league1", 2026, 5, null, 180, It.IsAny<CancellationToken>()))
             .ReturnsAsync(vorpRecs);
 
         _rosterRepo
@@ -246,7 +250,7 @@ public class GetRosterAwareRecommendationsQueryHandlerTests
     public async Task Handle_ReturnsEmpty_WhenNoVorpRecsExist()
     {
         _vorpRepo
-            .Setup(r => r.GetByWeekAsync(2026, 5, null, 90, It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByWeekAsync("league1", 2026, 5, null, 180, It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         var result = await CreateSut().Handle(

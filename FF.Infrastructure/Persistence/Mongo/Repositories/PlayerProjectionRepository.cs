@@ -94,13 +94,25 @@ public class PlayerProjectionRepository(
         return await _collection.Find(filter).ToListAsync(ct);
     }
 
+    /// <summary>
+    /// Sorted in memory, deliberately — do NOT restore <c>SortByDescending</c> here.
+    ///
+    /// The driver's default decimal serializer persists <c>decimal</c> as a BSON
+    /// STRING, so a server-side sort on a points column is LEXICOGRAPHIC: "9.93"
+    /// ranks above "19.44" because '9' &gt; '1'. Confirmed against dev on 2026-09-01.
+    /// Ordering on the deserialised decimal after materialising is correct, and one
+    /// position for one week is a small result set. See FAN-127.
+    /// </summary>
     public async Task<IReadOnlyList<PlayerProjectionDocument>> GetByPositionAsync(int season, int week, string position, CancellationToken ct = default)
     {
         var filter = Builders<PlayerProjectionDocument>.Filter.And(
             Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Season, season),
             Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Week, week),
             Builders<PlayerProjectionDocument>.Filter.Eq(x => x.Position, position));
-        return await _collection.Find(filter).SortByDescending(x => x.ProjectedPointsHalfPpr).ToListAsync(ct);
+
+        var docs = await _collection.Find(filter).ToListAsync(ct);
+
+        return docs.OrderByDescending(d => d.ProjectedPointsHalfPpr).ToList();
     }
 
     public async Task<PlayerProjectionDocument?> GetByPlayerAsync(string playerId, int season, int week, CancellationToken ct = default)

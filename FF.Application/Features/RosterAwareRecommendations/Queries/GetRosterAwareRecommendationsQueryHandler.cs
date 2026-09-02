@@ -21,11 +21,20 @@ public class GetRosterAwareRecommendationsQueryHandler(
         GetRosterAwareRecommendationsQuery request,
         CancellationToken cancellationToken)
     {
-        // Load pre-computed VORP recommendations for this week
-        var vorpRecs = await vorpRepository.GetByWeekAsync(
+        // Load the pre-computed VORP board for this league and week.
+        // FAN-118: league-scoped — the board now holds one row per player PER LEAGUE,
+        // because both replacement baselines depend on the league.
+        var board = await vorpRepository.GetByWeekAsync(
+            request.SleeperLeagueId,
             request.Season, request.Week,
-            request.Position, request.Top * 3,  // fetch wider pool before fit filtering
+            request.Position,
+            request.Top * 6,   // wide pool: rostered players and fit filtering both cut it down
             cancellationToken);
+
+        // The board deliberately includes rostered players — rankings and Top Assets
+        // need the whole pool. This page is about players you could actually add, so
+        // they come out here.
+        var vorpRecs = board.Where(r => !r.IsRostered).ToList();
 
         if (vorpRecs.Count == 0)
             return [];

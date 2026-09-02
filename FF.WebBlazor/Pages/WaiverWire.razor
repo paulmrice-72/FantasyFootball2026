@@ -140,7 +140,98 @@ else
             }
             else if (!_isOffSeason && _vorpRecs.Count > 0)
             {
-                @* existing VORP table unchanged *@
+                @* FAN-118: rebuilt. This branch was a comment — "existing VORP table
+                   unchanged" — which compiled cleanly and rendered nothing. *@
+
+                @if (_vorpRecs.Any(r => r.ReplacementPoolExhausted))
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                        <span style="font-size:0.78rem;">
+                            Projection pool is shallower than this league starts at one or more
+                            positions, so replacement level fell back to the last available
+                            projection. Values at those positions are understated.
+                        </span>
+                    </MudAlert>
+                }
+
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                    <span style="font-size:0.78rem;">
+                        <b>VORP</b> is value over the last player your league would start at the
+                        position — league-aware, so superflex deepens the QB baseline.
+                        <b>vs FA</b> is value over the best player still available at that
+                        position, which is the number that matters for a pickup.
+                    </span>
+                </MudAlert>
+
+                <MudTable Items="@FilteredVorp" Dense="true" Hover="true" Striped="true"
+                          Style="background: var(--fc-navy-card);">
+                    <HeaderContent>
+                        <MudTh>Rank</MudTh>
+                        <MudTh>Player</MudTh>
+                        <MudTh>Pos</MudTh>
+                        <MudTh>Team</MudTh>
+                        <MudTh Style="text-align:right">Proj</MudTh>
+                        <MudTh Style="text-align:right">Floor</MudTh>
+                        <MudTh Style="text-align:right">Ceiling</MudTh>
+                        <MudTh Style="text-align:right">Repl</MudTh>
+                        <MudTh Style="text-align:right">VORP</MudTh>
+                        <MudTh Style="text-align:right">vs FA</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @{
+                            var vorpCtx = context;
+                        }
+                        <MudTd>
+                            <MudText Typo="Typo.body2"
+                                     Style="font-family:'JetBrains Mono',monospace; color: var(--mud-palette-text-secondary);">
+                                #@context.VorpRank
+                            </MudText>
+                        </MudTd>
+                        <MudTd>
+                            <MudButton Variant="Variant.Text"
+                                       Style="font-weight:600; color: var(--fc-cyan); padding:0; min-width:0; text-transform:none;"
+                                       OnClick="@(() => _ = OpenPlayerCard(vorpCtx.PlayerId, vorpCtx.PlayerName, vorpCtx.Position, vorpCtx.NflTeam, null))">
+                                @context.PlayerName
+                            </MudButton>
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Style="@GetPositionStyle(context.Position)">
+                                @context.Position
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>@(context.NflTeam ?? "FA")</MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace;">
+                            @context.ProjectedPoints.ToString("F1")
+                        </MudTd>
+
+                        @* FAN-124: no simulation means no floor — "—", never a fabricated 0.0. *@
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:#9CA3AF;">
+                            @(context.FloorPoints.HasValue ? context.FloorPoints.Value.ToString("F1") : "—")
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:#9CA3AF;">
+                            @(context.CeilingPoints.HasValue ? context.CeilingPoints.Value.ToString("F1") : "—")
+                        </MudTd>
+
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace; color:#9CA3AF;">
+                            @context.ReplacementLevel.ToString("F1")
+                        </MudTd>
+                        <MudTd Style="@($"text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:{(context.Vorp >= 0 ? "var(--fc-cyan)" : "#EF5350")};")">
+                            @(context.Vorp >= 0 ? "+" : "")@context.Vorp.ToString("F1")
+                        </MudTd>
+                        <MudTd Style="text-align:right; font-family:'JetBrains Mono',monospace;">
+                            @if (context.VorpFreeAgent.HasValue)
+                            {
+                                <span style="@($"color:{(context.VorpFreeAgent.Value >= 0 ? "#4CAF50" : "#9CA3AF")};")">
+                                    @(context.VorpFreeAgent.Value >= 0 ? "+" : "")@context.VorpFreeAgent.Value.ToString("F1")
+                                </span>
+                            }
+                            else
+                            {
+                                <span style="color:#9CA3AF;">—</span>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
             }
         </MudTabPanel>
 

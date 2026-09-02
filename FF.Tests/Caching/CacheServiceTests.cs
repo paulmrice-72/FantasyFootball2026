@@ -69,61 +69,75 @@ public class CacheServiceTests
         sut.Get<string>("expiring-key").Should().BeNull();
     }
 
+    // ── FAN-118 ──────────────────────────────────────────────────────────────
+    // These two exercise the cache through the waiver handler. That handler used to
+    // take five dependencies and compute VORP itself; it now takes two and only reads
+    // the stored board, so the collaborator being asserted against is the VORP
+    // repository rather than the projection repository.
+
+    private static VorpRecommendationDocument Available(string playerId, string name) =>
+        new()
+        {
+            SleeperLeagueId = "league1",
+            PlayerId        = playerId,
+            PlayerName      = name,
+            Position        = "WR",
+            Season          = 2026,
+            Week            = 1,
+            IsRostered      = false,
+            Vorp            = 5.5m
+        };
+
     [Fact]
     public async Task VorpHandler_returns_cached_result_without_hitting_repo()
     {
-        // Arrange
-        var projRepo = Substitute.For<IPlayerProjectionRepository>();
-        var rosterRepo = Substitute.For<IRosterPlayerRepository>();
         var vorpRepo = Substitute.For<IVorpRecommendationRepository>();
-        var simRepo = Substitute.For<ISimulationResultRepository>();
         var cache = CreateService();
 
-        var cachedResult = new List<VorpRecommendationDocument>
-        {
-            new() { PlayerId = "abc", PlayerName = "Test Player", Position = "WR", Vorp = 5.5m }
-        };
+        var cachedResult = new List<VorpRecommendationDocument> { Available("abc", "Test Player") };
 
         var cacheKey = CacheKeys.VorpRecommendations("league1", 2026, 1, null, 20);
         cache.Set(cacheKey, (IReadOnlyList<VorpRecommendationDocument>)cachedResult);
 
-        var handler = new GetWaiverRecommendationsQueryHandler(
-            projRepo, rosterRepo, vorpRepo, simRepo, cache);
-
+        var handler = new GetWaiverRecommendationsQueryHandler(vorpRepo, cache);
         var query = new GetWaiverRecommendationsQuery("league1", 2026, 1, null, 20);
 
-        // Act
         var result = await handler.Handle(query, CancellationToken.None);
 
-        // Assert — repo never called because cache hit
         result.Should().HaveCount(1);
         result[0].PlayerName.Should().Be("Test Player");
-        await projRepo.DidNotReceive().GetByWeekAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+
+        await vorpRepo.DidNotReceive().GetByWeekAsync(
+            Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(),
+            Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task VorpHandler_caches_result_on_cache_miss()
     {
-        // Arrange
-        var projRepo = Substitute.For<IPlayerProjectionRepository>();
-        var rosterRepo = Substitute.For<IRosterPlayerRepository>();
         var vorpRepo = Substitute.For<IVorpRecommendationRepository>();
-        var simRepo = Substitute.For<ISimulationResultRepository>();
         var cache = CreateService();
 
-        // Return empty projections — handler returns early with []
-        projRepo.GetByWeekAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns([]);
+        IReadOnlyList<VorpRecommendationDocument> board = [Available("abc", "Test Player")];
 
-        var handler = new GetWaiverRecommendationsQueryHandler(
-            projRepo, rosterRepo, vorpRepo, simRepo, cache);
+        vorpRepo.GetByWeekAsync(
+                Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(),
+                Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(board);
 
+        var handler = new GetWaiverRecommendationsQueryHandler(vorpRepo, cache);
         var query = new GetWaiverRecommendationsQuery("league1", 2026, 1, null, 20);
 
-        // Act
-        await handler.Handle(query, CancellationToken.None);
+        // Twice: the first call populates the cache, the second should be served from it.
+        // Asserting the repository was hit exactly once is what actually demonstrates
+        // caching — the previous version only proved the repository was reached at all.
+        var first  = await handler.Handle(query, CancellationToken.None);
+        var second = await handler.Handle(query, CancellationToken.None);
 
-        // Assert — repo WAS called (cache miss triggered real load)
-        await projRepo.Received(1).GetByWeekAsync(2026, 1, Arg.Any<CancellationToken>());
+        first.Should().HaveCount(1);
+        second.Should().HaveCount(1);
+
+        await vorpRepo.Received(1).GetByWeekAsync(
+            "league1", 2026, 1, null, 80, Arg.Any<CancellationToken>());
     }
 }
