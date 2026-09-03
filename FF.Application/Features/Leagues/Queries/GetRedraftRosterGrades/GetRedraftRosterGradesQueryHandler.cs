@@ -137,7 +137,9 @@ public class GetRedraftRosterGradesQueryHandler(
                         Placing: positionRanks[pos].Placings[idx],
                         TeamCount: teamCount,
                         StarterPoints: Math.Round(
-                            t.Strengths.FirstOrDefault(s => s.Position == pos).StarterPoints, 1)))
+                            t.Strengths.FirstOrDefault(s => s.Position == pos).StarterPoints, 1),
+                        RosteredCount: t.Strengths.FirstOrDefault(s => s.Position == pos).RosteredCount,
+                        ProjectedCount: t.Strengths.FirstOrDefault(s => s.Position == pos).ProjectedCount))
                     .ToList()))
             .OrderByDescending(t => t.DepthScore)
             .Select((t, idx) => t with { Rank = idx + 1 })

@@ -46,7 +46,9 @@ public record RedraftTeamAssetDto(
 /// </summary>
 public record TeamPositionGradeDto(
     string Position,
-    string Grade,
+    string Grade,                 // retained on the API; the UI shows Placing instead (2026-09-03)
     int Placing,                  // 1 = best room at this position in the league
     int TeamCount,
-    double StarterPoints);        // avg sim median of the starters at this position
+    double StarterPoints,         // avg sim median of the starters at this position
+    int RosteredCount = 0,        // players at this position on the roster
+    int ProjectedCount = 0);      // of those, how many actually have a projection

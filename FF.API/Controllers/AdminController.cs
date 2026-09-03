@@ -307,13 +307,39 @@ public class AdminController(
         if (season < 2020 || season > DateTime.UtcNow.Year)
             return BadRequest($"Season must be between 2020 and {DateTime.UtcNow.Year}.");
 
-        var result = await mediator.Send(new SeedSeasonAverageSimsCommand(season), ct);
+        SeedSeasonAverageSimsResult result;
+        try
+        {
+            result = await mediator.Send(new SeedSeasonAverageSimsCommand(season), ct);
+        }
+        catch (NflverseDataUnavailableException ex)
+        {
+            // Asking for a season nflverse hasn't published is a caller mistake, not
+            // a server fault — it was surfacing as an unhandled 500 with a stack trace.
+            // A genuine connectivity failure IS a server-side problem and keeps its
+            // own status so the two stop looking identical in the logs.
+            if (ex.NotPublished)
+            {
+                logger.LogInformation(
+                    "Season-average seed declined — nflverse has not published {Season} yet", season);
+                return BadRequest(new { Season = season, Reason = "NotPublished", Message = ex.Message });
+            }
+
+            logger.LogError(ex,
+                "Season-average seed could not reach nflverse for season {Season}", season);
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { Season = season, Reason = "UpstreamUnavailable", Message = ex.Message });
+        }
+
         return Ok(new
         {
             Message = $"Season-average sim seed complete for {season}.",
             result.Seeded,
             result.Skipped,
-            result.Unmatched
+            result.Unmatched,
+            result.MatchedByGsis,
+            result.MatchedByName,
+            result.AmbiguousSkipped
         });
     }
 

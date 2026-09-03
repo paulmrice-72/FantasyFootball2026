@@ -1,4 +1,4 @@
-﻿// FF.Application/Players/Commands/BackfillCollegeTeam/BackfillCollegeTeamCommandHandler.cs
+// FF.Application/Players/Commands/BackfillCollegeTeam/BackfillCollegeTeamCommandHandler.cs
 using FF.Application.Interfaces.Persistence;
 using FF.SharedKernel.Common;
 using MediatR;
@@ -18,7 +18,7 @@ public class BackfillCollegeTeamCommandHandler(
         // 1 — Parse CSV into gsis_id → college lookup
         var lookup = ParseCsv(request.CsvContent);
         if (lookup.Count == 0)
-            return (Result<BackfillCollegeTeamResult>)Result<BackfillCollegeTeamResult>.Failure(
+            return Result<BackfillCollegeTeamResult>.Failure(
                 new Error("BACKFILL_EMPTY", "CSV contained no usable gsis_id/college rows."));
 
         logger.LogInformation(

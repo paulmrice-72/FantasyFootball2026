@@ -34,7 +34,7 @@ public class SyncNflverseDraftPicksCommandHandler(
             var csv = await client.GetStringAsync(NflverseDraftPicksUrl, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(csv))
-                return (Result<SyncDraftPicksResult>)Result<SyncDraftPicksResult>.Failure(
+                return Result<SyncDraftPicksResult>.Failure(
                     new Error("NFLVERSE_EMPTY", "Draft picks CSV was empty."));
 
             // 2 — Parse rows for this season
@@ -103,7 +103,7 @@ public class SyncNflverseDraftPicksCommandHandler(
         catch (Exception ex)
         {
             logger.LogError(ex, "NflverseDraftPickSync failed");
-            return (Result<SyncDraftPicksResult>)Result<SyncDraftPicksResult>.Failure(
+            return Result<SyncDraftPicksResult>.Failure(
                 new Error("NFLVERSE_ERROR", ex.Message));
         }
     }
