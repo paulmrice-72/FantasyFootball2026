@@ -1,0 +1,277 @@
+﻿{
+  "db": "FFAnalytics",
+  "ranAt": "2026-09-02T13:50:54.206Z",
+  "collections": [
+    {
+      "name": "PlayerGameLogs",
+      "count": 16328
+    },
+    {
+      "name": "app_settings",
+      "count": 1
+    },
+    {
+      "name": "articles",
+      "count": 12
+    },
+    {
+      "name": "calibration_results",
+      "count": 34
+    },
+    {
+      "name": "career_simulations",
+      "count": 3824
+    },
+    {
+      "name": "combine_results",
+      "count": 109
+    },
+    {
+      "name": "consensus_adp",
+      "count": 135
+    },
+    {
+      "name": "defensive_rankings",
+      "count": 384
+    },
+    {
+      "name": "depth_charts",
+      "count": 5132
+    },
+    {
+      "name": "draft_sessions",
+      "count": 2
+    },
+    {
+      "name": "dynasty_valuations",
+      "count": 3986
+    },
+    {
+      "name": "emergence_alerts",
+      "count": 0
+    },
+    {
+      "name": "fantasyPros_rookie_rankings",
+      "count": 818
+    },
+    {
+      "name": "injury_alerts",
+      "count": 642
+    },
+    {
+      "name": "pick_values",
+      "count": 27
+    },
+    {
+      "name": "player_narratives",
+      "count": 1
+    },
+    {
+      "name": "player_projections",
+      "count": 879
+    },
+    {
+      "name": "player_usage_metrics",
+      "count": 559
+    },
+    {
+      "name": "redraftAdpCache",
+      "count": 216
+    },
+    {
+      "name": "roster_players",
+      "count": 130
+    },
+    {
+      "name": "simulation_results",
+      "count": 1541
+    },
+    {
+      "name": "snap_counts",
+      "count": 53155
+    },
+    {
+      "name": "trade_analyses",
+      "count": 20
+    },
+    {
+      "name": "vegas_lines",
+      "count": 544
+    },
+    {
+      "name": "vorp_recommendations",
+      "count": 0
+    },
+    {
+      "name": "war_room_briefs",
+      "count": 7
+    },
+    {
+      "name": "writer_personas",
+      "count": 4
+    }
+  ],
+  "gameLogsBySeason": [
+    {
+      "docs": 5785,
+      "withSleeperId": 5777,
+      "season": 2024,
+      "seasonType": "REG",
+      "distinctPlayers": 556
+    },
+    {
+      "docs": 5293,
+      "withSleeperId": 5292,
+      "season": 2023,
+      "seasonType": "REG",
+      "distinctPlayers": 545
+    },
+    {
+      "docs": 5250,
+      "withSleeperId": 5249,
+      "season": 2022,
+      "seasonType": "REG",
+      "distinctPlayers": 575
+    }
+  ],
+  "walkerGameLogs": [
+    {
+      "sleeperIds": [
+        "11629"
+      ],
+      "teams": [
+        "BAL"
+      ],
+      "weeks": 3,
+      "gsis": "00-0039792",
+      "playerName": "D.Walker",
+      "displayName": "Devontez Walker",
+      "position": "WR",
+      "season": 2024
+    },
+    {
+      "sleeperIds": [
+        "8151"
+      ],
+      "teams": [
+        "SEA"
+      ],
+      "weeks": 12,
+      "gsis": "00-0038134",
+      "playerName": "K.Walker",
+      "displayName": "Kenneth Walker",
+      "position": "RB",
+      "season": 2024
+    },
+    {
+      "sleeperIds": [
+        "8151"
+      ],
+      "teams": [
+        "SEA"
+      ],
+      "weeks": 15,
+      "gsis": "00-0038134",
+      "playerName": "K.Walker",
+      "displayName": "Kenneth Walker",
+      "position": "RB",
+      "season": 2022
+    },
+    {
+      "sleeperIds": [
+        "8151"
+      ],
+      "teams": [
+        "SEA"
+      ],
+      "weeks": 15,
+      "gsis": "00-0038134",
+      "playerName": "K.Walker",
+      "displayName": "Kenneth Walker III",
+      "position": "RB",
+      "season": 2023
+    },
+    {
+      "sleeperIds": [
+        "4335"
+      ],
+      "teams": [
+        "CLE"
+      ],
+      "weeks": 5,
+      "gsis": "00-0033275",
+      "playerName": "P.Walker",
+      "displayName": "P.J. Walker",
+      "position": "QB",
+      "season": 2023
+    },
+    {
+      "sleeperIds": [
+        "4335"
+      ],
+      "teams": [
+        "CAR"
+      ],
+      "weeks": 6,
+      "gsis": "00-0033275",
+      "playerName": "P.Walker",
+      "displayName": "P.J. Walker",
+      "position": "QB",
+      "season": 2022
+    }
+  ],
+  "seasonAverageSims": [
+    {
+      "rows": 226,
+      "season": 2026
+    },
+    {
+      "rows": 539,
+      "season": 2025
+    },
+    {
+      "rows": 550,
+      "season": 2024
+    }
+  ],
+  "walkerSims": [
+    {
+      "Season": 2024,
+      "Week": 0,
+      "SleeperPlayerId": "8151",
+      "Median": {
+        "$numberDecimal": "14.38"
+      },
+      "NflTeam": "SEA",
+      "PlayerName": "Kenneth Walker",
+      "PlayerRole": "SeasonAverage",
+      "Position": "RB"
+    }
+  ],
+  "projections2026": [
+    {
+      "rows": 238,
+      "week": 0,
+      "basis": "RookieProjection"
+    },
+    {
+      "rows": 238,
+      "week": 1,
+      "basis": "RookieProjection"
+    }
+  ],
+  "decimalTypes": [
+    {
+      "collection": "player_projections",
+      "field": "ProjectedPointsHalfPpr",
+      "bsonType": "object",
+      "value": "16.8961473784639901600"
+    },
+    {
+      "collection": "simulation_results",
+      "field": "Median",
+      "bsonType": "object",
+      "value": "14.16"
+    }
+  ]
+}

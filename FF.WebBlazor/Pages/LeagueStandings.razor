@@ -288,9 +288,9 @@ else
                             <HeaderContent>
                                 <MudTh Style="width:40px;"><MudTableSortLabel SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.Rank)">#</MudTableSortLabel></MudTh>
                                 <MudTh><MudTableSortLabel SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.TeamName)">Team</MudTableSortLabel></MudTh>
-                                <MudTh Style="text-align:center;"><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.DepthScore)">Roster Strength</MudTableSortLabel></MudTh>
+                                <MudTh Style="text-align:center;"><MudTableSortLabel InitialDirection="SortDirection.Descending" SortBy="new Func<RedraftTeamRosterGradeDto, object>(t => t.DepthScore)">League Rank</MudTableSortLabel></MudTh>
                                 <MudTh Style="text-align:center; width:70px;">Score</MudTh>
-                                <MudTh Style="text-align:center;">Positions</MudTh>
+                                <MudTh Style="text-align:center;">Positions — rank in league</MudTh>
                                 <MudTh>Top Assets</MudTh>
                             </HeaderContent>
                             <RowTemplate>
@@ -306,9 +306,18 @@ else
                                         <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.OwnerName</MudText>
                                     </div>
                                 </MudTd>
+                                @* Placings, not letters. These numbers are a RANK WITHIN THIS LEAGUE,
+                                   while My Team -> Depth Grades letters an ABSOLUTE score against fixed
+                                   thresholds. Showing both as letters put two different meanings on the
+                                   same symbol one tab apart, which is what made "RB A here, RB C there"
+                                   look like a bug. A placing cannot be mistaken for a verdict. *@
                                 <MudTd Style="text-align:center;">
-                                    <MudText Typo="Typo.h6" Style="@(GradeStyle(context.DepthGrade) + "font-weight:800;")">
-                                        @context.DepthGrade
+                                    <MudText Typo="Typo.h6" Class="font-mono"
+                                             Style="@(PlacingStyle(context.Rank, _redraftGrades.Teams.Count) + "font-weight:800;")">
+                                        #@context.Rank
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                                        of @_redraftGrades.Teams.Count
                                     </MudText>
                                 </MudTd>
                                 <MudTd Style="text-align:center;">
@@ -320,9 +329,11 @@ else
                                     <div class="d-flex flex-wrap gap-1 justify-center">
                                         @foreach (var pg in context.PositionGrades)
                                         {
-                                            <MudTooltip Text="@($"{pg.Position}: {Ordinal(pg.Placing)} of {pg.TeamCount} in the league · starters average {pg.StarterPoints:F1} pts")">
+                                            <MudTooltip Text="@PositionChipTooltip(pg)">
                                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
-                                                    <span class="font-mono" style="@GradeStyle(pg.Grade)">@pg.Position&nbsp;@pg.Grade</span>
+                                                    <span class="font-mono" style="@PlacingStyle(pg.Placing, pg.TeamCount)">
+                                                        @pg.Position&nbsp;#@pg.Placing@(HasUnprojected(pg) ? "*" : "")
+                                                    </span>
                                                 </MudChip>
                                             </MudTooltip>
                                         }
@@ -349,10 +360,13 @@ else
                     </MudPaper>
 
                     <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3 d-block">
-                        Roster Strength: sim-median production vs. positional baselines, ranked within your league.
-                        Positional grades are ranked the same way — "WR B+" means this league's 4th-best WR room,
-                        not a verdict in the abstract. Hover a chip for the exact placing.
-                        Rank #1 = strongest roster in the league right now.
+                        Every number here is a placing <em>within this league</em>, not a rating.
+                        "WR&nbsp;#4" means this league's 4th-best WR room; it says nothing about whether
+                        that room is good in the abstract — in a strong league, 4th can be excellent.
+                        Score is sim-median starter production against positional baselines, and is what
+                        the placings are ordered by. Hover a chip for the starter average behind it.
+                        For an absolute read on your own roster, use My&nbsp;Team → Depth&nbsp;Grades,
+                        which grades against fixed thresholds and counts your bench.
                     </MudText>
                 }
             }
@@ -593,12 +607,59 @@ else
         string Grade,
         int Placing,
         int TeamCount,
-        double StarterPoints);
+        double StarterPoints,
+        int RosteredCount = 0,
+        int ProjectedCount = 0);
 
     private record RedraftTeamAssetDto(
         string PlayerName,
         string Position,
         double SeasonAvgPoints);
+
+    private static bool HasUnprojected(TeamPositionGradeDto pg) =>
+        pg.RosteredCount > 0 && pg.ProjectedCount < pg.RosteredCount;
+
+    /// <summary>
+    /// A placing built on an incomplete room is still a placing, but the reader
+    /// deserves to know. The asterisk is the cheap version of that; the tooltip
+    /// carries the detail.
+    /// </summary>
+    private static string PositionChipTooltip(TeamPositionGradeDto pg)
+    {
+        var text = $"{pg.Position}: {Ordinal(pg.Placing)} of {pg.TeamCount} in the league · " +
+                   $"starters average {pg.StarterPoints:F1} pts";
+
+        if (HasUnprojected(pg))
+        {
+            var missing = pg.RosteredCount - pg.ProjectedCount;
+            text += $" · {missing} of {pg.RosteredCount} rostered {pg.Position} " +
+                    $"{(missing == 1 ? "has" : "have")} no projection, so this placing " +
+                    $"rests on {pg.ProjectedCount}";
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// Colours a within-league placing by quartile. Deliberately NOT the same
+    /// palette as GradeStyle — these two scales must not look interchangeable,
+    /// because they are not: this is "where you sit among N teams", GradeStyle is
+    /// "how good is this in absolute terms".
+    /// </summary>
+    private static string PlacingStyle(int placing, int total)
+    {
+        if (placing <= 0 || total <= 1) return "color:var(--mud-palette-text-secondary);";
+
+        var fraction = (placing - 1) / (double)(total - 1);   // 0 = best, 1 = worst
+
+        return fraction switch
+        {
+            <= 0.25 => "color:#5eead4;",   // top quarter
+            <= 0.50 => "color:#7dd3fc;",
+            <= 0.75 => "color:#cbd5e1;",
+            _       => "color:#94a3b8;"    // bottom quarter — muted, not alarming
+        };
+    }
 
     // 1 -> "1st", 2 -> "2nd", 11 -> "11th"
     private static string Ordinal(int n)

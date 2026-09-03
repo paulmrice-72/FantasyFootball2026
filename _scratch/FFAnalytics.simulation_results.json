@@ -1,0 +1,48 @@
+[{
+  "Season": 2025,
+  "Week": 0,
+  "SleeperPlayerId": "11629",
+  "Median": {
+    "$numberDecimal": "8.65"
+  },
+  "NflTeam": "",
+  "PlayerName": "Devontez Walker",
+  "PlayerRole": "SeasonAverage",
+  "Position": "WR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "SleeperPlayerId": "11629",
+  "Median": {
+    "$numberDecimal": "4.3"
+  },
+  "NflTeam": "BAL",
+  "PlayerName": "Devontez Walker",
+  "PlayerRole": "SeasonAverage",
+  "Position": "WR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "SleeperPlayerId": "13079",
+  "Median": {
+    "$numberDecimal": "7.9"
+  },
+  "NflTeam": "",
+  "PlayerName": "Jahdae Walker",
+  "PlayerRole": "SeasonAverage",
+  "Position": "WR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "SleeperPlayerId": "8151",
+  "Median": {
+    "$numberDecimal": "14.38"
+  },
+  "NflTeam": "SEA",
+  "PlayerName": "Kenneth Walker",
+  "PlayerRole": "SeasonAverage",
+  "Position": "RB"
+}]

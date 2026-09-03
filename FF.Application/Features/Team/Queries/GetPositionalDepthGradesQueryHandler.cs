@@ -112,12 +112,23 @@ public class GetPositionalDepthGradesQueryHandler(
 
                     var designation = injury?.Designation;
                     var isOut = IsOut(designation);
-                    var median = sim is not null ? (double)sim.Median : 0.0;
+
+                    // FAN-124, one layer down. The lineup card stopped rendering a
+                    // missing projection as 0.0; this handler was still SCORING it as
+                    // 0.0, which is the same invented number doing quiet damage in an
+                    // aggregate. A player with no projection is now excluded from the
+                    // maths entirely, and if that leaves too few to judge, the position
+                    // is reported as ungraded rather than graded on what happens to be
+                    // left. Verified 2026-09-02 against a roster where Kenneth Walker
+                    // had no sim row in any reachable season.
+                    var hasProjection = sim is not null && sim.Median > 0m;
+                    var median = hasProjection ? (double)sim!.Median : 0.0;
 
                     return new
                     {
                         Median = median * InjuryFactor(designation),
                         RawMedian = median,
+                        HasProjection = hasProjection,
                         IsOut = isOut,
                         Designation = designation
                     };
@@ -125,19 +136,22 @@ public class GetPositionalDepthGradesQueryHandler(
                 .OrderByDescending(p => p.Median)
                 .ToList();
 
-            var starterGroup = posPlayers.Take(starterSlots).ToList();
+            var projected = posPlayers.Where(p => p.HasProjection).ToList();
+            var unprojectedCount = posPlayers.Count - projected.Count;
+
+            var starterGroup = projected.Take(starterSlots).ToList();
             var starterScore = starterGroup.Count > 0
                 ? starterGroup.Average(p => p.Median)
                 : 0.0;
 
             double depthScore = 0;
-            for (int i = 0; i < posPlayers.Count; i++)
+            for (int i = 0; i < projected.Count; i++)
             {
                 var isStarterSlot = i < starterSlots;
-                if (isStarterSlot || posPlayers[i].Median >= qualityFloor)
+                if (isStarterSlot || projected[i].Median >= qualityFloor)
                 {
                     var weight = i < DepthWeights.Length ? DepthWeights[i] : 0.05;
-                    depthScore += posPlayers[i].Median * weight;
+                    depthScore += projected[i].Median * weight;
                 }
             }
 
@@ -184,11 +198,39 @@ public class GetPositionalDepthGradesQueryHandler(
                 ? 0.0
                 : Math.Clamp(starterNorm + depthNorm, 0, 100);
 
-            var (grade, label) = MapGrade((int)Math.Round(rawScore));
-
             var rosteredCount = posPlayers.Count;
-            var healthyCount = posPlayers.Count(p => !p.IsOut);
-            var summary = BuildSummary(pos, grade, starterScore, healthyCount, rosteredCount);
+
+            // "Healthy" now means what the UI label has always claimed. It used to
+            // count everyone who was not OUT, so three Questionable players showed
+            // as 4/4, 6/6 and 2/2 while the injury report said otherwise — and the
+            // injury-concern branch in BuildSummary could never fire.
+            var healthyCount = posPlayers.Count(p => !IsCarryingDesignation(p.Designation));
+
+            string grade, label, summary;
+
+            if (projected.Count < starterSlots)
+            {
+                // Not enough projected players to fill the starting slots. Grading the
+                // remainder would produce a confident letter for a position we cannot
+                // actually see — the failure mode that made a 2-of-3 RB room read B+.
+                grade = "—";
+                label = "Not graded";
+                summary = BuildUngradedSummary(pos, starterSlots, projected.Count, unprojectedCount);
+                rawScore = 0.0;
+
+                logger.LogInformation(
+                    "Depth grade suppressed for {Position} — {Projected} of {Required} starter " +
+                    "slots have a projection ({Unprojected} of {Rostered} rostered players unprojected)",
+                    pos, projected.Count, starterSlots, unprojectedCount, rosteredCount);
+            }
+            else
+            {
+                (grade, label) = MapGrade((int)Math.Round(rawScore));
+                summary = BuildSummary(pos, grade, starterScore, healthyCount, rosteredCount);
+
+                if (unprojectedCount > 0)
+                    summary += $" ({unprojectedCount} rostered {pos} without a projection.)";
+            }
 
             grades.Add(new PositionDepthGradeDto(
                 Position: pos,
@@ -229,6 +271,14 @@ public class GetPositionalDepthGradesQueryHandler(
 
     private static bool IsOut(string? designation) => Normalise(designation) == "OUT";
 
+    /// <summary>
+    /// True when the player is on the injury report at all. Distinct from
+    /// <see cref="IsOut"/>: a Questionable player still plays most weeks, so he
+    /// counts toward depth, but he is not "healthy" and the card should not say so.
+    /// </summary>
+    private static bool IsCarryingDesignation(string? designation) =>
+        Normalise(designation) is "OUT" or "DOUBTFUL" or "QUESTIONABLE";
+
     private static string Normalise(string? designation)
     {
         if (string.IsNullOrWhiteSpace(designation)) return string.Empty;
@@ -247,6 +297,15 @@ public class GetPositionalDepthGradesQueryHandler(
         foreach (var (min, grade, label) in GradeTable)
             if (score >= min) return (grade, label);
         return ("F", "Dire");
+    }
+
+    private static string BuildUngradedSummary(
+        string pos, int starterSlots, int projectedCount, int unprojectedCount)
+    {
+        var missing = starterSlots - projectedCount;
+        return $"{pos} not graded — only {projectedCount} of {starterSlots} starting " +
+               $"{pos} slot(s) have a projection ({missing} short, {unprojectedCount} rostered " +
+               $"{pos} unprojected). A grade here would be scored on an incomplete room.";
     }
 
     private static string BuildSummary(

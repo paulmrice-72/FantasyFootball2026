@@ -63,7 +63,9 @@ public static class RosterStrengthCalculator
     public readonly record struct PositionStrength(
         string Position,
         double StarterPoints,
-        double NormalizedScore);
+        double NormalizedScore,
+        int RosteredCount = 0,
+        int ProjectedCount = 0);
 
     /// <summary>
     /// Per-position starter strength for one roster. This is the breakdown that
@@ -83,17 +85,33 @@ public static class RosterStrengthCalculator
             var baseline = PositionBaseline[pos];
             var slots = StarterSlots[pos];
 
-            var posPlayers = playerIds
+            var rosteredAtPosition = playerIds
                 .Where(id =>
                 {
                     playerLookup.TryGetValue(id, out var p);
                     return p?.Position.ToString() == pos;
                 })
-                .Select(id => simMedianLookup.TryGetValue(id, out var m) ? m : 0.0)
+                .ToList();
+
+            // A player with no simulation row is UNKNOWN, not zero. The previous
+            // version mapped a lookup miss to 0.0 and then averaged it in, so a
+            // roster carrying an unprojected starter was pushed down the league
+            // table by a number nobody had produced. Verified 2026-09-02: Kenneth
+            // Walker had no reachable sim row in any season, and this is the same
+            // fabricated-zero pattern FAN-124 removed from the lineup card and
+            // GetPositionalDepthGradesQueryHandler.
+            //
+            // Excluding him is not free either — a position judged on fewer players
+            // is judged on less evidence — so the counts travel with the result and
+            // the UI says when a placing rests on an incomplete room.
+            var projected = rosteredAtPosition
+                .Select(id => simMedianLookup.TryGetValue(id, out var m) ? (double?)m : null)
+                .Where(m => m is > 0)
+                .Select(m => m!.Value)
                 .OrderByDescending(m => m)
                 .ToList();
 
-            var starterScore = posPlayers.Take(slots).DefaultIfEmpty(0).Average();
+            var starterScore = projected.Take(slots).DefaultIfEmpty(0).Average();
 
             // GRADE-FIX-002: a position contributes 0 if its starter quality is
             // below 50% of baseline — keeps a handful of filler players from
@@ -103,7 +121,10 @@ public static class RosterStrengthCalculator
                 ? Math.Clamp((starterScore / baseline) * 50.0, 0, 100)
                 : 0.0;
 
-            result.Add(new PositionStrength(pos, starterScore, normalized));
+            result.Add(new PositionStrength(
+                pos, starterScore, normalized,
+                RosteredCount: rosteredAtPosition.Count,
+                ProjectedCount: projected.Count));
         }
 
         return result;

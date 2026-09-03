@@ -1,5 +1,6 @@
-﻿// FF.Application/Features/Simulations/Commands/SeedSeasonAverageSims/SeedSeasonAverageSimsCommandHandler.cs
+// FF.Application/Features/Simulations/Commands/SeedSeasonAverageSims/SeedSeasonAverageSimsCommandHandler.cs
 using System.Globalization;
+using System.Net;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
@@ -18,6 +19,23 @@ public class SeedSeasonAverageSimsCommandHandler(
 {
     private static readonly HashSet<string> SkillPositions = ["QB", "RB", "WR", "TE"];
 
+    /// <summary>
+    /// Sleeper's player table carries placeholder rows for retired/void entries.
+    /// They all normalise to the same handful of keys and would otherwise sit in
+    /// the name index competing with real players.
+    /// </summary>
+    private static readonly HashSet<string> PlaceholderNames =
+        ["player invalid", "duplicate player", "invalid player", "unknown player"];
+
+    // nflverse has renamed these columns more than once. Read every spelling we
+    // have seen rather than assuming the current one — a rename silently blanks
+    // the field, which is how the 2025 prod seed ended up with empty NflTeam.
+    private static readonly string[] GsisIdColumns =
+        ["player_id", "gsis_id", "player_gsis_id"];
+
+    private static readonly string[] TeamColumns =
+        ["recent_team", "team", "team_abbr", "recent_team_abbr"];
+
     private const string SeasonAggregateUrlTemplate = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_reg_{0}.csv";
     private const string WeeklyUrlTemplate = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_{0}.csv";
 
@@ -35,67 +53,16 @@ public class SeedSeasonAverageSimsCommandHandler(
         {
             // Provided directly — detect weekly vs aggregate by header
             csv = request.CsvContent;
-            var firstLine = csv.Split('\n').FirstOrDefault() ?? string.Empty;
-            isWeeklyFile = firstLine.Contains(",week,", StringComparison.OrdinalIgnoreCase)
-                || firstLine.StartsWith("week,", StringComparison.OrdinalIgnoreCase)
-                || firstLine.Contains("\"week\"", StringComparison.OrdinalIgnoreCase);
+            isWeeklyFile = LooksWeekly(csv);
             logger.LogInformation(
                 "Using provided CSV content — weeklyFile={IsWeekly}, season {Season}",
                 isWeeklyFile, request.Season);
         }
         else
         {
-            // Try season aggregate from nflverse first
-            var http = httpClientFactory.CreateClient("NflverseClient");
-            var seasonUrl = string.Format(SeasonAggregateUrlTemplate, request.Season);
-            string? downloaded = null;
-            isWeeklyFile = false;
-
-            try
-            {
-                var response = await http.GetAsync(seasonUrl, cancellationToken);
-                if (response.IsSuccessStatusCode)
-                {
-                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
-                    var firstLine = content.Split('\n').FirstOrDefault() ?? string.Empty;
-                    bool looksWeekly = firstLine.Contains(",week,", StringComparison.OrdinalIgnoreCase)
-                        || firstLine.StartsWith("week,", StringComparison.OrdinalIgnoreCase)
-                        || firstLine.Contains("\"week\"", StringComparison.OrdinalIgnoreCase);
-                    if (!looksWeekly)
-                    {
-                        downloaded = content;
-                        logger.LogInformation("Using season aggregate file for {Season}", request.Season);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex,
-                    "Season aggregate download failed for {Season} — trying weekly file", request.Season);
-            }
-
-            if (downloaded is null)
-            {
-                // Fall back to weekly file
-                var weeklyUrl = string.Format(WeeklyUrlTemplate, request.Season);
-                logger.LogInformation(
-                    "Season aggregate not available for {Season} — falling back to weekly URL", request.Season);
-                try
-                {
-                    downloaded = await http.GetStringAsync(weeklyUrl, cancellationToken);
-                    isWeeklyFile = true;
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidOperationException(
-                        $"Neither season aggregate (stats_player_reg_{request.Season}.csv) " +
-                        $"nor weekly file (stats_player_week_{request.Season}.csv) could be downloaded from nflverse. " +
-                        $"This is expected if season {request.Season} hasn't started yet — nflverse only " +
-                        $"publishes data once games are played. Upload the CSV directly via the Admin import panel instead.", ex);
-                }
-            }
-
-            csv = downloaded;
+            var download = await DownloadAsync(request.Season, cancellationToken);
+            csv = download.Content;
+            isWeeklyFile = download.IsWeekly;
         }
 
         // ── 2: Parse CSV ──────────────────────────────────────────────────────
@@ -120,30 +87,59 @@ public class SeedSeasonAverageSimsCommandHandler(
                     r.TryGetValue("season_type", out var st) && st.Trim() == "REG"
                     && r.TryGetValue("position", out var pos)
                     && SkillPositions.Contains(pos.Trim().ToUpper())
-                    && r.TryGetValue("games", out var gamesStr)
-                    && decimal.TryParse(gamesStr, NumberStyles.Float,
-                        CultureInfo.InvariantCulture, out var g) && g > 0)
+                    && TryParseGames(r.GetValueOrDefault("games"), out var g) && g > 0)
                 .ToList();
             logger.LogInformation("{Count} eligible REG-season rows after filtering", eligible.Count);
         }
 
-        // ── 4: Load Sleeper players — GsisId match is primary, normalized name is fallback ──
-        var gsisToSleeper = await resolutionService.BuildGsisToSleeperMapAsync(cancellationToken);
-        
-        var allPlayers = await playerRepository.GetAllAsync(cancellationToken);
-        var playerBySleeperId = allPlayers
-                    .Where(p => p.SleeperPlayerId != null)
-                    .GroupBy(p => p.SleeperPlayerId!)
-                    .ToDictionary(g => g.Key, g => g.First());
+        // ── 4: Build the identity indexes ─────────────────────────────────────
+        //
+        // Three ways to reach a Sleeper id, in descending order of trust:
+        //
+        //   1. nflverse gsis -> sleeper bridge (stable across seasons)
+        //   2. the GsisId already stored on our own Player row
+        //   3. normalised name + POSITION
+        //
+        // (3) used to be `GroupBy(name).ToDictionary(g => g.First())` — no position
+        // check and no tiebreak, so with two "Kenneth Walker" rows in the player
+        // table (8151 RB, 4634 WR) the winner was decided by whatever order
+        // GetAllAsync happened to return. Verified 2026-09-02: dev wrote the RB's
+        // 2024 season average onto the WR's id while prod wrote the same row onto
+        // the RB's. Same code, same input, different answer per environment.
+        var gsisToSleeper = NormalizeGsisMap(
+            await resolutionService.BuildGsisToSleeperMapAsync(cancellationToken));
 
-        var playerByNormalizedName = allPlayers
-            .Where(p => p.SleeperPlayerId != null && p.FullName != null)
-            .GroupBy(p => NormalizeName(p.FullName!))
+        var allPlayers = await playerRepository.GetAllAsync(cancellationToken);
+
+        var indexablePlayers = allPlayers
+            .Where(p => !string.IsNullOrWhiteSpace(p.SleeperPlayerId)
+                        && !string.IsNullOrWhiteSpace(p.FullName)
+                        && !PlaceholderNames.Contains(NormalizeName(p.FullName!)))
+            .ToList();
+
+        var playerBySleeperId = indexablePlayers
+            .GroupBy(p => p.SleeperPlayerId!)
             .ToDictionary(g => g.Key, g => g.First());
+
+        var playerByOwnGsis = indexablePlayers
+            .Where(p => !string.IsNullOrWhiteSpace(p.GsisId))
+            .GroupBy(p => p.GsisId!.Trim())
+            .ToDictionary(g => g.Key, g => g.First());
+
+        // Keyed on name AND position — the whole group is kept so ambiguity is
+        // visible at lookup time instead of being silently resolved by First().
+        var playersByNameAndPosition = indexablePlayers
+            .GroupBy(p => $"{NormalizeName(p.FullName!)}|{p.Position.ToString().ToUpperInvariant()}")
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        logger.LogInformation(
+            "Identity indexes built — {Bridge} gsis bridge entries, {Players} indexable players, " +
+            "{OwnGsis} with a stored GsisId",
+            gsisToSleeper.Count, indexablePlayers.Count, playerByOwnGsis.Count);
 
         // ── 5: Build sim docs ─────────────────────────────────────────────────
         var toUpsert = new List<SimulationResultDocument>();
-        int skipped = 0, unmatched = 0, matchedByGsis = 0, matchedByName = 0;
+        int skipped = 0, unmatched = 0, matchedByGsis = 0, matchedByName = 0, ambiguousSkipped = 0;
 
         foreach (var row in eligible)
         {
@@ -151,12 +147,10 @@ public class SeedSeasonAverageSimsCommandHandler(
                 ?? row.GetValueOrDefault("player_name")
                 ?? string.Empty;
             var position = row["position"].Trim().ToUpper();
-            var nflTeam = row.GetValueOrDefault("recent_team")
-                            ?? row.GetValueOrDefault("team")   // weekly file (Jul 2026+) renamed this column
-                            ?? string.Empty;
-            var gsisId = row.GetValueOrDefault("player_id");
+            var nflTeam = FirstNonEmpty(row, TeamColumns) ?? string.Empty;
+            var gsisId = FirstNonEmpty(row, GsisIdColumns)?.Trim();
 
-            if (!int.TryParse(row.GetValueOrDefault("games"), out var games) || games <= 0)
+            if (!TryParseGames(row.GetValueOrDefault("games"), out var games) || games <= 0)
             {
                 skipped++;
                 continue;
@@ -178,26 +172,51 @@ public class SeedSeasonAverageSimsCommandHandler(
 
             FF.Domain.Entities.Player? player = null;
 
+            // (1) gsis -> sleeper bridge
             if (!string.IsNullOrWhiteSpace(gsisId)
                 && gsisToSleeper.TryGetValue(gsisId, out var sleeperId)
                 && playerBySleeperId.TryGetValue(sleeperId, out player))
             {
                 matchedByGsis++;
             }
+            // (2) GsisId stored on our own Player row
+            else if (!string.IsNullOrWhiteSpace(gsisId)
+                     && playerByOwnGsis.TryGetValue(gsisId, out player))
+            {
+                matchedByGsis++;
+            }
+            // (3) name + position, with an explicit tiebreak and an explicit refusal
             else
             {
-                var normalized = NormalizeName(playerName);
-                if (playerByNormalizedName.TryGetValue(normalized, out player))
+                var key = $"{NormalizeName(playerName)}|{position}";
+
+                if (!playersByNameAndPosition.TryGetValue(key, out var candidates))
                 {
-                    matchedByName++;
-                }
-                else
-                {
-                    logger.LogDebug("No Sleeper match for '{Name}' ({Pos}) — GsisId={Gsis}",
-                        playerName, position, gsisId);
+                    logger.LogWarning(
+                        "No Sleeper match for '{Name}' ({Pos}) — gsis={Gsis}. " +
+                        "This player will have NO season average for {Season}.",
+                        playerName, position, gsisId ?? "-", request.Season);
                     unmatched++;
                     continue;
                 }
+
+                player = ResolveAmbiguity(candidates, gsisId, nflTeam);
+
+                if (player is null)
+                {
+                    // Refusing is deliberate. A wrong bind writes one player's
+                    // production onto another player's id, and nothing downstream
+                    // can tell that apart from real data.
+                    logger.LogWarning(
+                        "Ambiguous name match for '{Name}' ({Pos}) — {Count} candidates " +
+                        "[{Candidates}]. Skipping rather than guessing.",
+                        playerName, position, candidates.Count,
+                        string.Join(", ", candidates.Select(c => $"{c.SleeperPlayerId}:{c.NflTeam ?? "-"}")));
+                    ambiguousSkipped++;
+                    continue;
+                }
+
+                matchedByName++;
             }
 
             toUpsert.Add(new SimulationResultDocument
@@ -228,18 +247,216 @@ public class SeedSeasonAverageSimsCommandHandler(
 
         logger.LogInformation(
             "Upserting {Count} season-average sim docs for season {Season} " +
-            "(byGsis={Gsis}, byName={Name}, skipped={Skip}, unmatched={Unmatched})",
-                toUpsert.Count, request.Season, matchedByGsis, matchedByName, skipped, unmatched);
+            "(byGsis={Gsis}, byName={Name}, skipped={Skip}, unmatched={Unmatched}, ambiguous={Ambiguous})",
+            toUpsert.Count, request.Season, matchedByGsis, matchedByName,
+            skipped, unmatched, ambiguousSkipped);
+
+        if (matchedByGsis == 0 && matchedByName > 0)
+        {
+            logger.LogWarning(
+                "Every player in the {Season} seed was resolved by NAME — the gsis bridge " +
+                "matched nothing. Check that the nflverse file still carries one of [{Columns}] " +
+                "and that the roster CSVs still carry sleeper_id.",
+                request.Season, string.Join(", ", GsisIdColumns));
+        }
 
         await simRepository.UpsertBatchAsync(toUpsert, cancellationToken);
 
         return new SeedSeasonAverageSimsResult(
             Seeded: toUpsert.Count,
             Skipped: skipped,
-            Unmatched: unmatched);
+            Unmatched: unmatched,
+            MatchedByGsis: matchedByGsis,
+            MatchedByName: matchedByName,
+            AmbiguousSkipped: ambiguousSkipped);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Download ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Tries the season aggregate, then the weekly file. Throws
+    /// <see cref="NflverseDataUnavailableException"/> with NotPublished set only
+    /// when nflverse actually answered 404 for both.
+    /// </summary>
+    private async Task<(string Content, bool IsWeekly)> DownloadAsync(
+        int season, CancellationToken cancellationToken)
+    {
+        var http = httpClientFactory.CreateClient("NflverseClient");
+
+        var aggregate = await TryDownloadAsync(
+            http, string.Format(SeasonAggregateUrlTemplate, season), cancellationToken);
+
+        if (aggregate.Content is not null && !LooksWeekly(aggregate.Content))
+        {
+            logger.LogInformation("Using season aggregate file for {Season}", season);
+            return (aggregate.Content, false);
+        }
+
+        logger.LogInformation(
+            "Season aggregate unusable for {Season} (notFound={NotFound}, error={Error}) — trying weekly file",
+            season, aggregate.NotFound, aggregate.Error?.Message ?? "-");
+
+        var weekly = await TryDownloadAsync(
+            http, string.Format(WeeklyUrlTemplate, season), cancellationToken);
+
+        if (weekly.Content is not null)
+            return (weekly.Content, true);
+
+        // Both failed. Only call it "not published" when nflverse said so.
+        var bothNotFound = aggregate.NotFound && weekly.NotFound;
+
+        var message = bothNotFound
+            ? $"nflverse has not published stats for season {season} yet " +
+              $"(both stats_player_reg_{season}.csv and stats_player_week_{season}.csv return 404). " +
+              $"This is normal before the season is played — upload the CSV via the Admin import panel " +
+              $"if you have it from another source."
+            : $"Could not retrieve nflverse stats for season {season}: " +
+              $"{weekly.Error?.GetType().Name ?? "unknown error"} — {weekly.Error?.Message ?? "no detail"}. " +
+              $"nflverse did NOT report the file as missing, so this is a connectivity or timeout problem " +
+              $"in this environment, not a missing-season problem. Check egress to github.com and the " +
+              $"NflverseClient timeout.";
+
+        throw new NflverseDataUnavailableException(
+            season, bothNotFound, message, weekly.Error ?? aggregate.Error);
+    }
+
+    private async Task<(string? Content, bool NotFound, Exception? Error)> TryDownloadAsync(
+        HttpClient http, string url, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await http.GetAsync(url, cancellationToken);
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return (null, true, null);
+
+            if (!response.IsSuccessStatusCode)
+                return (null, false,
+                    new HttpRequestException($"{(int)response.StatusCode} {response.ReasonPhrase} for {url}"));
+
+            return (await response.Content.ReadAsStringAsync(cancellationToken), false, null);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // HttpClient surfaces its own timeout as TaskCanceledException. Without
+            // this guard it reads as "the caller cancelled", which it is not.
+            return (null, false, new TimeoutException($"Request to {url} timed out.", ex));
+        }
+        catch (Exception ex)
+        {
+            return (null, false, ex);
+        }
+    }
+
+    // ── Identity helpers ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Deterministic tiebreak for a name+position group. Returns null when the
+    /// group cannot be resolved — the caller must then skip, not guess.
+    /// </summary>
+    private static FF.Domain.Entities.Player? ResolveAmbiguity(
+        List<FF.Domain.Entities.Player> candidates, string? gsisId, string nflTeam)
+    {
+        if (candidates.Count == 1) return candidates[0];
+
+        // The row's own gsis, if our Player row happens to carry it.
+        if (!string.IsNullOrWhiteSpace(gsisId))
+        {
+            var byGsis = candidates
+                .Where(c => string.Equals(c.GsisId?.Trim(), gsisId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (byGsis.Count == 1) return byGsis[0];
+        }
+
+        // Same NFL team as the stat row.
+        if (!string.IsNullOrWhiteSpace(nflTeam))
+        {
+            var byTeam = candidates
+                .Where(c => string.Equals(c.NflTeam, nflTeam, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (byTeam.Count == 1) return byTeam[0];
+        }
+
+        // Currently on a roster at all beats a bare historical shell.
+        var rostered = candidates
+            .Where(c => !string.IsNullOrWhiteSpace(c.NflTeam))
+            .ToList();
+        if (rostered.Count == 1) return rostered[0];
+
+        return null;
+    }
+
+    /// <summary>
+    /// nflverse roster CSVs are written from R, which serialises numeric ids with a
+    /// trailing ".0" ("4881.0"). Our SleeperPlayerId is "4881", so an unnormalised
+    /// bridge value misses every lookup and quietly demotes the whole import to
+    /// name matching.
+    /// </summary>
+    private static Dictionary<string, string> NormalizeGsisMap(Dictionary<string, string> raw)
+    {
+        var map = new Dictionary<string, string>(raw.Count, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var kvp in raw)
+        {
+            var gsis = kvp.Key?.Trim();
+            var sleeper = NormalizeSleeperId(kvp.Value);
+
+            if (string.IsNullOrWhiteSpace(gsis) || string.IsNullOrWhiteSpace(sleeper))
+                continue;
+
+            map.TryAdd(gsis, sleeper);
+        }
+
+        return map;
+    }
+
+    private static string NormalizeSleeperId(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+        var id = raw.Trim();
+
+        // "4881.0" -> "4881"; leave genuinely non-numeric ids (team defences) alone.
+        var dot = id.IndexOf('.');
+        if (dot > 0 && id[(dot + 1)..].All(c => c == '0'))
+            id = id[..dot];
+
+        return id;
+    }
+
+    private static string? FirstNonEmpty(Dictionary<string, string> row, string[] columns)
+    {
+        foreach (var c in columns)
+        {
+            var v = row.GetValueOrDefault(c);
+            if (!string.IsNullOrWhiteSpace(v)) return v.Trim();
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// "games" arrives as "17" from some files and "17.0" from others. The old
+    /// code filtered with decimal.TryParse and then read with int.TryParse, so a
+    /// float-formatted column passed the filter and was skipped in the body.
+    /// </summary>
+    private static bool TryParseGames(string? raw, out int games)
+    {
+        games = 0;
+        if (!decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d))
+            return false;
+        games = (int)Math.Round(d, MidpointRounding.AwayFromZero);
+        return true;
+    }
+
+    private static bool LooksWeekly(string csv)
+    {
+        var firstLine = csv.Split('\n').FirstOrDefault() ?? string.Empty;
+        return firstLine.Contains(",week,", StringComparison.OrdinalIgnoreCase)
+            || firstLine.StartsWith("week,", StringComparison.OrdinalIgnoreCase)
+            || firstLine.Contains("\"week\"", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Aggregation ───────────────────────────────────────────────────────────
 
     private static List<Dictionary<string, string>> AggregateWeeklyToSeason(
         List<Dictionary<string, string>> weeklyRows)
@@ -257,11 +474,18 @@ public class SeedSeasonAverageSimsCommandHandler(
         return eligible
             .GroupBy(r =>
             {
+                // Group on the stable gsis id when the file carries it. Grouping on
+                // the display name splits a player whose name changes mid-file —
+                // nflverse alternates "Kenneth Walker" and "Kenneth Walker III"
+                // between seasons, so this is not hypothetical.
+                var gsis = FirstNonEmpty(r, GsisIdColumns);
+                if (!string.IsNullOrWhiteSpace(gsis)) return $"gsis:{gsis}";
+
                 var name = r.GetValueOrDefault("player_display_name")
                     ?? r.GetValueOrDefault("player_name")
                     ?? string.Empty;
                 var pos = r["position"].Trim().ToUpper();
-                return $"{name}|{pos}";
+                return $"name:{name}|{pos}";
             })
             .Select(g =>
             {
@@ -281,24 +505,40 @@ public class SeedSeasonAverageSimsCommandHandler(
 
                 if (gamesPlayed == 0) return null;
 
-                return new Dictionary<string, string>
+                // Prefer the most recent non-empty team in the group — a traded
+                // player's first week should not decide his season row.
+                var team = g.Select(r => FirstNonEmpty(r, TeamColumns))
+                            .LastOrDefault(t => !string.IsNullOrWhiteSpace(t))
+                           ?? string.Empty;
+
+                var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["player_id"] = sample.GetValueOrDefault("player_id") ?? string.Empty,
+                    ["player_id"] = FirstNonEmpty(sample, GsisIdColumns) ?? string.Empty,
                     ["player_display_name"] = sample.GetValueOrDefault("player_display_name")
                         ?? sample.GetValueOrDefault("player_name")
                         ?? string.Empty,
                     ["position"] = sample["position"].Trim().ToUpper(),
-                    ["recent_team"] = sample.GetValueOrDefault("recent_team") ?? sample.GetValueOrDefault("team") ?? string.Empty,
+                    ["recent_team"] = team,
                     ["season_type"] = "REG",
-                    ["games"] = gamesPlayed.ToString(),
+                    ["games"] = gamesPlayed.ToString(CultureInfo.InvariantCulture),
                     ["fantasy_points"] = totalPts.ToString(CultureInfo.InvariantCulture),
                     ["receptions"] = totalRec.ToString(CultureInfo.InvariantCulture),
                 };
+
+                return row;
             })
             .Where(r => r is not null)
             .Select(r => r!)
             .ToList();
     }
+
+    // ── Name normalisation ────────────────────────────────────────────────────
+    //
+    // Suffix stripping is what makes "Kenneth Walker III" and "Kenneth Walker"
+    // the same key — which is correct for matching one player across nflverse
+    // files, and is exactly why the key is not unique on its own. Position and
+    // the tiebreak ladder above carry that weight now; this method must never be
+    // the sole basis for a bind.
 
     private static string NormalizeName(string name) =>
         name.ToLowerInvariant()
@@ -311,6 +551,8 @@ public class SeedSeasonAverageSimsCommandHandler(
             .Replace(" iii", "")   // longest suffix first — "ii" below would otherwise eat part of it
             .Replace(" ii", "")
             .Trim();
+
+    // ── CSV ───────────────────────────────────────────────────────────────────
 
     private static List<Dictionary<string, string>> ParseCsv(string csv)
     {
