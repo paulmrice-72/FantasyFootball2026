@@ -1,4 +1,4 @@
-﻿// FF.Application/DraftTools/Queries/GetDraftSession/GetDraftSessionQueryHandler.cs
+// FF.Application/DraftTools/Queries/GetDraftSession/GetDraftSessionQueryHandler.cs
 using FF.Application.Common.Models;
 using FF.Application.Interfaces.Repositories;
 using FF.Domain.Documents;
@@ -17,11 +17,11 @@ public class GetDraftSessionQueryHandler(IDraftSessionRepository sessionReposito
             request.SessionId, cancellationToken);
 
         if (session is null)
-            return (Result<DraftSessionDocument>)Result<DraftSessionDocument>.Failure(
+            return Result<DraftSessionDocument>.Failure(
                 Error.NotFound("Draft.SessionNotFound", "Draft session not found."));
 
         if (session.UserId != request.UserId)
-            return (Result<DraftSessionDocument>)Result<DraftSessionDocument>.Failure(
+            return Result<DraftSessionDocument>.Failure(
                 Error.Unauthorized("Draft.NotOwner"));
 
         return Result<DraftSessionDocument>.Success(session);

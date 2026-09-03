@@ -1,4 +1,4 @@
-﻿// FF.Application/Players/Queries/GetPlayerNarrative/GetPlayerNarrativeQueryHandler.cs
+// FF.Application/Players/Queries/GetPlayerNarrative/GetPlayerNarrativeQueryHandler.cs
 using FF.Application.Common.Models;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
@@ -38,7 +38,7 @@ public class GetPlayerNarrativeQueryHandler(
             p => p.SleeperPlayerId == request.SleeperPlayerId);
 
         if (player is null)
-            return (Result<PlayerNarrativeDto>)Result<PlayerNarrativeDto>.Failure(
+            return Result<PlayerNarrativeDto>.Failure(
                 new Error("Player.NotFound", $"Player {request.SleeperPlayerId} not found."));
 
         // 3 — Load supporting data from MongoDB
@@ -83,7 +83,7 @@ public class GetPlayerNarrativeQueryHandler(
             ct: cancellationToken);
 
         if (narrative is null)
-            return (Result<PlayerNarrativeDto>)Result<PlayerNarrativeDto>.Failure(
+            return Result<PlayerNarrativeDto>.Failure(
                 new Error("Narrative.GenerationFailed", "Could not generate scout report."));
 
         // 5 — Cache to MongoDB
