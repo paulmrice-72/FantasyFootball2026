@@ -1,0 +1,1151 @@
+[{
+  "n": 219,
+  "lastSync": {
+    "$date": "2026-09-01T20:37:26.746Z"
+  },
+  "nullAdp": 0,
+  "probe": "B_adp_counts",
+  "season": 2026,
+  "fmt": "ppr"
+},
+{
+  "PlayerName": "J.Allen",
+  "NflTeam": "BUF",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 16,
+  "ppr": 21.63,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9411764705882353
+},
+{
+  "PlayerName": "J.Allen",
+  "NflTeam": "BUF",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 16,
+  "ppr": 21.63,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9411764705882353
+},
+{
+  "PlayerName": "M.Stafford",
+  "NflTeam": "LA",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 20.28,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "M.Stafford",
+  "NflTeam": "LA",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 20.28,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "D.Maye",
+  "NflTeam": "NE",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 19.73,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "D.Maye",
+  "NflTeam": "NE",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 19.73,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "P.Mahomes",
+  "NflTeam": "KC",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 14,
+  "ppr": 19.38,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9333333333333333
+},
+{
+  "PlayerName": "P.Mahomes",
+  "NflTeam": "KC",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 14,
+  "ppr": 19.38,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9333333333333333
+},
+{
+  "PlayerName": "T.Lawrence",
+  "NflTeam": "JAX",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 18.75,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "T.Lawrence",
+  "NflTeam": "JAX",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 18.75,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "C.Williams",
+  "NflTeam": "CHI",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 18.04,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "C.Williams",
+  "NflTeam": "CHI",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 18.04,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "B.Nix",
+  "NflTeam": "DEN",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 18.02,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "B.Nix",
+  "NflTeam": "DEN",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 18.02,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "B.Purdy",
+  "NflTeam": "SF",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 9,
+  "ppr": 18.01,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.5
+},
+{
+  "PlayerName": "B.Purdy",
+  "NflTeam": "SF",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 9,
+  "ppr": 18.01,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.5
+},
+{
+  "PlayerName": "J.Herbert",
+  "NflTeam": "LAC",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 16,
+  "ppr": 17.86,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9411764705882353
+},
+{
+  "PlayerName": "J.Herbert",
+  "NflTeam": "LAC",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 16,
+  "ppr": 17.86,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9411764705882353
+},
+{
+  "PlayerName": "D.Prescott",
+  "NflTeam": "DAL",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 17.69,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "D.Prescott",
+  "NflTeam": "DAL",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 17.69,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "J.Goff",
+  "NflTeam": "DET",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 17.66,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "J.Goff",
+  "NflTeam": "DET",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 17,
+  "ppr": 17.66,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9444444444444444
+},
+{
+  "PlayerName": "J.Hurts",
+  "NflTeam": "PHI",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 16,
+  "ppr": 17.51,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9411764705882353
+},
+{
+  "PlayerName": "J.Hurts",
+  "NflTeam": "PHI",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 16,
+  "ppr": 17.51,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.9411764705882353
+},
+{
+  "PlayerName": "J.Brissett",
+  "NflTeam": "ARI",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 13,
+  "ppr": 17.44,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.7647058823529411
+},
+{
+  "PlayerName": "J.Brissett",
+  "NflTeam": "ARI",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 13,
+  "ppr": 17.44,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.7647058823529411
+},
+{
+  "PlayerName": "J.Burrow",
+  "NflTeam": "CIN",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 8,
+  "ppr": 16.86,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.4444444444444444
+},
+{
+  "PlayerName": "J.Burrow",
+  "NflTeam": "CIN",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 8,
+  "ppr": 16.86,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.4444444444444444
+},
+{
+  "PlayerName": "J.Dart",
+  "NflTeam": "NYG",
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 14,
+  "ppr": 16.78,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.8235294117647058
+},
+{
+  "PlayerName": "J.Dart",
+  "NflTeam": "NYG",
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "GameSampleSize": 14,
+  "ppr": 16.78,
+  "probe": "D_qb_proj_top30",
+  "usage": 1,
+  "avail": 0.8235294117647058
+},
+{
+  "PlayerName": "J.Milton",
+  "Position": "QB",
+  "NflTeam": "DAL",
+  "Season": 2025,
+  "Week": 18,
+  "ProjectedPointsPpr": {
+    "$numberDecimal": "3.87032059287692000"
+  },
+  "GameSampleSize": 3,
+  "probe": "E_outlier_proj"
+},
+{
+  "PlayerName": "J.Milton",
+  "Position": "QB",
+  "NflTeam": "DAL",
+  "Season": 2026,
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "ProjectedPointsPpr": {
+    "$numberDecimal": "4.55"
+  },
+  "AvailabilityRate": {
+    "$numberDecimal": "0.25"
+  },
+  "GameSampleSize": 4,
+  "probe": "E_outlier_proj"
+},
+{
+  "PlayerName": "J.Milton",
+  "Position": "QB",
+  "NflTeam": "DAL",
+  "Season": 2026,
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "BasisSeason": 2025,
+  "ProjectedPointsPpr": {
+    "$numberDecimal": "4.55"
+  },
+  "AvailabilityRate": {
+    "$numberDecimal": "0.25"
+  },
+  "GameSampleSize": 4,
+  "probe": "E_outlier_proj"
+},
+{
+  "PlayerName": "Joe Fagnano",
+  "Position": "QB",
+  "NflTeam": "BAL",
+  "Season": 2026,
+  "Week": 1,
+  "Basis": "RookieProjection",
+  "BasisSeason": 2026,
+  "ProjectedPointsPpr": {
+    "$numberDecimal": "0.22"
+  },
+  "AvailabilityRate": {
+    "$numberDecimal": "0.88"
+  },
+  "GameSampleSize": 0,
+  "probe": "E_outlier_proj"
+},
+{
+  "PlayerName": "Joe Fagnano",
+  "Position": "QB",
+  "NflTeam": "BAL",
+  "Season": 2026,
+  "Week": 0,
+  "Basis": "RookieProjection",
+  "BasisSeason": 2026,
+  "ProjectedPointsPpr": {
+    "$numberDecimal": "0.22"
+  },
+  "AvailabilityRate": {
+    "$numberDecimal": "0.88"
+  },
+  "GameSampleSize": 0,
+  "probe": "E_outlier_proj"
+},
+{
+  "PlayerName": "Kendall Milton",
+  "Position": "RB",
+  "NflTeam": "CIN",
+  "Season": 2025,
+  "Week": 18,
+  "BaseProjection": {
+    "$numberDecimal": "0.2"
+  },
+  "Median": {
+    "$numberDecimal": "0.2"
+  },
+  "Ceiling": {
+    "$numberDecimal": "4.04"
+  },
+  "Mean": {
+    "$numberDecimal": "0.2"
+  },
+  "PlayerRole": "Unknown",
+  "ScoringFormat": "HalfPpr",
+  "probe": "F_outlier_sim"
+},
+{
+  "PlayerName": "J.Milton",
+  "Position": "QB",
+  "NflTeam": "DAL",
+  "Season": 2025,
+  "Week": 18,
+  "BaseProjection": {
+    "$numberDecimal": "3.87"
+  },
+  "Median": {
+    "$numberDecimal": "3.87"
+  },
+  "Ceiling": {
+    "$numberDecimal": "5.26"
+  },
+  "Mean": {
+    "$numberDecimal": "3.87"
+  },
+  "PlayerRole": "Unknown",
+  "ScoringFormat": "HalfPpr",
+  "probe": "F_outlier_sim"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "19.24"
+  },
+  "Ceiling": {
+    "$numberDecimal": "28.86"
+  },
+  "Mean": {
+    "$numberDecimal": "19.24"
+  },
+  "Median": {
+    "$numberDecimal": "19.24"
+  },
+  "NflTeam": "NE",
+  "PlayerName": "Joe Milton",
+  "PlayerRole": "SeasonAverage",
+  "Position": "QB",
+  "ScoringFormat": "HalfPPR",
+  "probe": "F_outlier_sim"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "0.2"
+  },
+  "Ceiling": {
+    "$numberDecimal": "0.30"
+  },
+  "Mean": {
+    "$numberDecimal": "0.2"
+  },
+  "Median": {
+    "$numberDecimal": "0.2"
+  },
+  "NflTeam": "CIN",
+  "PlayerName": "Kendall Milton",
+  "PlayerRole": "SeasonAverage",
+  "Position": "RB",
+  "ScoringFormat": "HalfPPR",
+  "probe": "F_outlier_sim"
+},
+{
+  "Week": 0,
+  "Season": 2025,
+  "BaseProjection": {
+    "$numberDecimal": "2.58"
+  },
+  "Ceiling": {
+    "$numberDecimal": "3.87"
+  },
+  "Mean": {
+    "$numberDecimal": "2.58"
+  },
+  "Median": {
+    "$numberDecimal": "2.58"
+  },
+  "NflTeam": "DAL",
+  "PlayerName": "Joe Milton",
+  "PlayerRole": "SeasonAverage",
+  "Position": "QB",
+  "ScoringFormat": "HalfPPR",
+  "probe": "F_outlier_sim"
+},
+{
+  "PlayerName": "J.Milton",
+  "Position": "QB",
+  "NflTeam": "DAL",
+  "Season": 2026,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "4.55"
+  },
+  "Median": {
+    "$numberDecimal": "3.95"
+  },
+  "Ceiling": {
+    "$numberDecimal": "8.10"
+  },
+  "Mean": {
+    "$numberDecimal": "4.58"
+  },
+  "PlayerRole": "Unknown",
+  "ScoringFormat": "FullPpr",
+  "probe": "F_outlier_sim"
+},
+{
+  "PlayerName": "J.Milton",
+  "Position": "QB",
+  "NflTeam": "DAL",
+  "Season": 2026,
+  "Week": 1,
+  "BaseProjection": {
+    "$numberDecimal": "4.55"
+  },
+  "Median": {
+    "$numberDecimal": "3.95"
+  },
+  "Ceiling": {
+    "$numberDecimal": "8.12"
+  },
+  "Mean": {
+    "$numberDecimal": "4.57"
+  },
+  "PlayerRole": "Unknown",
+  "ScoringFormat": "FullPpr",
+  "probe": "F_outlier_sim"
+},
+{
+  "PlayerName": "Joe Fagnano",
+  "Position": "QB",
+  "NflTeam": "BAL",
+  "Season": 2026,
+  "Week": 1,
+  "BaseProjection": {
+    "$numberDecimal": "0.22"
+  },
+  "Median": {
+    "$numberDecimal": "0.17"
+  },
+  "Ceiling": {
+    "$numberDecimal": "0.18"
+  },
+  "Mean": {
+    "$numberDecimal": "0.24"
+  },
+  "PlayerRole": "Unknown",
+  "ScoringFormat": "FullPpr",
+  "probe": "F_outlier_sim"
+},
+{
+  "PlayerName": "Joe Fagnano",
+  "Position": "QB",
+  "NflTeam": "BAL",
+  "Season": 2026,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "0.22"
+  },
+  "Median": {
+    "$numberDecimal": "0.17"
+  },
+  "Ceiling": {
+    "$numberDecimal": "0.18"
+  },
+  "Mean": {
+    "$numberDecimal": "0.25"
+  },
+  "PlayerRole": "Unknown",
+  "ScoringFormat": "FullPpr",
+  "probe": "F_outlier_sim"
+},
+{
+  "n": 37,
+  "probe": "G_depth_qb_coverage",
+  "week": 0,
+  "depthTeam": 2
+},
+{
+  "n": 34,
+  "probe": "G_depth_qb_coverage",
+  "week": 0,
+  "depthTeam": 4
+},
+{
+  "n": 43,
+  "probe": "G_depth_qb_coverage",
+  "week": 0,
+  "depthTeam": 3
+},
+{
+  "n": 1,
+  "probe": "G_depth_qb_coverage",
+  "week": 0,
+  "depthTeam": 5
+},
+{
+  "n": 34,
+  "probe": "G_depth_qb_coverage",
+  "week": 0,
+  "depthTeam": 1
+},
+{
+  "DepthPosition": "Strong Safety",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 1,
+  "FullName": "Kyle Hamilton",
+  "NflTeam": "BAL",
+  "Position": "SS",
+  "SleeperPlayerId": "",
+  "probe": "H_outlier_depth"
+},
+{
+  "DepthPosition": "Running Back",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 5,
+  "FullName": "Kendall Milton",
+  "NflTeam": "CIN",
+  "Position": "RB",
+  "SleeperPlayerId": "11649",
+  "probe": "H_outlier_depth"
+},
+{
+  "DepthPosition": "Quarterback",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 2,
+  "FullName": "Joe Milton III",
+  "NflTeam": "DAL",
+  "Position": "QB",
+  "SleeperPlayerId": "11557",
+  "probe": "H_outlier_depth"
+},
+{
+  "DepthPosition": "Left Defensive Tackle",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 3,
+  "FullName": "Kyonte Hamilton",
+  "NflTeam": "HOU",
+  "Position": "LDT",
+  "SleeperPlayerId": "",
+  "probe": "H_outlier_depth"
+},
+{
+  "DepthPosition": "Right Defensive Tackle",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 1,
+  "FullName": "DaVon Hamilton",
+  "NflTeam": "JAX",
+  "Position": "RDT",
+  "SleeperPlayerId": "",
+  "probe": "H_outlier_depth"
+},
+{
+  "DepthPosition": "Nose Tackle",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 2,
+  "FullName": "Ty Hamilton",
+  "NflTeam": "LA",
+  "Position": "NT",
+  "SleeperPlayerId": "",
+  "probe": "H_outlier_depth"
+},
+{
+  "DepthPosition": "Right Defensive End",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 1,
+  "FullName": "Milton Williams",
+  "NflTeam": "NE",
+  "Position": "RDE",
+  "SleeperPlayerId": "2941",
+  "probe": "H_outlier_depth"
+},
+{
+  "Week": 0,
+  "Season": 2026,
+  "DepthPosition": "Quarterback",
+  "DepthTeam": 3,
+  "FullName": "Joe Fagnano",
+  "NflTeam": "BAL",
+  "Position": "QB",
+  "SleeperPlayerId": "13350",
+  "probe": "H_outlier_depth"
+},
+{
+  "DepthPosition": "Left Cornerback",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 2,
+  "FullName": "Antonio Hamilton Sr.",
+  "NflTeam": "WAS",
+  "Position": "LCB",
+  "SleeperPlayerId": "",
+  "probe": "H_outlier_depth"
+},
+{
+  "Week": 0,
+  "DepthPosition": "Nickel Back",
+  "Season": 2026,
+  "DepthTeam": 1,
+  "FullName": "Kyle Hamilton",
+  "NflTeam": "BAL",
+  "Position": "NB",
+  "SleeperPlayerId": "",
+  "probe": "H_outlier_depth"
+},
+{
+  "Week": 0,
+  "DepthPosition": "Quarterback",
+  "Season": 2026,
+  "DepthTeam": 3,
+  "FullName": "Joe Fagnano",
+  "NflTeam": "BAL",
+  "Position": "QB",
+  "SleeperPlayerId": "13350",
+  "probe": "H_outlier_depth"
+},
+{
+  "Week": 0,
+  "DepthPosition": "Nickel Back",
+  "Season": 2026,
+  "DepthTeam": 2,
+  "FullName": "Antonio Hamilton Sr.",
+  "NflTeam": "WAS",
+  "Position": "NB",
+  "SleeperPlayerId": "",
+  "probe": "H_outlier_depth"
+},
+{
+  "DepthPosition": "Right Defensive Tackle",
+  "Season": 2026,
+  "Week": 0,
+  "DepthTeam": 3,
+  "FullName": "Kyonte Hamilton",
+  "NflTeam": "HOU",
+  "Position": "RDT",
+  "SleeperPlayerId": "",
+  "probe": "H_outlier_depth"
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa55bfb"
+    },
+    "SleeperPlayerId": "13350",
+    "Age": 25,
+    "BreakoutClassification": 1,
+    "BreakoutScore": 43,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.233Z"
+    },
+    "BreakoutSignals": [
+      "Age 25 — 4yr to peak",
+      "Rookie — dynasty upside play"
+    ],
+    "CareerPhase": 0,
+    "CareerValueScore": 970.7,
+    "DiscountedFutureValue": 94.5,
+    "NflTeam": "BAL",
+    "PeakYear": 2030,
+    "PlayerId": "",
+    "PlayerName": "Joe Fagnano",
+    "Position": "QB",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 94.5,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 0,
+    "YearsOfPrimeRemaining": 5
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa55ca1"
+    },
+    "SleeperPlayerId": "11557",
+    "Age": 26,
+    "BreakoutClassification": 1,
+    "BreakoutScore": 45,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.233Z"
+    },
+    "BreakoutSignals": [
+      "Age 26 — 3yr to peak",
+      "Year 3 — prime breakout window"
+    ],
+    "CareerPhase": 0,
+    "CareerValueScore": 323.4,
+    "DiscountedFutureValue": 14.7,
+    "NflTeam": "DAL",
+    "PeakYear": 2029,
+    "PlayerId": "",
+    "PlayerName": "Joe Milton",
+    "Position": "QB",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 14.7,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 2,
+    "YearsOfPrimeRemaining": 5
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa55f73"
+    },
+    "SleeperPlayerId": "11649",
+    "Age": 24,
+    "BreakoutClassification": 3,
+    "BreakoutScore": 35,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.250Z"
+    },
+    "BreakoutSignals": [
+      "Year 3 — prime breakout window"
+    ],
+    "CareerPhase": 1,
+    "CareerValueScore": 152.4,
+    "DiscountedFutureValue": 0,
+    "NflTeam": "",
+    "PeakYear": 2026,
+    "PlayerId": "",
+    "PlayerName": "Kendall Milton",
+    "Position": "RB",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 0,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 2,
+    "YearsOfPrimeRemaining": 3
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa56325"
+    },
+    "SleeperPlayerId": "1390",
+    "Age": 31,
+    "BreakoutClassification": 3,
+    "BreakoutScore": 4,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.267Z"
+    },
+    "BreakoutSignals": [],
+    "CareerPhase": 2,
+    "CareerValueScore": 99.7,
+    "DiscountedFutureValue": 0,
+    "NflTeam": "",
+    "PeakYear": 2026,
+    "PlayerId": "00-0030290",
+    "PlayerName": "Cobi Hamilton",
+    "Position": "WR",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 0,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 9,
+    "YearsOfPrimeRemaining": 1
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa56326"
+    },
+    "SleeperPlayerId": "4998",
+    "Age": 27,
+    "BreakoutClassification": 3,
+    "BreakoutScore": 23,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.267Z"
+    },
+    "BreakoutSignals": [],
+    "CareerPhase": 1,
+    "CareerValueScore": 207.5,
+    "DiscountedFutureValue": 0,
+    "NflTeam": "",
+    "PeakYear": 2026,
+    "PlayerId": "00-0034370",
+    "PlayerName": "DaeSean Hamilton",
+    "Position": "WR",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 0,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 4,
+    "YearsOfPrimeRemaining": 5
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa56327"
+    },
+    "SleeperPlayerId": "4364",
+    "Age": 26,
+    "BreakoutClassification": 3,
+    "BreakoutScore": 23,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.267Z"
+    },
+    "BreakoutSignals": [],
+    "CareerPhase": 1,
+    "CareerValueScore": 223.3,
+    "DiscountedFutureValue": 0,
+    "NflTeam": "",
+    "PeakYear": 2026,
+    "PlayerId": "",
+    "PlayerName": "Karel Hamilton",
+    "Position": "WR",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 0,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 5,
+    "YearsOfPrimeRemaining": 5
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa5676d"
+    },
+    "SleeperPlayerId": "2941",
+    "Age": 30,
+    "BreakoutClassification": 3,
+    "BreakoutScore": 4,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.268Z"
+    },
+    "BreakoutSignals": [],
+    "CareerPhase": 2,
+    "CareerValueScore": 131.6,
+    "DiscountedFutureValue": 0,
+    "NflTeam": "",
+    "PeakYear": 2026,
+    "PlayerId": "",
+    "PlayerName": "Milton Williams",
+    "Position": "WR",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 0,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 10,
+    "YearsOfPrimeRemaining": 2
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa5679e"
+    },
+    "SleeperPlayerId": "11536",
+    "Age": 22,
+    "BreakoutClassification": 3,
+    "BreakoutScore": 35,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.268Z"
+    },
+    "BreakoutSignals": [
+      "Age 22 — 4yr to peak"
+    ],
+    "CareerPhase": 0,
+    "CareerValueScore": 220.5,
+    "DiscountedFutureValue": 0,
+    "NflTeam": "",
+    "PeakYear": 2030,
+    "PlayerId": "",
+    "PlayerName": "Milton Wright",
+    "Position": "WR",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 0,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 1,
+    "YearsOfPrimeRemaining": 5
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa568ce"
+    },
+    "SleeperPlayerId": "2870",
+    "Age": 32,
+    "BreakoutClassification": 3,
+    "BreakoutScore": 4,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.281Z"
+    },
+    "BreakoutSignals": [],
+    "CareerPhase": 2,
+    "CareerValueScore": 60.9,
+    "DiscountedFutureValue": 0,
+    "NflTeam": "",
+    "PeakYear": 2026,
+    "PlayerId": "",
+    "PlayerName": "Ray Hamilton",
+    "Position": "TE",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 0,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 10,
+    "YearsOfPrimeRemaining": 0
+  }
+},
+{
+  "probe": "I_outlier_dynasty",
+  "raw": {
+    "_id": {
+      "$oid": "69fbd09dae4ded89efa5699c"
+    },
+    "SleeperPlayerId": "1755",
+    "Age": 31,
+    "BreakoutClassification": 3,
+    "BreakoutScore": 4,
+    "BreakoutScoredAt": {
+      "$date": "2026-09-03T02:01:42.281Z"
+    },
+    "BreakoutSignals": [],
+    "CareerPhase": 2,
+    "CareerValueScore": 86,
+    "DiscountedFutureValue": 0,
+    "NflTeam": "",
+    "PeakYear": 2026,
+    "PlayerId": "",
+    "PlayerName": "Keavon Milton",
+    "Position": "TE",
+    "ScoringFormat": 1,
+    "Season": 2026,
+    "TradeValue": 0,
+    "TradeValueComputedAt": {
+      "$date": "2026-09-03T02:01:50.980Z"
+    },
+    "YearsExperience": 9,
+    "YearsOfPrimeRemaining": 1
+  }
+}]

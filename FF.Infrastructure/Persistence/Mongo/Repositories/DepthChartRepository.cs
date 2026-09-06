@@ -94,4 +94,28 @@ public class DepthChartRepository(MongoDbContext db) : IDepthChartRepository
             .Select(g => g.First())
             .ToList();
     }
+
+    public async Task<IReadOnlyList<DepthChartDocument>> GetLatestByPositionAsync(
+        string position, int season, CancellationToken ct = default)
+    {
+        var filter = Builders<DepthChartDocument>.Filter.And(
+            Builders<DepthChartDocument>.Filter.Eq(d => d.Position, position),
+            Builders<DepthChartDocument>.Filter.Eq(d => d.Season, season));
+
+        var all = await _collection
+            .Find(filter)
+            .SortByDescending(d => d.Week)
+            .ToListAsync(ct);
+
+        // Same "highest week wins" contract as GetLatestBySleeperIdsAsync.
+        // Rows with a blank SleeperPlayerId are dropped rather than grouped —
+        // the depth chart carries defensive players with no Sleeper id at all,
+        // and collapsing them would produce one meaningless "" entry that a
+        // caller could accidentally match against.
+        return all
+            .Where(d => !string.IsNullOrWhiteSpace(d.SleeperPlayerId))
+            .GroupBy(d => d.SleeperPlayerId)
+            .Select(g => g.First())
+            .ToList();
+    }
 }

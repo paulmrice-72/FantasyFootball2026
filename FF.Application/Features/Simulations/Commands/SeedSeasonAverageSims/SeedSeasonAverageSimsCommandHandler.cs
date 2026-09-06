@@ -137,9 +137,40 @@ public class SeedSeasonAverageSimsCommandHandler(
             "{OwnGsis} with a stored GsisId",
             gsisToSleeper.Count, indexablePlayers.Count, playerByOwnGsis.Count);
 
+        // ── 4b: Positional priors for small-sample shrinkage ──────────────────
+        //
+        // 2026-09-07. The per-game average below was `total / games` with `games > 0`
+        // as the only gate, so one good afternoon became a season-long rate that
+        // outranked players with seventeen games of evidence. Measured case: Joe
+        // Milton's 2024 row seeded at 19.24 half-PPR per game off a two-game
+        // sample — a top-five quarterback rate, stored permanently, and the origin
+        // of the "why is Joe Milton on my dynasty board" complaint.
+        //
+        // Shrinkage rather than a cutoff. A hard `games >= N` filter would erase
+        // Joe Burrow's eight-game 2025 along with the noise, and a player who
+        // genuinely missed half a season still has a real average — it is just
+        // less certain. Weight a player's own rate by how much of a sample he
+        // brought and give the rest to what an unremarkable player at his position
+        // averages.
+        //
+        // The prior is the MEDIAN OVER EVERY eligible row at the position, backups
+        // included — deliberately not the median among qualified starters. The
+        // question shrinkage answers is "what should we expect from a player we
+        // know little about", and the answer to that is not "a starter".
+        var positionalPriors = BuildPositionalPriors(eligible);
+
+        foreach (var (pos, prior) in positionalPriors.OrderBy(p => p.Key))
+        {
+            logger.LogInformation(
+                "Shrinkage prior for {Position}: {Prior:F2} half-PPR pts/gm " +
+                "(median of all eligible {Season} rows at the position)",
+                pos, prior, request.Season);
+        }
+
         // ── 5: Build sim docs ─────────────────────────────────────────────────
         var toUpsert = new List<SimulationResultDocument>();
         int skipped = 0, unmatched = 0, matchedByGsis = 0, matchedByName = 0, ambiguousSkipped = 0;
+        int shrunk = 0;
 
         foreach (var row in eligible)
         {
@@ -168,7 +199,18 @@ public class SeedSeasonAverageSimsCommandHandler(
                 receptions = 0m;
 
             var halfPprTotal = stdPts + (receptions * 0.5m);
-            var avgHalfPpr = halfPprTotal / games;
+            var rawAvgHalfPpr = halfPprTotal / games;
+
+            var prior = positionalPriors.TryGetValue(position, out var p) ? p : rawAvgHalfPpr;
+            var avgHalfPpr = ApplyShrinkage(rawAvgHalfPpr, games, prior);
+
+            if (avgHalfPpr != rawAvgHalfPpr)
+            {
+                shrunk++;
+                logger.LogDebug(
+                    "Shrunk {Name} ({Pos}): {Raw:F2} → {Adj:F2} on {Games} game(s), prior {Prior:F2}",
+                    playerName, position, rawAvgHalfPpr, avgHalfPpr, games, prior);
+            }
 
             FF.Domain.Entities.Player? player = null;
 
@@ -241,15 +283,17 @@ public class SeedSeasonAverageSimsCommandHandler(
                 OpponentTeam = string.Empty,
                 Spread = 0,
                 GameScript = "Neutral",
-                PlayerRole = "SeasonAverage"
+                PlayerRole = "SeasonAverage",
+                GameSampleSize = games
             });
         }
 
         logger.LogInformation(
             "Upserting {Count} season-average sim docs for season {Season} " +
-            "(byGsis={Gsis}, byName={Name}, skipped={Skip}, unmatched={Unmatched}, ambiguous={Ambiguous})",
+            "(byGsis={Gsis}, byName={Name}, skipped={Skip}, unmatched={Unmatched}, " +
+            "ambiguous={Ambiguous}, shrunk={Shrunk})",
             toUpsert.Count, request.Season, matchedByGsis, matchedByName,
-            skipped, unmatched, ambiguousSkipped);
+            skipped, unmatched, ambiguousSkipped, shrunk);
 
         if (matchedByGsis == 0 && matchedByName > 0)
         {
@@ -432,6 +476,79 @@ public class SeedSeasonAverageSimsCommandHandler(
             if (!string.IsNullOrWhiteSpace(v)) return v.Trim();
         }
         return null;
+    }
+
+    /// <summary>
+    /// Games below which a player's own rate stops being taken at face value.
+    /// Half a season — enough that a hot two-game stretch cannot carry the number,
+    /// low enough that a genuinely injured starter keeps most of his own signal.
+    /// </summary>
+    private const decimal FullWeightGames = 8m;
+
+    /// <summary>
+    /// Blends a player's own per-game rate toward a positional prior in proportion
+    /// to how much sample he brought. At or above <see cref="FullWeightGames"/> the
+    /// rate is returned untouched, so this changes nothing for the great majority
+    /// of rows.
+    ///
+    /// Worked example — Joe Milton, 2024, 2 games, 19.24 raw against a QB prior
+    /// near 9: weight 0.25, giving 0.25 × 19.24 + 0.75 × 9 ≈ 11.6. Still a real
+    /// number rather than a zero, because he did play well; no longer a top-five
+    /// quarterback rate built on one afternoon.
+    /// </summary>
+    private static decimal ApplyShrinkage(decimal rawAverage, int games, decimal positionalPrior)
+    {
+        if (games >= FullWeightGames) return rawAverage;
+
+        var weight = games / FullWeightGames;
+        return Math.Round((weight * rawAverage) + ((1m - weight) * positionalPrior), 2);
+    }
+
+    /// <summary>
+    /// Median per-game half-PPR by position across every eligible row. Median, not
+    /// mean, because the very rows this exists to correct — a handful of extreme
+    /// small-sample rates — would drag a mean upward and weaken the prior exactly
+    /// where it is needed most.
+    /// </summary>
+    private static Dictionary<string, decimal> BuildPositionalPriors(
+        IReadOnlyList<Dictionary<string, string>> eligible)
+    {
+        var byPosition = new Dictionary<string, List<decimal>>();
+
+        foreach (var row in eligible)
+        {
+            if (!row.TryGetValue("position", out var rawPos)) continue;
+            var position = rawPos.Trim().ToUpper();
+
+            if (!TryParseGames(row.GetValueOrDefault("games"), out var games) || games <= 0)
+                continue;
+
+            if (!decimal.TryParse(row.GetValueOrDefault("fantasy_points"),
+                    NumberStyles.Float, CultureInfo.InvariantCulture, out var stdPts))
+                continue;
+
+            if (!decimal.TryParse(row.GetValueOrDefault("receptions"),
+                    NumberStyles.Float, CultureInfo.InvariantCulture, out var receptions))
+                receptions = 0m;
+
+            var avg = (stdPts + (receptions * 0.5m)) / games;
+
+            if (!byPosition.TryGetValue(position, out var list))
+                byPosition[position] = list = [];
+
+            list.Add(avg);
+        }
+
+        return byPosition.ToDictionary(
+            kv => kv.Key,
+            kv =>
+            {
+                var sorted = kv.Value.OrderBy(v => v).ToList();
+                var mid = sorted.Count / 2;
+                return sorted.Count % 2 == 1
+                    ? sorted[mid]
+                    : Math.Round((sorted[mid - 1] + sorted[mid]) / 2m, 4);
+            });
     }
 
     /// <summary>

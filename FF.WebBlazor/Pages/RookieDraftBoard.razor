@@ -26,16 +26,16 @@
         <MudIcon Icon="@Icons.Material.Filled.SportsFootball" Class="mr-2" Style="vertical-align:middle;" />
         Draft Board
     </MudText>
-    @* Fix 2026-08-27: redraft subtitle used to literally read "ranked by dynasty
-       trade value" because that's what the board pulled from. Now matches the
-       corrected data source (Week 1 projected points) in LoadRedraftPlayers below.
-       FIX-PRESEASON-001 (2026-08-27): added a third state — preseason, before
-       Week 1 sim data exists — where the board falls back to live ADP. *@
+    @* 2026-09-07: the subtitle now states which instrument is ORDERING the
+       board, because that is the thing that silently changed under us. ADP
+       orders it whenever market data exists; the points column is context. The
+       no-ADP state is called out explicitly rather than presented as normal —
+       a board ranked on per-game points reads QB-heavy in a 1-QB league. *@
     <MudText Typo="Typo.body2" Class="mud-text-secondary">
         @(_isRedraftMode
-            ? (_isPreseasonAdpFallback
-                ? "Live ADP rankings · 2025 avg pts for context (preseason — Week 1 sims not in yet)"
-                : "Week 1 projected points · Your league's scoring format")
+            ? (_hasAdp
+                ? $"Ordered by live ADP · {(_isPreseasonAdpFallback ? "2025 avg pts" : "our projected pts/gm")} as the value signal"
+                : "⚠ No ADP data — ordered by projected pts/gm, which skews toward QBs in a 1-QB league")
             : "Dynasty composite scores · Draft capital · FantasyPros rankings")
     </MudText>
 </div>
@@ -208,7 +208,13 @@
                             <MudTh>Player</MudTh>
                             <MudTh>Pos</MudTh>
                             <MudTh>Team</MudTh>
-                            <MudTh Style="text-align:right">@(_isPreseasonAdpFallback ? "2025 Avg Pts" : "Proj. Pts (Wk 1)")</MudTh>
+                            <MudTh Style="text-align:right">ADP</MudTh>
+                            <MudTh Style="text-align:right">
+                                <MudTooltip Text="Pick value gained by taking him here instead of at his market price. Convex: falling further is worth disproportionately more, and an equal fall is worth more for a better player. Negative before the draft starts, because nothing can have fallen yet.">
+                                    <span>Draft Value</span>
+                                </MudTooltip>
+                            </MudTh>
+                            <MudTh Style="text-align:right">@(_isPreseasonAdpFallback ? "2025 Avg Pts" : "Proj. Pts/Gm")</MudTh>
                             <MudTh>Status</MudTh>
                         </HeaderContent>
                         <RowTemplate>
@@ -240,7 +246,43 @@
                                 <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(context.Position)" Variant="Variant.Filled">@context.Position</MudChip>
                             </MudTd>
                             <MudTd DataLabel="Team"><MudText Typo="Typo.body2">@(context.NflTeam ?? "FA")</MudText></MudTd>
-                            <MudTd DataLabel="@(_isPreseasonAdpFallback ? "2025 Avg Pts" : "Proj. Pts (Wk 1)")" Style="text-align:right; font-family:'JetBrains Mono',monospace; color:var(--fc-cyan);">@context.ProjectedPoints.ToString("F1")</MudTd>
+                            <MudTd DataLabel="ADP" Style="text-align:right; font-family:'JetBrains Mono',monospace;">
+                                @if (context.Adp.HasValue)
+                                {
+                                    <MudText Typo="Typo.body2" Style="font-family:'JetBrains Mono',monospace;">@context.Adp.Value.ToString("F1")</MudText>
+                                    @if (context.AdpRound.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Style="display:block; opacity:0.5; font-size:0.62rem;">R@(context.AdpRound.Value)</MudText>
+                                    }
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Style="opacity:0.35;">—</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Draft Value" Style="text-align:right; font-family:'JetBrains Mono',monospace;">
+                                @if (context.Adp.HasValue && !IsDrafted(context.SleeperPlayerId))
+                                {
+                                    var dv = DraftValueFor(context);
+                                    var dvLabel = DraftValueLabel(dv);
+                                    <MudText Typo="Typo.body2"
+                                             Style="@($"font-family:'JetBrains Mono',monospace; font-weight:700; color:{DraftValueHex(dv)};")">
+                                        @(dv >= 0 ? "+" : "")@dv.ToString("F0")
+                                    </MudText>
+                                    @if (!string.IsNullOrEmpty(dvLabel))
+                                    {
+                                        <MudText Typo="Typo.caption"
+                                                 Style="@($"display:block; font-size:0.6rem; font-weight:700; letter-spacing:0.04em; color:{DraftValueHex(dv)};")">
+                                            @dvLabel
+                                        </MudText>
+                                    }
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Style="opacity:0.35;">—</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="@(_isPreseasonAdpFallback ? "2025 Avg Pts" : "Proj. Pts/Gm")" Style="text-align:right; font-family:'JetBrains Mono',monospace; color:var(--fc-cyan);">@context.ProjectedPoints.ToString("F1")</MudTd>
                             <MudTd DataLabel="Status">
                                 @if (IsDrafted(context.SleeperPlayerId))
                                 {
@@ -420,6 +462,64 @@
                                 </MudText>
                             </div>
                         }
+
+                        @* Starting slots. Editable because the league's real
+                           roster configuration is not exposed to this layer yet
+                           (FAN-100) — and an unstated assumption is what made
+                           this panel wrong for a 3-WR league in the first place. *@
+                        <MudDivider Class="my-2" />
+                        <div class="d-flex align-center justify-space-between mb-1">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                     Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
+                                Starting Slots
+                            </MudText>
+                            <MudTooltip Text="Set these to match your league. Needs and Best Fit are measured against them.">
+                                <MudIcon Icon="@Icons.Material.Filled.Tune" Style="font-size:0.8rem; color:var(--mud-palette-text-secondary);" />
+                            </MudTooltip>
+                        </div>
+                        <div class="d-flex align-center gap-1 flex-wrap">
+                            @foreach (var slot in StarterPositions)
+                            {
+                                <div class="d-flex align-center gap-1">
+                                    <MudText Typo="Typo.caption"
+                                             Style="@($"font-weight:700; font-size:0.62rem; color:{GetPositionHex(slot)};")">
+                                        @slot
+                                    </MudText>
+                                    <MudNumericField T="int" Value="@GetStarterSlot(slot)"
+                                                     ValueChanged="@((int v) => SetStarterSlot(slot, v))"
+                                                     Min="0" Max="6" Variant="Variant.Outlined"
+                                                     Margin="Margin.Dense" HideSpinButtons="true"
+                                                     Style="width:40px;" Class="fc-slot-input" />
+                                </div>
+                            }
+                        </div>
+
+                        @* Flex slots are typed, not one undifferentiated count. A
+                           WR/RB flex and a superflex are completely different
+                           questions about who is worth drafting. *@
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 mb-1"
+                                 Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
+                            Flex Slots
+                        </MudText>
+                        <div class="d-flex align-center gap-1 flex-wrap">
+                            @foreach (var flex in FlexTypes)
+                            {
+                                <div class="d-flex align-center gap-1">
+                                    <MudTooltip Text="@flex.Detail">
+                                        <MudText Typo="Typo.caption"
+                                                 Style="@($"font-weight:700; font-size:0.62rem; color:{(GetFlexSlot(flex.Key) > 0 ? "var(--fc-cyan)" : "#6B7280")}; cursor:help;")">
+                                            @flex.Label
+                                        </MudText>
+                                    </MudTooltip>
+                                    <MudNumericField T="int" Value="@GetFlexSlot(flex.Key)"
+                                                     ValueChanged="@((int v) => SetFlexSlot(flex.Key, v))"
+                                                     Min="0" Max="4" Variant="Variant.Outlined"
+                                                     Margin="Margin.Dense" HideSpinButtons="true"
+                                                     Style="width:40px;" Class="fc-slot-input" />
+                                </div>
+                            }
+                        </div>
+
                         @if (_rosterNeedsStale)
                         {
                             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1" Style="font-style:italic; font-size:0.65rem;">
@@ -537,6 +637,7 @@
                             @foreach (var rec in _bestAvailableRedraft)
                             {
                                 bool isNeed = _rosterNeeds.Any(n => n.Position == rec.Position && n.Level == "NEED");
+                                double bpaDv = DraftValueFor(rec);
                                 <div class="d-flex align-center gap-2 mb-1">
                                     <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(rec.Position)"
                                              Variant="Variant.Filled"
@@ -555,9 +656,12 @@
                                         <MudIcon Icon="@Icons.Material.Filled.Star"
                                                  Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
                                     }
+                                    @* Draft Value, not ADP — at the clock the question
+                                       isn't his price, it's the gap between his price
+                                       and your pick. *@
                                     <MudText Typo="Typo.caption"
-                                             Style="font-family:'JetBrains Mono',monospace; color:var(--fc-cyan); min-width:28px; text-align:right; flex-shrink:0; font-size:0.72rem;">
-                                        @rec.ProjectedPoints.ToString("F1")
+                                             Style="@($"font-family:'JetBrains Mono',monospace; font-weight:700; color:{DraftValueHex(bpaDv)}; min-width:34px; text-align:right; flex-shrink:0; font-size:0.72rem;")">
+                                        @(bpaDv >= 0 ? "+" : "")@bpaDv.ToString("F0")
                                     </MudText>
                                 </div>
                             }
@@ -567,7 +671,7 @@
                                 <MudDivider Class="my-2" />
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1"
                                          Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
-                                    Best Fit (Roster Need)
+                                    Best Fit (Value + Roster Need)
                                 </MudText>
                                 @foreach (var rec in _bestFitRedraft)
                                 {
@@ -586,9 +690,12 @@
                                         </div>
                                         <MudIcon Icon="@Icons.Material.Filled.Star"
                                                  Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
+                                        @* Picks of surplus against the pick on the clock, plus the
+                                           starter-gap weight. Positive = the market would take him
+                                           later than you can have him. *@
                                         <MudText Typo="Typo.caption"
-                                                 Style="font-family:'JetBrains Mono',monospace; color:var(--fc-cyan); min-width:28px; text-align:right; flex-shrink:0; font-size:0.72rem;">
-                                            @rec.ProjectedPoints.ToString("F1")
+                                                 Style="@($"font-family:'JetBrains Mono',monospace; color:{((rec.ValueVsPick ?? 0) >= 0 ? "#10B981" : "#F87171")}; min-width:34px; text-align:right; flex-shrink:0; font-size:0.72rem;")">
+                                            @((rec.ValueVsPick ?? 0) >= 0 ? "+" : "")@((rec.ValueVsPick ?? 0).ToString("F0"))
                                         </MudText>
                                     </div>
                                 }
@@ -737,6 +844,39 @@
     private List<RedraftBoardPlayerDto> _bestFitRedraft = [];
     private Dictionary<string, int>? _liveRosterPositionCounts;
     private bool _rosterNeedsStale = false;
+
+    // 2026-09-07: true when the redraft board has live ADP to order by.
+    private bool _hasAdp = false;
+
+    // Starting-lineup slots for THIS league. Deliberately user-set rather than
+    // guessed: League.RosterPositions exists in Postgres but is not exposed to
+    // the Blazor layer (FAN-100), and the previous code silently assumed a
+    // 2-WR league — which is how a 3-WR league got told one receiver was
+    // enough. A visible, editable stopgap beats an invisible wrong default.
+    private Dictionary<string, int> _starterSlots = new(StringComparer.OrdinalIgnoreCase)
+        { ["QB"] = 1, ["RB"] = 2, ["WR"] = 2, ["TE"] = 1 };
+
+    // 2026-09-07: flex used to be a single FLEX count against a hardcoded
+    // RB/WR/TE eligibility list, which cannot express the leagues people actually
+    // play. Paul's has 2 × WR/RB, where a tight end is NOT flex-eligible — the old
+    // model credited tight ends with flex value they could never claim, and had no
+    // way to represent superflex at all. Sleeper already distinguishes these in
+    // roster_positions (FLEX, WRRB_FLEX, REC_FLEX, SUPER_FLEX), so this mirrors
+    // those names rather than inventing a parallel vocabulary.
+    private record FlexSlotType(string Key, string Label, string Detail, string[] Eligible);
+
+    private static readonly FlexSlotType[] FlexTypes =
+    [
+        new("FLEX",      "FLEX",  "RB / WR / TE",      ["RB", "WR", "TE"]),
+        new("WRRB",      "W/R",   "WR / RB",           ["RB", "WR"]),
+        new("RECFLEX",   "W/T",   "WR / TE",           ["WR", "TE"]),
+        new("SUPERFLEX", "SFLEX", "QB / RB / WR / TE", ["QB", "RB", "WR", "TE"]),
+    ];
+
+    private Dictionary<string, int> _flexSlots = new(StringComparer.OrdinalIgnoreCase)
+        { ["FLEX"] = 1, ["WRRB"] = 0, ["RECFLEX"] = 0, ["SUPERFLEX"] = 0 };
+
+    private static readonly string[] StarterPositions = ["QB", "RB", "WR", "TE"];
 
     private bool _hideDrafted = false;
     private string? _selectedLeagueId;
@@ -953,7 +1093,82 @@
     // Shared by both modes — position-count needs only depend on session/pick
     // state, not on which player pool (dynasty rookies vs redraft board) is
     // loaded, so this stays mode-agnostic.
-    private List<RosterNeedEntry> ComputeRosterNeeds()
+    // ── Draft Value ───────────────────────────────────────────────────────
+    //
+    // 2026-09-07. "Josh Allen fell to the sixth round" and "a WR4 fell to the
+    // sixth round" are not the same event, and counting picks-fallen scores them
+    // identically — which is precisely how the first version of this panel came to
+    // recommend Xavier Legette at pick 1 with a +174. A raw `adp - currentPick`
+    // rewards a LATE ADP, so the most undraftable player on the board wins.
+    //
+    // Value is not linear in pick number: the gap between pick 1 and pick 15 is
+    // enormous, the gap between 140 and 154 is nearly nothing. So the honest
+    // measure is the difference in pick VALUE between where the market says he
+    // goes and where you can actually have him.
+    //
+    //     DraftValue = PickValue(his ADP) − PickValue(the pick on the clock)
+    //
+    // One function, three behaviours, all wanted:
+    //
+    //   * falling further is worth convexly more (a whole round beats four picks)
+    //   * an equal fall is worth more for a better player (Allen 20→60 scores +36;
+    //     a mid-rounder 100→140 scores +9)
+    //   * reaching is negative, and a late-ADP player at an early pick is deeply
+    //     negative rather than a jackpot
+    //
+    // The decay constant puts pick 1 at 100 and spans a 12-team first round from
+    // roughly 100 to 81. Nothing about it is sacred; the shape is what matters.
+    private const double PickValueDecay = 0.0175;
+
+    private static double PickValue(double pickNumber) =>
+        100.0 * Math.Exp(-PickValueDecay * Math.Max(0, pickNumber - 1));
+
+    /// <summary>
+    /// The pick on the clock. _picks holds every player taken league-wide, so the
+    /// next selection is one past it. Pre-draft this is 1, which correctly makes
+    /// every Draft Value zero or negative — nothing can fall to you before the
+    /// draft has started.
+    /// </summary>
+    private int NextPickNumber => _picks.Count + 1;
+
+    private double DraftValueFor(RedraftBoardPlayerDto p) =>
+        p.Adp.HasValue
+            ? PickValue(p.Adp.Value) - PickValue(NextPickNumber)
+            : 0d;
+
+    // Thresholds are in value points, not picks. ~15 is about a full round of
+    // surplus in the early-middle of a draft; ~6 is a real but ordinary edge.
+    private static string DraftValueLabel(double v) =>
+        v >= 15 ? "STEAL" : v >= 6 ? "VALUE" : v <= -15 ? "REACH" : string.Empty;
+
+    private static string DraftValueHex(double v) =>
+        v >= 15 ? "#10B981" : v >= 6 ? "#34D399" : v <= -15 ? "#F87171" : "#9CA3AF";
+
+    private int GetStarterSlot(string slot) =>
+        _starterSlots.TryGetValue(slot, out var v) ? v : 0;
+
+    private void SetStarterSlot(string slot, int value)
+    {
+        _starterSlots[slot] = Math.Max(0, value);
+        RecomputeAfterSlotChange();
+    }
+
+    private int GetFlexSlot(string key) =>
+        _flexSlots.TryGetValue(key, out var v) ? v : 0;
+
+    private void SetFlexSlot(string key, int value)
+    {
+        _flexSlots[key] = Math.Max(0, value);
+        RecomputeAfterSlotChange();
+    }
+
+    private void RecomputeAfterSlotChange()
+    {
+        if (_isRedraftMode) RecomputeRedraftNeedsAndBestAvailable();
+        else RecomputeNeedsAndBestAvailable();
+    }
+
+    private Dictionary<string, int> CurrentPositionCounts()
     {
         var combined = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         if (_liveRosterPositionCounts is not null)
@@ -963,19 +1178,123 @@
         foreach (var pick in _myPicksList)
             combined[pick.Position] = combined.TryGetValue(pick.Position, out var c) ? c + 1 : 1;
 
-        static string NeedLevel(string pos, int count) => pos switch
+        return combined;
+    }
+
+    /// <summary>
+    /// How many starting slots this roster can actually fill. Dedicated slots are
+    /// filled first, then flex slots take from whatever surplus remains — most
+    /// restrictive flex first, each drawing from the eligible position with the
+    /// deepest surplus, so a W/R slot cannot be "used up" by a tight end that a
+    /// broader FLEX slot could have taken instead.
+    /// </summary>
+    private int CountFilledStarters(Dictionary<string, int> counts)
+    {
+        var leftover = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var filled = 0;
+
+        foreach (var pos in StarterPositions)
         {
-            "RB" => count == 0 ? "NEED" : count >= 4 ? "STRONG" : "OK",
-            "WR" => count == 0 ? "NEED" : count >= 5 ? "STRONG" : "OK",
-            "TE" => count == 0 ? "NEED" : count >= 2 ? "STRONG" : "OK",
-            "QB" => count == 0 ? "NEED" : count >= 2 ? "STRONG" : "OK",
-            _    => "OK"
-        };
+            var owned = counts.TryGetValue(pos, out var c) ? c : 0;
+            var required = _starterSlots.TryGetValue(pos, out var r) ? Math.Max(0, r) : 0;
+            var used = Math.Min(owned, required);
+            filled += used;
+            leftover[pos] = owned - used;
+        }
+
+        var slots = FlexTypes
+            .SelectMany(t => Enumerable.Repeat(
+                t, _flexSlots.TryGetValue(t.Key, out var n) ? Math.Max(0, n) : 0))
+            .OrderBy(t => t.Eligible.Length)
+            .ToList();
+
+        foreach (var slot in slots)
+        {
+            var best = slot.Eligible
+                .Where(p => leftover.TryGetValue(p, out var l) && l > 0)
+                .OrderByDescending(p => leftover[p])
+                .FirstOrDefault();
+
+            if (best is null) continue;
+
+            leftover[best]--;
+            filled++;
+        }
+
+        return filled;
+    }
+
+    // Diminishing: your first receiver matters more than your fourth, even in a
+    // league that can start four. Without this a 2×W/R league weights RB and WR so
+    // heavily that a top-five tight end falling a full round never surfaces.
+    private static readonly double[] StarterGapWeights = [1.0, 0.6, 0.3];
+
+    /// <summary>
+    /// How many more players at this position would each turn into a starter,
+    /// capped at three. Answered by simulation rather than arithmetic: add one,
+    /// ask whether the number of fillable starting slots went up, repeat.
+    ///
+    /// This is what makes flex types work without special-casing any of them. In a
+    /// 2 × W/R league a receiver keeps converting through WR1, WR2 and both flex
+    /// slots (gap 3 after the cap), while a tight end converts once and stops —
+    /// because there is no slot left he is eligible for. Superflex falls out the
+    /// same way: a second quarterback starts, so QB gap becomes 2.
+    /// </summary>
+    private double StarterGap(string pos, Dictionary<string, int> counts)
+    {
+        var probe = new Dictionary<string, int>(counts, StringComparer.OrdinalIgnoreCase);
+        var previous = CountFilledStarters(probe);
+        var gap = 0;
+
+        for (var i = 0; i < StarterGapWeights.Length; i++)
+        {
+            probe[pos] = (probe.TryGetValue(pos, out var c) ? c : 0) + 1;
+            var now = CountFilledStarters(probe);
+
+            if (now <= previous) break;
+
+            gap++;
+            previous = now;
+        }
+
+        return gap;
+    }
+
+    /// <summary>Weighted need value, with the diminishing curve applied.</summary>
+    private double StarterGapWeight(string pos, Dictionary<string, int> counts)
+    {
+        var gap = (int)StarterGap(pos, counts);
+        var total = 0d;
+        for (var i = 0; i < gap && i < StarterGapWeights.Length; i++)
+            total += StarterGapWeights[i];
+        return total;
+    }
+
+    // 2026-09-07: this used to fire NEED only at count == 0 and STRONG at fixed
+    // counts (WR >= 5 and so on), reading nothing about the league. In a 3-WR
+    // league that declared one receiver sufficient. Worse, Best Fit was computed
+    // ONLY for NEED positions, so once you owned one of everything — about round
+    // 4 — the panel went silent for the rest of the draft, exactly when roster
+    // construction starts to matter. Need is now measured against real starting
+    // slots and expressed as a gap, not a boolean.
+    private List<RosterNeedEntry> ComputeRosterNeeds()
+    {
+        var counts = CurrentPositionCounts();
 
         return new[] { "RB", "WR", "TE", "QB" }.Select(pos =>
         {
-            int total = combined.TryGetValue(pos, out var c) ? c : 0;
-            return new RosterNeedEntry(pos, total, NeedLevel(pos, total));
+            int total = counts.TryGetValue(pos, out var c) ? c : 0;
+            int required = _starterSlots.TryGetValue(pos, out var r) ? r : 0;
+            var gap = (int)StarterGap(pos, counts);
+
+            // NEED = the next player here starts for you. OK = he doesn't start
+            // but the position isn't yet stocked. STRONG = you have two deep
+            // behind every slot he could occupy.
+            var level = gap >= 1 ? "NEED"
+                      : total >= (required * 2) + 1 ? "STRONG"
+                      : "OK";
+
+            return new RosterNeedEntry(pos, total, level);
         }).ToList();
     }
 
@@ -1009,32 +1328,56 @@
         _rosterNeedsStale = false;
     }
 
-    // Redraft counterpart — same needs calc, but Best Available / Best Fit
-    // score off ProjectedPoints (Week-N sim median, or ADP-fallback season
-    // avg pts) since redraft players don't carry a DynastyScore.
+    // 2026-09-07 rewrite. Two changes.
+    //
+    // Best Available is now the top of the ADP board rather than the top of a
+    // per-game points list — see LoadRedraftPlayers for why points cannot order
+    // a draft. Each entry carries its surplus against the pick actually on the
+    // clock: a player whose market price is pick 38, still sitting there at pick
+    // 52, is +14. That is the instrument the 09-06 keeper analysis ran on, and
+    // it is explainable out loud at the table.
+    //
+    // Best Fit is the same pool re-scored, with roster need as a WEIGHT rather
+    // than a filter. The old version partitioned on NEED, which is why one
+    // flagged need floated every player at that position above the board's best
+    // available (FAN-104) and why the panel produced nothing at all once no
+    // position sat at zero.
     private void RecomputeRedraftNeedsAndBestAvailable()
     {
         _rosterNeeds = ComputeRosterNeeds();
-        var needPositions = _rosterNeeds.Where(n => n.Level == "NEED").Select(n => n.Position).ToHashSet();
+        var counts = CurrentPositionCounts();
 
         var available = _redraftPlayers.Where(r => !_picks.Contains(r.SleeperPlayerId)).ToList();
 
         _bestAvailableRedraft = available
-            .OrderByDescending(r => r.ProjectedPoints)
+            .OrderBy(r => r.Rank)
             .Take(3)
+            .Select(r => r with { ValueVsPick = DraftValueFor(r) })
             .ToList();
 
-        _bestFitRedraft = needPositions.Count == 0
-            ? []
-            : needPositions
-                .Select(pos => available.Where(r => r.Position == pos)
-                                        .OrderByDescending(r => r.ProjectedPoints)
-                                        .FirstOrDefault())
-                .Where(r => r is not null)
-                .Select(r => r!)
-                .OrderByDescending(r => r.ProjectedPoints)
-                .Take(3)
-                .ToList();
+        // One unfilled starting slot is worth roughly a round of draft capital in
+        // the middle of a draft — enough to break a tie between adjacent players,
+        // deliberately not enough to reach past a tier.
+        //
+        // Worth knowing rather than treating as a magic number: because pick value
+        // decays, need is a SMALL term early (a 10-pick fall in round one is worth
+        // ~15, dwarfing 8) and a LARGE one late (the same fall in round twelve is
+        // worth ~2). That is the behaviour you want. Early, take the best player.
+        // Late, when everyone left is worth about the same, roster construction is
+        // the only thing left to decide on.
+        const double ValuePerStarterGap = 8.0;
+
+        _bestFitRedraft = available
+            .Select(r => new
+            {
+                p = r,
+                score = DraftValueFor(r) + (ValuePerStarterGap * StarterGapWeight(r.Position, counts))
+            })
+            .OrderByDescending(x => x.score)
+            .ThenBy(x => x.p.Rank)
+            .Take(3)
+            .Select(x => x.p with { ValueVsPick = x.score })
+            .ToList();
 
         _rosterNeedsStale = false;
     }
@@ -1091,6 +1434,19 @@
     // preseason window. FAN-96/FAN-100's "wire Consensus ADP" note is now
     // superseded by this — used the already-syncing FFC ADP cache instead of
     // the rookie-only Consensus ADP importer.
+    // 2026-09-07: the two sources above were wired as mutually exclusive
+    // fallbacks — ADP ran only when the sim query came back EMPTY. Once the
+    // 09-06 backfill put 2026 rows in simulation_results, that gate flipped and
+    // the whole board silently switched to being ordered by one week's
+    // projected points. Per-game points do not order a snake draft: a QB at ~20
+    // pts/gm outranks the WR1 at ~15, so a 1-QB league's board inverts. That is
+    // the same failure GetDraftPrepQueryHandler diagnosed and fixed on its own
+    // side on 08-27 (see its ScoreRank comment) — this page never got it.
+    //
+    // Both sources are now fetched every time and merged. ADP orders the board
+    // because a draft board is a market instrument: it answers "who goes next".
+    // Our projection becomes the value signal against that market, which is the
+    // instrument that actually held up in the 09-06 keeper analysis.
     private async Task LoadRedraftPlayers()
     {
         _loading = true; StateHasChanged();
@@ -1099,40 +1455,87 @@
             var season = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId)?.Season
                          ?? DateTime.UtcNow.Year;
             var posParam = string.IsNullOrEmpty(_selectedPosition) ? "" : $"&position={_selectedPosition}";
-            var rows = await Http.GetFromJsonAsync<List<RedraftSimDto>>(
-                $"api/v1/projections/simulations?season={season}&week=1{posParam}") ?? [];
 
-            if (rows.Count > 0)
+            // Tolerated individually: one dead endpoint should degrade the
+            // board mid-draft, not blank it.
+            var simTask = SafeGetAsync<List<RedraftSimDto>>(
+                $"api/v1/projections/simulations?season={season}&week=1{posParam}");
+            var adpTask = SafeGetAsync<List<RedraftBoardEntryDto>>(
+                $"api/v1/drafttools/redraft-board?season={season}{posParam}");
+            await Task.WhenAll(simTask, adpTask);
+
+            var simRows = (await simTask) ?? [];
+            var adpRows = (await adpTask) ?? [];
+
+            var projBySleeperId = simRows
+                .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId))
+                .GroupBy(r => r.SleeperPlayerId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.First().Mean > 0m ? g.First().Mean : g.First().Median);
+
+            _hasAdp = adpRows.Count > 0;
+            // Header wording only: true when the points column is a prior-season
+            // average rather than this season's projection.
+            _isPreseasonAdpFallback = simRows.Count == 0;
+
+            // SyncRedraftAdpJob hardcodes a 12-team pull (`GetAdpAsync(season,
+            // "ppr", 12, ct)`). In a 10-team league a 12-team ADP is
+            // systematically late: the player who goes 24th in a 12-teamer goes
+            // about 20th in a 10-teamer, because a pick number is a round times
+            // a team count. Ordering is unaffected — the scale is monotonic —
+            // but surplus-vs-pick is meaningless without it, so scale here
+            // rather than quietly comparing two different rulers.
+            var leagueTeams = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId)?.TotalTeams ?? 12;
+            var adpScale = leagueTeams > 0 ? leagueTeams / 12.0 : 1.0;
+
+            if (adpRows.Count > 0)
             {
-                _isPreseasonAdpFallback = false;
-                _redraftPlayers = rows
-                    .OrderByDescending(r => r.Median)
-                    .Select((r, i) => new RedraftBoardPlayerDto(
-                        r.SleeperPlayerId, r.PlayerName, r.Position, r.NflTeam, r.Median, i + 1))
-                    .ToList();
-            }
-            else
-            {
-                // No Week 1 sim data yet — fall back to live ADP. ADP drives
-                // rank/inclusion here (covers rookies); season-avg fills the
-                // points column only where a prior-season number exists.
-                _isPreseasonAdpFallback = true;
-                var adpRows = await Http.GetFromJsonAsync<List<RedraftBoardEntryDto>>(
-                    $"api/v1/drafttools/redraft-board?season={season}{posParam}") ?? [];
                 _redraftPlayers = adpRows
                     .OrderBy(a => a.Adp)
                     .Select((a, i) => new RedraftBoardPlayerDto(
                         a.SleeperPlayerId, a.PlayerName, a.Position, a.NflTeam,
-                        a.SeasonAvgPoints ?? 0, i + 1))
+                        projBySleeperId.TryGetValue(a.SleeperPlayerId, out var p)
+                            ? p
+                            : a.SeasonAvgPoints ?? 0m,
+                        i + 1,
+                        Adp: Math.Round(a.Adp * adpScale, 1),
+                        AdpRound: leagueTeams > 0
+                            ? (int)Math.Ceiling(a.Adp * adpScale / leagueTeams)
+                            : a.AdpRound))
                     .ToList();
-                if (_redraftPlayers.Count == 0)
-                    Snackbar.Add("No Week 1 sim or ADP data found — run sync-ffc-adp from the Admin console.", Severity.Warning);
             }
+            else if (simRows.Count > 0)
+            {
+                // No market data at all. Our own projection is the only thing
+                // left, but this ordering IS the QB-heavy one described above —
+                // the header says so rather than presenting it as a draft board.
+                _redraftPlayers = simRows
+                    .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId))
+                    .Select(r => new { r, pts = r.Mean > 0m ? r.Mean : r.Median })
+                    .OrderByDescending(x => x.pts)
+                    .Select((x, i) => new RedraftBoardPlayerDto(
+                        x.r.SleeperPlayerId, x.r.PlayerName, x.r.Position, x.r.NflTeam,
+                        x.pts, i + 1))
+                    .ToList();
+            }
+            else
+            {
+                _redraftPlayers = [];
+                Snackbar.Add("No ADP or projection data found — run sync-ffc-adp from the Admin console.", Severity.Warning);
+            }
+
             ApplyRedraftFilter();
             RecomputeRedraftNeedsAndBestAvailable();
         }
         catch { Snackbar.Add("Failed to load redraft rankings.", Severity.Error); _redraftPlayers = []; _filteredRedraft = []; }
         finally { _loading = false; }
+    }
+
+    private async Task<T?> SafeGetAsync<T>(string url)
+    {
+        try { return await Http.GetFromJsonAsync<T>(url); }
+        catch { return default; }
     }
 
     private void ApplyRookieFilter()
@@ -1348,8 +1751,19 @@
     // for the redraft board. RedraftSimDto mirrors the subset of SimRow fields
     // (RedraftRankings.razor) this page needs; RedraftBoardPlayerDto is the
     // post-projection, ranked shape the table binds to.
-    private record RedraftSimDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, decimal Median);
-    private record RedraftBoardPlayerDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, decimal ProjectedPoints, int Rank);
+    // 2026-09-07: Mean added. This board sorted on Median, and 09-06 measured
+    // Median as a position-dependent 89-94% of Mean (RB 89.2, TE 90.1, QB 93.7,
+    // WR 94.3) — so the ordering was biased hardest against the two positions
+    // you draft earliest. Reads guard `Mean > 0 ? Mean : Median`, the same
+    // guard shipped everywhere else on 09-06, so legacy rows still render.
+    private record RedraftSimDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, decimal Median, decimal Mean);
+
+    // Adp / AdpRound / ValueVsPick are optional so every existing construction
+    // site keeps compiling unchanged.
+    private record RedraftBoardPlayerDto(
+        string SleeperPlayerId, string PlayerName, string Position, string? NflTeam,
+        decimal ProjectedPoints, int Rank,
+        double? Adp = null, int? AdpRound = null, double? ValueVsPick = null);
     // FIX-PRESEASON-001 (2026-08-27): mirrors RedraftBoardEntryDto from
     // GetRedraftBoardQuery (api/v1/drafttools/redraft-board) — the preseason fallback.
     private record RedraftBoardEntryDto(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, double Adp, int AdpRound, decimal? SeasonAvgPoints);
