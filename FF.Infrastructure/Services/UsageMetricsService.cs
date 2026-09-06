@@ -111,12 +111,23 @@ public class UsageMetricsService(
             playerId, season, activeLogs.Count, metrics.Role);
     }
 
-    public async Task AggregateAllPlayersAsync(
+    public async Task<int> AggregateAllPlayersAsync(
         int season,
         CancellationToken ct = default)
     {
         var playerIds = await _gameLogRepository
             .GetDistinctPlayerIdsAsync(season, ct);
+
+        // A season with no game logs is a no-op, not a success. Say so loudly —
+        // the job previously ran, wrote nothing, and reported completion.
+        if (playerIds.Count == 0)
+        {
+            _logger.LogWarning(
+                "Usage aggregation found NO game logs for season {Season} — nothing was written. "
+                + "Check that the stats sync has run for that season.",
+                season);
+            return 0;
+        }
 
         _logger.LogInformation(
             "Starting usage aggregation for {Count} players — season {Season}",
@@ -129,7 +140,10 @@ public class UsageMetricsService(
         }
 
         _logger.LogInformation(
-            "Completed usage aggregation for season {Season}", season);
+            "Completed usage aggregation for season {Season} — {Count} players processed",
+            season, playerIds.Count);
+
+        return playerIds.Count;
     }
 
     // aDOT = ReceivingAirYards / Targets

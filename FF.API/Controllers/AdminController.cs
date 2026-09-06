@@ -270,14 +270,62 @@ public class AdminController(
         return Ok(new { Message = $"Projection calculation and simulation complete for season {request.Season}." });
     }
 
+    /// <summary>
+    /// Runs the snap count import + merge. Pass ?season= to backfill a prior year;
+    /// omit it to use the calendar season (what the recurring job does).
+    /// </summary>
     [HttpPost("jobs/run-snap-count-sync")]
     public async Task<IActionResult> RunSnapCountSync(
         [FromServices] SnapCountSyncJob snapCountJob,
-        CancellationToken ct)
+        CancellationToken ct,
+        [FromQuery] int? season = null)
     {
-        logger.LogInformation("Admin triggered snap count sync");
-        await snapCountJob.RunAsync();
-        return Ok(new { Message = "Snap count sync complete." });
+        if (season.HasValue && (season < 2020 || season > DateTime.UtcNow.Year))
+            return BadRequest($"Season must be between 2020 and {DateTime.UtcNow.Year}.");
+
+        logger.LogInformation("Admin triggered snap count sync — season {Season}",
+            season.HasValue ? season.Value.ToString() : "calendar");
+        await snapCountJob.RunAsync(season);
+        return Ok(new
+        {
+            Message = season.HasValue
+                ? $"Snap count sync complete for {season}."
+                : "Snap count sync complete (calendar season)."
+        });
+    }
+
+    /// <summary>
+    /// FAN-138 — runs usage metrics aggregation for an explicit season.
+    /// The Hangfire recurring registration reads the season from the NFL context,
+    /// which made backfilling a prior season impossible without repointing the whole
+    /// site's context. Omit ?season= to fall back to the context season.
+    /// </summary>
+    [HttpPost("jobs/run-usage-metrics")]
+    public async Task<IActionResult> RunUsageMetrics(
+        [FromServices] UsageMetricsAggregationJob usageMetricsJob,
+        [FromServices] INflContextService nflContext,
+        CancellationToken ct,
+        [FromQuery] int? season = null)
+    {
+        var targetSeason = season ?? await nflContext.GetSeasonAsync();
+
+        if (targetSeason < 2020 || targetSeason > DateTime.UtcNow.Year)
+            return BadRequest($"Season must be between 2020 and {DateTime.UtcNow.Year}.");
+
+        logger.LogInformation(
+            "Admin triggered usage metrics aggregation — season {Season}", targetSeason);
+
+        var processed = await usageMetricsJob.ExecuteAsync(targetSeason);
+
+        return Ok(new
+        {
+            Season = targetSeason,
+            PlayersProcessed = processed,
+            Message = processed == 0
+                ? $"No game logs found for {targetSeason} — nothing was written. "
+                  + "Run the stats sync for that season first."
+                : $"Usage metrics aggregation complete for {targetSeason}."
+        });
     }
 
     [HttpPost("jobs/run-article-generation")]
