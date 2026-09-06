@@ -1,4 +1,4 @@
-﻿using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
 using Microsoft.Extensions.Logging;
 
@@ -34,7 +34,9 @@ public class SnapCountMergeService(
                     $"No snap counts found for season {season}.");
             }
 
-            // Build lookup: PlayerName + Team + Season + Week
+            // Build lookup: PlayerName + Team + Season + Week.
+            // The snap count side is nflverse's `player` column, which is the FULL name
+            // ("Josh Allen").
             var snapLookup = allSnapCounts
                 .GroupBy(s => MakeKey(s.PlayerName, s.Team, s.Season, s.Week))
                 .ToDictionary(g => g.Key, g => g.First());
@@ -48,10 +50,21 @@ public class SnapCountMergeService(
 
             int merged = 0;
             int unmatched = 0;
+            var unmatchedSamples = new List<string>();
 
             foreach (var log in gameLogs)
             {
-                var key = MakeKey(log.PlayerName, log.NflTeam, log.Season, log.Week);
+                // PlayerGameLogDocument.PlayerName comes from nflverse `player_name`,
+                // which is ABBREVIATED ("J.Allen"). The snap count side is the full name.
+                // Keying on PlayerName therefore matched exactly nothing, every run, since
+                // the feature shipped. DisplayName holds `player_display_name` — the full
+                // name — and is the correct join key. See FAN-122.
+                var name = !string.IsNullOrWhiteSpace(log.DisplayName)
+                    ? log.DisplayName
+                    : log.PlayerName;
+
+                var key = MakeKey(name, log.NflTeam, log.Season, log.Week);
+
                 if (snapLookup.TryGetValue(key, out var snap))
                 {
                     log.OffenseSnaps = snap.OffenseSnaps;
@@ -61,15 +74,37 @@ public class SnapCountMergeService(
                 else
                 {
                     unmatched++;
+                    if (unmatchedSamples.Count < 20)
+                        unmatchedSamples.Add(key);
                 }
             }
 
             // Persist updated game logs
             await playerGameLogRepository.BulkUpdateSnapCountsAsync(gameLogs, cancellationToken);
 
-            logger.LogInformation(
-                "Snap count merge complete. Merged: {Merged}, Unmatched: {Unmatched}",
-                merged, unmatched);
+            if (merged == 0)
+            {
+                logger.LogError(
+                    "Snap count merge for season {Season} matched NOTHING against {LogCount} "
+                    + "game logs and {SnapCount} snap rows. Sample unmatched keys: {Samples}",
+                    season, gameLogs.Count, snapLookup.Count, unmatchedSamples);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Snap count merge complete. Merged: {Merged}, Unmatched: {Unmatched}",
+                    merged, unmatched);
+
+                // Team abbreviation drift and mid-season trades (NflTeam is nflverse
+                // `recent_team`, not the team for that week's game) both land here.
+                if (unmatched > 0)
+                {
+                    logger.LogWarning(
+                        "Snap count merge for season {Season} left {Unmatched} game logs "
+                        + "unmatched. Sample keys: {Samples}",
+                        season, unmatched, unmatchedSamples);
+                }
+            }
 
             return new SnapCountMergeResult(true, merged, unmatched, null);
         }

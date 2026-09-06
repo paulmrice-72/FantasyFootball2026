@@ -262,11 +262,11 @@ try
         cronExpression: Cron.Weekly(DayOfWeek.Tuesday, 6),
         options: utcOptions);
 
-    // RunAsync takes an optional season; expression trees cannot omit optional
-    // arguments, so the recurring registration passes null explicitly (= calendar season).
+    // RunAsync takes an optional season and returns a result; expression trees handle
+    // neither well, so the recurring path goes through the parameterless wrapper.
     RecurringJob.AddOrUpdate<SnapCountSyncJob>(
         "snap-count-sync",
-        job => job.RunAsync(null),
+        job => job.RunRecurringAsync(),
         "0 9 * * 2",
         new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
