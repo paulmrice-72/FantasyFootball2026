@@ -212,6 +212,9 @@ public class GetMyMatchupQueryHandler(
                 IsStarter: starterSet.Contains(sleeperPlayerId),
                 SlotLabel: starterSet.Contains(sleeperPlayerId) ? "STR" : "BN",
                 MedianProjectedPoints: sim is not null ? (double)sim.Median : null,
+                MeanProjectedPoints: sim is not null
+                    ? (double)(sim.Mean > 0m ? sim.Mean : sim.Median)
+                    : null,
                 FloorProjectedPoints: sim is not null ? (double)sim.Floor : null,
                 CeilingProjectedPoints: sim is not null ? (double)sim.Ceiling : null,
                 BoomProbability: sim is not null ? (double)sim.BoomProbability : null,   // NEW
@@ -230,7 +233,10 @@ public class GetMyMatchupQueryHandler(
         .ToList();
 
         var starters = matchupPlayers.Where(p => p.IsStarter).ToList();
-        var totalMedian = starters.Sum(p => p.MedianProjectedPoints ?? 0);
+
+        // Expectations add; medians do not. Summing MedianProjectedPoints here
+        // understated every team total on this page by roughly 6-11% per position.
+        var totalExpected = starters.Sum(p => p.MeanProjectedPoints ?? 0);
         var pooledVariance = starters.Sum(p =>
         {
             var spread = (p.CeilingProjectedPoints ?? 0) - (p.FloorProjectedPoints ?? 0);
@@ -243,18 +249,18 @@ public class GetMyMatchupQueryHandler(
             TeamName: teamName,
             OwnerName: ownerName,
             SleeperRosterId: rosterId,
-            TotalProjectedPoints: totalMedian,
-            ProjectedFloor: totalMedian - pooledStdDev,
-            ProjectedCeiling: totalMedian + pooledStdDev,
+            TotalProjectedPoints: totalExpected,
+            ProjectedFloor: totalExpected - pooledStdDev,
+            ProjectedCeiling: totalExpected + pooledStdDev,
             Players: matchupPlayers);
     }
 
     private static (double myWinProb, double oppWinProb) CalculateWinProbability(
-        double myMedian, double oppMedian,
+        double myExpected, double oppExpected,
         double myFloor, double oppFloor,
         double myCeiling, double oppCeiling)
     {
-        var spread = myMedian - oppMedian;
+        var spread = myExpected - oppExpected;
         var myRange = myCeiling - myFloor;
         var oppRange = oppCeiling - oppFloor;
         var avgRange = (myRange + oppRange) / 2.0;

@@ -133,10 +133,9 @@
                             <MudTd>
                                 <MudText Typo="Typo.body2" Class="fc-stat"
                                          Style="font-family:'JetBrains Mono',monospace;">
-                                    @(
-                                        context.MedianProjectedPoints.HasValue
-                                            ? context.MedianProjectedPoints.Value.ToString("F1") : "—"
-                                    )
+                                    @* Expected points, not the median — see MyRosterPlayerDto.
+                                       Falls back to Median for legacy sim rows with no Mean. *@
+                                    @((context.MeanProjectedPoints ?? context.MedianProjectedPoints)?.ToString("F1") ?? "—")
                                 </MudText>
                             </MudTd>
                             <MudTd>
@@ -225,7 +224,8 @@
                     <MudItem xs="6" sm="4">
                         <MudSelect T="string" @bind-Value="_optimizerMode" Label="Score Mode"
                                    Variant="Variant.Outlined" Margin="Margin.Dense">
-                            <MudSelectItem Value="@("Median")">Median</MudSelectItem>
+                            <MudSelectItem Value="@("Mean")">Expected (Mean)</MudSelectItem>
+                            <MudSelectItem Value="@("Median")">Typical (Median)</MudSelectItem>
                             <MudSelectItem Value="@("Floor")">Floor</MudSelectItem>
                             <MudSelectItem Value="@("Ceiling")">Ceiling</MudSelectItem>
                         </MudSelect>
@@ -903,7 +903,8 @@ else if (_roster is null)
     private bool _optimizing;
     private string? _optimizerError;
     private OptimizerResult? _lineupResult;
-    private string _optimizerMode = "Median";
+    // Mean, not Median: the optimiser maximises a SUM, and expectations add.
+    private string _optimizerMode = "Mean";
     private string _optimizerRisk = "";
 
     // ── TEAM-004: Start/Sit ──────────────────────────────────────────
@@ -1155,6 +1156,7 @@ else if (_roster is null)
         bool IsOnIr,
         bool IsOnTaxi,
         double? MedianProjectedPoints,
+        double? MeanProjectedPoints,
         string? ByeWeek);
 
     private static string PositionClass(string pos) => pos switch

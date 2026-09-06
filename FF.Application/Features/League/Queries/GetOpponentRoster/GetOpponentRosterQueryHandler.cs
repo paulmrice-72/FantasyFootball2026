@@ -61,6 +61,11 @@ public class GetOpponentRosterQueryHandler(
                     IsOnIr: irSet.Contains(id),
                     IsOnTaxi: taxiSet.Contains(id),
                     MedianProjectedPoints: sim is not null ? (double)sim.Median : null,
+                    // Same measure as my own roster — an opponent scouted on medians
+                    // against a team shown on means would read as weaker than he is.
+                    MeanProjectedPoints: sim is not null
+                        ? (double)(sim.Mean > 0m ? sim.Mean : sim.Median)
+                        : null,
                     ByeWeek: null);
             })
             .OrderBy(p => PositionOrder(p.Position))

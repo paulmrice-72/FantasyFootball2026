@@ -37,7 +37,8 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
         [FromQuery] string sleeperLeagueId,
         [FromQuery] int season,
         [FromQuery] int week,
-        [FromQuery] string mode = "Median",
+        // Mean, not Median: the optimiser maximises a SUM, and expectations add.
+        [FromQuery] string mode = "Mean",
         [FromQuery] string? riskProfile = null,
         CancellationToken ct = default)
     {
@@ -54,8 +55,9 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             .Where(id => !string.IsNullOrEmpty(id))
             .ToList();
 
+        // Mean, not Median: the optimiser maximises a SUM, and expectations add.
         if (!Enum.TryParse<OptimizationMode>(mode, true, out var optimizationMode))
-            optimizationMode = OptimizationMode.Median;
+            optimizationMode = OptimizationMode.Mean;
 
         RiskProfile? parsedRisk = null;
         if (!string.IsNullOrEmpty(riskProfile) &&
@@ -67,7 +69,10 @@ public class TeamController(IMediator mediator, UserManager<ApplicationUser> use
             Week: week,
             Mode: optimizationMode,
             RiskProfile: parsedRisk,
-            RosterSleeperIds: rosterSleeperIds), ct);
+            RosterSleeperIds: rosterSleeperIds,
+            // Without this the handler optimises against RosterConfiguration.Standard,
+            // which starts 2 WRs regardless of what the league actually starts.
+            SleeperLeagueId: sleeperLeagueId), ct);
 
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error.Message);
     }

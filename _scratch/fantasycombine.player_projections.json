@@ -1,0 +1,54 @@
+[{
+  "_id": {
+    "pos": "WR",
+    "m": {
+      "$numberDecimal": "0.90"
+    }
+  },
+  "n": 25
+},
+{
+  "_id": {
+    "pos": "RB",
+    "m": {
+      "$numberDecimal": "0.90"
+    }
+  },
+  "n": 20
+},
+{
+  "_id": {
+    "pos": "RB",
+    "m": {
+      "$numberDecimal": "1.15"
+    }
+  },
+  "n": 16
+},
+{
+  "_id": {
+    "pos": "WR",
+    "m": {
+      "$numberDecimal": "1.15"
+    }
+  },
+  "n": 15
+},
+{
+  "_id": {
+    "pos": "TE",
+    "m": {
+      "$numberDecimal": "1.15"
+    }
+  },
+  "n": 8
+},
+{
+  "_id": {
+    "pos": "TE",
+    "m": {
+      "$numberDecimal": "0.90"
+    }
+  },
+  "n": 8
+}]

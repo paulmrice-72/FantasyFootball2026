@@ -1,0 +1,1400 @@
+[{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25181d"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25183f"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517de"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251810"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ee"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517cf"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25182f"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b2"
+  },
+  "PlayerName": "A.Dalton",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e7"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b7"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251808"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f8"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251785"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251813"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ab"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251829"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d3"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251837"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25179c"
+  },
+  "PlayerName": "J.Johnson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251847"
+  },
+  "PlayerName": "O.Beckham",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b4"
+  },
+  "PlayerName": "T.Taylor",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517eb"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25179e"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f3"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517bc"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251803"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517fb"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c5"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25180a"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a8"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251816"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c9"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25181c"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251799"
+  },
+  "PlayerName": "J.Flacco",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251823"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d4"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25182c"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ad"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251832"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517db"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25183c"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251786"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251844"
+  },
+  "PlayerName": "O.Beckham",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e3"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e6"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a0"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e8"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ba"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ed"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251787"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f0"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517bd"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f7"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a1"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f9"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517bf"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251800"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517fe"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c1"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251806"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a5"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251809"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c7"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25180c"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251797"
+  },
+  "PlayerName": "J.Flacco",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251811"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517cb"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251814"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ac"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251819"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517cc"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251820"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251791"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25181e"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d1"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251824"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251789"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25182a"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d7"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25182e"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25179a"
+  },
+  "PlayerName": "J.Johnson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251830"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d8"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251834"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ae"
+  },
+  "PlayerName": "A.Dalton",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251838"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517df"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25183d"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251783"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251840"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e1"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251846"
+  },
+  "PlayerName": "O.Beckham",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b5"
+  },
+  "PlayerName": "T.Taylor",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25184b"
+  },
+  "PlayerName": "B.Cooks",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b3"
+  },
+  "PlayerName": "A.Dalton",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e5"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251792"
+  },
+  "PlayerName": "M.Lewis",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e9"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b6"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ec"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25179d"
+  },
+  "PlayerName": "J.Johnson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ea"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b8"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ef"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25178d"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f1"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b9"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f2"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25179f"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f5"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517bb"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f4"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251793"
+  },
+  "PlayerName": "J.Flacco",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517f6"
+  },
+  "PlayerName": "K.Allen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517be"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517fa"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a2"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ff"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c0"
+  },
+  "PlayerName": "R.Wilson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517fd"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251801"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c4"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251802"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a4"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251804"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c6"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251805"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251796"
+  },
+  "PlayerName": "J.Flacco",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251807"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c3"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25180b"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a6"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25180d"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c8"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25180e"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25178e"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25180f"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251794"
+  },
+  "PlayerName": "J.Flacco",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251812"
+  },
+  "PlayerName": "T.Kelce",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a9"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251815"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ca"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251818"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251798"
+  },
+  "PlayerName": "J.Flacco",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251817"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517cd"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25181a"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a7"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25181b"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d0"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25181f"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25178b"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251822"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517ce"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251821"
+  },
+  "PlayerName": "D.Hopkins",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517aa"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251825"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d5"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251827"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25178a"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251826"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d2"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251828"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251790"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25182b"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d6"
+  },
+  "PlayerName": "A.Thielen",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25182d"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25178f"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251831"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517d9"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251833"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517af"
+  },
+  "PlayerName": "A.Dalton",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251835"
+  },
+  "PlayerName": "G.Smith",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517da"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251836"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251788"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25183a"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517dc"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251839"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b1"
+  },
+  "PlayerName": "A.Dalton",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25183b"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517dd"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25183e"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251781"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251841"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e0"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251842"
+  },
+  "PlayerName": "C.Patterson",
+  "Position": "RB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517b0"
+  },
+  "PlayerName": "A.Dalton",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251843"
+  },
+  "PlayerName": "O.Beckham",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e2"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251845"
+  },
+  "PlayerName": "O.Beckham",
+  "Position": "WR"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25179b"
+  },
+  "PlayerName": "J.Johnson",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517e4"
+  },
+  "PlayerName": "Z.Ertz",
+  "Position": "TE"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251782"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe25178c"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251784"
+  },
+  "PlayerName": "A.Rodgers",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe251795"
+  },
+  "PlayerName": "J.Flacco",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517a3"
+  },
+  "PlayerName": "M.Stafford",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517c2"
+  },
+  "PlayerName": "K.Cousins",
+  "Position": "QB"
+},
+{
+  "_id": {
+    "$oid": "69ad3337b4198466fe2517fc"
+  },
+  "PlayerName": "R.Woods",
+  "Position": "WR"
+}]

@@ -58,6 +58,9 @@ public class GetMyRosterQueryHandler(
                     IsOnIr: irSet.Contains(sleeperPlayerId),
                     IsOnTaxi: taxiSet.Contains(sleeperPlayerId),
                     MedianProjectedPoints: sim is not null ? (double)sim.Median : null,
+                    MeanProjectedPoints: sim is not null
+                        ? (double)(sim.Mean > 0m ? sim.Mean : sim.Median)
+                        : null,
                     ByeWeek: player is not null ? GetByeWeek(player.NflTeam) : null);
             })
             .OrderBy(p => PositionOrder(p.Position))

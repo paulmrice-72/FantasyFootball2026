@@ -79,7 +79,9 @@ public class OptimizeLineupRiskProfileTests
         var repo = Substitute.For<ISimulationResultRepository>();
         repo.GetByWeekAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(pool.ToList().AsReadOnly());
-        return new OptimizeLineupCommandHandler(repo, NullLogger<OptimizeLineupCommandHandler>.Instance);
+        return new OptimizeLineupCommandHandler(
+            repo, Substitute.For<ILeagueRepository>(),
+            NullLogger<OptimizeLineupCommandHandler>.Instance);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────────

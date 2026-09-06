@@ -219,6 +219,7 @@ public static class LineupOptimizerService
         {
             OptimizationMode.Floor => player.ProjectedFloor,
             OptimizationMode.Ceiling => player.ProjectedCeiling,
+            OptimizationMode.Mean => player.ProjectedMean,
             _ => player.ProjectedMedian
         };
 

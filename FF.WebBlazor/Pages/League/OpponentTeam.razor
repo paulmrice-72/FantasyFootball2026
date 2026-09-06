@@ -231,7 +231,8 @@ else
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">Active</MudText>
                         }
                     </MudTd>
-                    <MudTd>@(context.MedianProjectedPoints.HasValue ? context.MedianProjectedPoints.Value.ToString("F1") : "—")</MudTd>
+                    @* Expected points, matching My Team — see MyRosterPlayerDto. *@
+                    <MudTd>@((context.MeanProjectedPoints ?? context.MedianProjectedPoints)?.ToString("F1") ?? "—")</MudTd>
                     <MudTd>@(context.ByeWeek ?? "—")</MudTd>
                     <MudTd Style="text-align:center;">
                         @if (context.IsStarter)
@@ -467,7 +468,7 @@ else
         string SleeperPlayerId, string PlayerName, string Position,
         string NflTeam, int? Age, string? InjuryDesignation,
         bool IsStarter, bool IsOnIr, bool IsOnTaxi,
-        double? MedianProjectedPoints, string? ByeWeek);
+        double? MedianProjectedPoints, double? MeanProjectedPoints, string? ByeWeek);
 
     private record PositionalDepthGradesDto(List<PositionDepthGradeDto> Grades);
 

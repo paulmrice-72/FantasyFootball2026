@@ -11,6 +11,7 @@ namespace FF.Application.Features.Lineups.Commands.OptimizeLineup;
 
 public class OptimizeLineupCommandHandler(
     ISimulationResultRepository simulationRepository,
+    ILeagueRepository leagueRepository,
     ILogger<OptimizeLineupCommandHandler> logger)
     : IRequestHandler<OptimizeLineupCommand, Result<LineupOptimizerResult>>
 {
@@ -66,6 +67,7 @@ public class OptimizeLineupCommandHandler(
                 Position = s.Position,
                 NflTeam = s.NflTeam,
                 ProjectedMedian = s.Median,
+                ProjectedMean = s.Mean > 0m ? s.Mean : s.Median,
                 ProjectedFloor = s.Floor,
                 ProjectedCeiling = s.Ceiling,
                 BoomProbability = s.BoomProbability,
@@ -75,10 +77,18 @@ public class OptimizeLineupCommandHandler(
             })
             .ToList();
 
+        // The league's own starting slots, not RosterConfiguration.Standard. Standard
+        // is QB/RB/RB/WR/WR/TE/FLEX — a 2-WR lineup — so a 3-WR league was being
+        // optimised against the wrong shape and quietly dropped a receiver.
+        // Resolution mirrors GetLineupCardQuery: by season first, then the active
+        // list, because a league row can exist under a different season key.
+        var rosterConfig = await ResolveRosterConfigAsync(
+            request.SleeperLeagueId, request.Season, cancellationToken);
+
         var optimizerInput = new LineupOptimizerInput
         {
             AvailablePlayers = players,
-            RosterConfig = RosterConfiguration.Standard,
+            RosterConfig = rosterConfig,
             Mode = request.Mode,
             RiskProfile = request.RiskProfile,
             LockedPlayerIds = lockedIds,
@@ -100,5 +110,49 @@ public class OptimizeLineupCommandHandler(
             result.Mode, result.RiskProfile?.ToString() ?? "None");
 
         return Result.Success(result);
+    }
+
+    /// <summary>
+    /// The league's starting slots, or <see cref="RosterConfiguration.Standard"/> when
+    /// no league was supplied or none could be found. A wrong shape here is silent —
+    /// the solver happily returns a valid lineup for the wrong league — so the
+    /// fallback is logged rather than taken quietly.
+    /// </summary>
+    private async Task<RosterConfiguration> ResolveRosterConfigAsync(
+        string? sleeperLeagueId, int season, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(sleeperLeagueId))
+        {
+            logger.LogWarning(
+                "No SleeperLeagueId supplied — optimising against RosterConfiguration.Standard. "
+                + "Starting slots may not match the league's actual lineup.");
+            return RosterConfiguration.Standard;
+        }
+
+        var league = await leagueRepository.GetBySleeperIdAsync(sleeperLeagueId, season, ct);
+
+        if (league is null)
+        {
+            var activeLeagues = await leagueRepository.GetActiveLeaguesAsync(ct);
+            league = activeLeagues.FirstOrDefault(l => l.SleeperLeagueId == sleeperLeagueId);
+        }
+
+        var config = league?.GetRosterConfiguration();
+
+        if (config is null)
+        {
+            logger.LogWarning(
+                "League {LeagueId} not found for season {Season} — optimising against "
+                + "RosterConfiguration.Standard.", sleeperLeagueId, season);
+            return RosterConfiguration.Standard;
+        }
+
+        logger.LogInformation(
+            "Optimising league {LeagueId} with QB {Qb} RB {Rb} WR {Wr} TE {Te} FLEX {Flex}, "
+            + "{Total} starters.",
+            sleeperLeagueId, config.QbSlots, config.RbSlots, config.WrSlots,
+            config.TeSlots, config.FlexSlotDefinitions.Count, config.TotalStarters);
+
+        return config;
     }
 }

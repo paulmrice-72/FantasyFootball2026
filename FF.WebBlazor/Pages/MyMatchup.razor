@@ -619,18 +619,27 @@ else
         return $"Boom/bust week — {boomCount} high-ceiling, {bustCount} bust-risk starter{(bustCount == 1 ? "" : "s")}";
     }
 
+    /// <summary>
+    /// Expected points, for display and comparison — the same measure the side
+    /// totals are built from. Falls back to the median for legacy simulation rows
+    /// written before Mean was populated. Every projected-points read on this page
+    /// goes through here, so the per-player figures and the team total agree.
+    /// </summary>
+    private static double? Proj(MyMatchupPlayerDto p) =>
+        p.MeanProjectedPoints ?? p.MedianProjectedPoints;
+
     private static bool ShouldConsiderStarting(MyMatchupPlayerDto bench, List<MyMatchupPlayerDto> allPlayers)
     {
-        if (!bench.MedianProjectedPoints.HasValue || bench.MedianProjectedPoints.Value <= 0)
-            return false;
+        var benchProj = Proj(bench);
+        if (benchProj is not > 0) return false;
 
         var startersAtPos = allPlayers
-            .Where(p => p.IsStarter && p.Position == bench.Position && p.MedianProjectedPoints.HasValue)
+            .Where(p => p.IsStarter && p.Position == bench.Position && Proj(p).HasValue)
             .ToList();
 
         if (startersAtPos.Count == 0) return false;
 
-        return bench.MedianProjectedPoints.Value > startersAtPos.Min(p => p.MedianProjectedPoints!.Value);
+        return benchProj.Value > startersAtPos.Min(p => Proj(p)!.Value);
     }
 
     // ── Render fragments ───────────────────────────────────────────────────────
@@ -646,10 +655,10 @@ else
                             Style="font-size:1.1rem; font-weight:700;">
                        @player.ActualPoints.Value.ToString("F2")
                    </MudText>
-                   @if (player.MedianProjectedPoints.HasValue)
+                   @if (Proj(player).HasValue)
                    {
                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-size:0.68rem;">
-                           proj @player.MedianProjectedPoints.Value.ToString("F1")
+                           proj @Proj(player)!.Value.ToString("F1")
                            @if (player.FloorProjectedPoints.HasValue && player.CeilingProjectedPoints.HasValue)
                            {
                                <span> (@player.FloorProjectedPoints.Value.ToString("F1")–@player.CeilingProjectedPoints.Value.ToString("F1"))</span>
@@ -667,14 +676,14 @@ else
                              style="cursor:pointer; text-decoration:underline dotted;"
                              title="Click to see projection breakdown">
                            <MudText Typo="Typo.body2" Class="@(isMySide ? "fc-stat fc-cyan" : "fc-stat fc-ceiling")">
-                               @(player.MedianProjectedPoints.HasValue ? player.MedianProjectedPoints.Value.ToString("F1") : "—")
+                               @(Proj(player)?.ToString("F1") ?? "—")
                            </MudText>
                        </span>
                    }
                    else
                    {
                        <MudText Typo="Typo.body2" Class="@(isMySide ? "fc-stat fc-cyan" : "mud-text-secondary")">
-                           @(player.MedianProjectedPoints.HasValue ? player.MedianProjectedPoints.Value.ToString("F1") : "—")
+                           @(Proj(player)?.ToString("F1") ?? "—")
                        </MudText>
                    }
                    @if (player.FloorProjectedPoints.HasValue && player.CeilingProjectedPoints.HasValue)
@@ -810,6 +819,7 @@ else
         bool IsStarter,
         string? SlotLabel,
         double? MedianProjectedPoints,
+        double? MeanProjectedPoints,
         double? FloorProjectedPoints,
         double? CeilingProjectedPoints,
         double? BoomProbability,
