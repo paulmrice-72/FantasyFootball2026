@@ -20,6 +20,17 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Windows PowerShell 5.1 uses the .NET Framework HttpWebRequest stack, which sends
+# "Expect: 100-continue" on every POST. A zero-length POST with that header can be
+# dropped by the proxy in front of Kestrel, surfacing as
+#   "The request was aborted: The connection was closed unexpectedly."
+# with no status code. Both lines below are no-ops on PowerShell 7.
+[System.Net.ServicePointManager]::Expect100Continue = $false
+[System.Net.ServicePointManager]::SecurityProtocol  =
+    [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
+
+Write-Host ("PowerShell {0} ({1})" -f $PSVersionTable.PSVersion, $PSVersionTable.PSEdition) -ForegroundColor DarkGray
+
 # ── Auth ────────────────────────────────────────────────────────────────
 # AuthController route is api/v1/[controller] -> api/v1/Auth
 # AuthResponse is (AccessToken, RefreshToken, AccessTokenExpiry), camelCased on the wire.
@@ -52,16 +63,17 @@ function Invoke-Api {
         [object]$Body,
         [int]$TimeoutSec = 900
     )
+    # Always send a body and a content type, even where the endpoint takes none.
+    # A zero-length POST is what died against prod on 2026-09-06; "{}" is ignored by
+    # any action without a [FromBody] parameter.
     $params = @{
         Method      = $Method
         Uri         = "$script:BaseUrl$Path"
         Headers     = @{ Authorization = "Bearer $script:Token" }
         TimeoutSec  = $TimeoutSec
         ErrorAction = 'Stop'
-    }
-    if ($null -ne $Body) {
-        $params.ContentType = 'application/json'
-        $params.Body        = ($Body | ConvertTo-Json -Compress)
+        ContentType = 'application/json'
+        Body        = if ($null -ne $Body) { $Body | ConvertTo-Json -Compress } else { '{}' }
     }
 
     Write-Host "  -> $Method $Path" -ForegroundColor DarkGray
@@ -76,6 +88,18 @@ function Invoke-Api {
     catch {
         $sw.Stop()
         Write-Host ("  <- FAILED ({0:n1}s): {1}" -f $sw.Elapsed.TotalSeconds, $_.Exception.Message) -ForegroundColor Red
+
+        # Surface the HTTP status when there is one. Its ABSENCE is the useful signal:
+        # no status = the connection died before a response, which is an infrastructure
+        # or client-stack problem, not an application error.
+        $resp = $_.Exception.Response
+        if ($resp) {
+            Write-Host ("  <- HTTP {0} {1}" -f [int]$resp.StatusCode, $resp.StatusCode) -ForegroundColor Red
+        }
+        else {
+            Write-Host "  <- No HTTP response received — connection closed before any status." -ForegroundColor Yellow
+            Write-Host "     Check Seq for 'Starting snap count import' / 'Downloading nflverse'." -ForegroundColor Yellow
+        }
         if ($_.ErrorDetails.Message) { Write-Host $_.ErrorDetails.Message -ForegroundColor Red }
         throw
     }

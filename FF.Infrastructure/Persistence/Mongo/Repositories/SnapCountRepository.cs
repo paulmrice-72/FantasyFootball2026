@@ -2,6 +2,7 @@
 using FF.Application.Interfaces.Persistence;
 using FF.Domain.Documents;
 using Microsoft.Extensions.Logging;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace FF.Infrastructure.Persistence.Mongo.Repositories;
@@ -53,20 +54,7 @@ public class SnapCountRepository(MongoDbContext database,
 
         foreach (var batch in batches)
         {
-            var bulkOps = batch.Select(doc =>
-            {
-                var filter = Builders<SnapCountDocument>.Filter.And(
-                    Builders<SnapCountDocument>.Filter.Eq(x => x.PlayerName, doc.PlayerName),
-                    Builders<SnapCountDocument>.Filter.Eq(x => x.Team, doc.Team),
-                    Builders<SnapCountDocument>.Filter.Eq(x => x.Season, doc.Season),
-                    Builders<SnapCountDocument>.Filter.Eq(x => x.Week, doc.Week)
-                );
-
-                return (WriteModel<SnapCountDocument>)new ReplaceOneModel<SnapCountDocument>(filter, doc)
-                {
-                    IsUpsert = true
-                };
-            }).ToList();
+            var bulkOps = batch.Select(BuildUpsert).ToList();
 
             var result = await _collection.BulkWriteAsync(
                 bulkOps,
@@ -78,6 +66,43 @@ public class SnapCountRepository(MongoDbContext database,
         }
 
         return (totalInserted, totalReplaced);
+    }
+
+    /// <summary>
+    /// Upsert on the natural key (PlayerName + Team + Season + Week) WITHOUT touching _id.
+    /// </summary>
+    /// <remarks>
+    /// This was a ReplaceOneModel(filter, doc). SnapCountDocument.Id is mapped with
+    /// StringObjectIdGenerator, so every freshly parsed document serialises a brand new
+    /// ObjectId. On the first import that is harmless — the upsert inserts. On every
+    /// import after that the filter matches an existing row whose _id differs, and
+    /// MongoDB rejects the replacement with error 66:
+    ///
+    ///   "After applying the update, the (immutable) field '_id' was found to have been
+    ///    altered to _id: ObjectId('...')"
+    ///
+    /// Every row in the batch failed that way, so the collection had been frozen at its
+    /// first-ever import since the feature shipped. $set of the fields with _id stripped
+    /// updates existing rows in place and lets the server generate _id on insert.
+    /// </remarks>
+    internal static WriteModel<SnapCountDocument> BuildUpsert(SnapCountDocument doc)
+    {
+        var filter = Builders<SnapCountDocument>.Filter.And(
+            Builders<SnapCountDocument>.Filter.Eq(x => x.PlayerName, doc.PlayerName),
+            Builders<SnapCountDocument>.Filter.Eq(x => x.Team, doc.Team),
+            Builders<SnapCountDocument>.Filter.Eq(x => x.Season, doc.Season),
+            Builders<SnapCountDocument>.Filter.Eq(x => x.Week, doc.Week)
+        );
+
+        var fields = doc.ToBsonDocument();
+        fields.Remove("_id");
+
+        return new UpdateOneModel<SnapCountDocument>(
+            filter,
+            new BsonDocument("$set", fields))
+        {
+            IsUpsert = true
+        };
     }
     public async Task<List<SnapCountDocument>> GetBySeasonWeekAsync(
         int season,
