@@ -127,7 +127,8 @@ namespace FF.API.Controllers
         public async Task<IActionResult> Optimize(
            [FromQuery] int? season,
            [FromQuery] int? week,
-           [FromQuery] OptimizationMode mode = OptimizationMode.Median,
+           // Mean, not Median: the optimiser maximises a SUM, and expectations add.
+           [FromQuery] OptimizationMode mode = OptimizationMode.Mean,
            [FromQuery] RiskProfile? riskProfile = null,
            [FromBody] OptimizeLineupRequest? request = null,
            CancellationToken ct = default)

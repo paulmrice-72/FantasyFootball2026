@@ -1,0 +1,52 @@
+[{
+  "_id": {
+    "$oid": "6a97378e393d1d90a8e04a40"
+  },
+  "PlayerName": "T.Warren",
+  "Season": 2026,
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "UsageTrendMultiplier": {
+    "$numberDecimal": "1.0092"
+  },
+  "GameSampleSize": 17
+},
+{
+  "_id": {
+    "$oid": "6a97378e393d1d90a8e04a6d"
+  },
+  "PlayerName": "M.Golden",
+  "Season": 2026,
+  "Week": 0,
+  "Basis": "PriorSeasonCarryover",
+  "UsageTrendMultiplier": {
+    "$numberDecimal": "1.15"
+  },
+  "GameSampleSize": 14
+},
+{
+  "_id": {
+    "$oid": "6a97386d393d1d90a8e051fc"
+  },
+  "PlayerName": "T.Warren",
+  "Season": 2026,
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "UsageTrendMultiplier": {
+    "$numberDecimal": "1.0092"
+  },
+  "GameSampleSize": 17
+},
+{
+  "_id": {
+    "$oid": "6a97386e393d1d90a8e05229"
+  },
+  "PlayerName": "M.Golden",
+  "Season": 2026,
+  "Week": 1,
+  "Basis": "PriorSeasonCarryover",
+  "UsageTrendMultiplier": {
+    "$numberDecimal": "1.15"
+  },
+  "GameSampleSize": 14
+}]

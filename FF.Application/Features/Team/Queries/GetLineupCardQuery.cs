@@ -150,6 +150,14 @@ public class GetLineupCardQueryHandler(
                 // the card can say "—" instead of inventing a 0.0.
                 var hasProjection = sim is not null && sim.Median > 0m;
 
+                // The card sums these, so it must sum EXPECTATIONS, not medians —
+                // see PlayerSlot.ProjectedMean. Falls back to Median for any legacy
+                // row written before Mean was populated: a slightly low number beats
+                // a zero, and a zero here would read as "not projected".
+                var projectedMean = sim is null
+                    ? 0m
+                    : sim.Mean > 0m ? sim.Mean : sim.Median;
+
                 return new PlayerSlot
                 {
                     PlayerId = id,
@@ -157,6 +165,7 @@ public class GetLineupCardQueryHandler(
                     Position = position,
                     NflTeam = player?.NflTeam ?? sim?.NflTeam ?? string.Empty,
                     ProjectedMedian = sim?.Median ?? 0m,
+                    ProjectedMean = projectedMean,
                     ProjectedFloor = sim?.Floor ?? 0m,
                     ProjectedCeiling = sim?.Ceiling ?? 0m,
                     HasProjection = hasProjection,
@@ -182,7 +191,7 @@ public class GetLineupCardQueryHandler(
         {
             AvailablePlayers = players,
             RosterConfig = rosterConfig,
-            Mode = OptimizationMode.Median,
+            Mode = OptimizationMode.Mean,
             LockedPlayerIds = [],
             ExcludedPlayerIds = []
         };
@@ -230,7 +239,7 @@ public class GetLineupCardQueryHandler(
         var benchSlots = players
             .Where(p => !starterIds.Contains(p.PlayerId))
             .OrderBy(p => p.Position)
-            .ThenByDescending(p => p.ProjectedMedian)
+            .ThenByDescending(p => p.ProjectedMean)
             .Select(p =>
             {
                 injuryLookup.TryGetValue(p.PlayerId, out var inj);
@@ -240,7 +249,9 @@ public class GetLineupCardQueryHandler(
                     PlayerName: p.PlayerName,
                     Position: p.Position,
                     NflTeam: p.NflTeam,
-                    ProjectedPoints: p.ProjectedMedian,
+                    // Same measure as the starters above — a card that mixed means
+                    // and medians would make bench players look worse than they are.
+                    ProjectedPoints: p.ProjectedMean,
                     BoomProbability: (double?)p.BoomProbability,
                     BustProbability: (double?)p.BustProbability,
                     InjuryDesignation: inj?.Designation,

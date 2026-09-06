@@ -24,6 +24,22 @@ public record PlayerSlot
     public decimal ProjectedMedian { get; init; }
     public decimal ProjectedFloor { get; init; }
     public decimal ProjectedCeiling { get; init; }
+
+    /// <summary>
+    /// Arithmetic mean of the simulated distribution — the player's EXPECTED score.
+    ///
+    /// This is the number to use whenever scores are going to be ADDED, because
+    /// expectations are additive and medians are not: the median of a sum of
+    /// right-skewed distributions is not the sum of their medians. The stat-line
+    /// simulation is deliberately right-skewed (see MonteCarloSimulationService),
+    /// so summing medians understates a lineup total by roughly 6-11% depending on
+    /// position — measured against dev 2026 wk0: RB 89.2% of mean, TE 90.1%,
+    /// QB 93.7%, WR 94.3%.
+    ///
+    /// ProjectedMedian remains the right number for a single-player "typical week"
+    /// question, which is why both are carried rather than one replacing the other.
+    /// </summary>
+    public decimal ProjectedMean { get; init; }
     public bool IsLocked { get; init; }
     public bool IsExcluded { get; init; }
 
@@ -75,5 +91,12 @@ public enum OptimizationMode
 {
     Median,
     Floor,
-    Ceiling
+    Ceiling,
+
+    /// <summary>
+    /// Maximise EXPECTED points. The correct objective for any lineup decision,
+    /// because the thing being maximised is a sum. Appended rather than inserted
+    /// so the existing ordinals stay stable for anything that persisted them.
+    /// </summary>
+    Mean
 }

@@ -37,6 +37,11 @@ public record MyMatchupPlayerDto(
     bool IsStarter,
     string? SlotLabel,
     double? MedianProjectedPoints,
+    // Expected points — arithmetic mean of the simulated distribution. Side totals
+    // are built from THIS, not from MedianProjectedPoints: a matchup total is a sum,
+    // and summing right-skewed medians understates it by 6-11% per position. Median
+    // is retained per player because it is the honest "typical week" figure.
+    double? MeanProjectedPoints,
     double? FloorProjectedPoints,
     double? CeilingProjectedPoints,
     double? BoomProbability,      // NEW — MATCHUP-003

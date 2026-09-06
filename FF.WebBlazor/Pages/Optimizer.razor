@@ -51,7 +51,8 @@
                         </MudGrid>
                         <MudSelect T="string" @bind-Value="_mode" Label="Score Mode"
                                    Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
-                            <MudSelectItem Value="@("Median")">Median</MudSelectItem>
+                            <MudSelectItem Value="@("Mean")">Expected (Mean)</MudSelectItem>
+                            <MudSelectItem Value="@("Median")">Typical (Median)</MudSelectItem>
                             <MudSelectItem Value="@("Floor")">Floor</MudSelectItem>
                             <MudSelectItem Value="@("Ceiling")">Ceiling</MudSelectItem>
                         </MudSelect>
@@ -99,7 +100,7 @@
                         else
                         {
                             <div class="fc-pool-list">
-                                @foreach (var p in _rosterPool.OrderByDescending(p => p.Median))
+                                @foreach (var p in _rosterPool.OrderByDescending(p => p.Proj))
                                 {
                                     <div class="fc-pool-row @PoolRowClass(p)" @onclick="() => CyclePlayerState(p)">
                                         <div class="fc-pool-row-left">
@@ -112,7 +113,7 @@
                                         </div>
                                         <div class="fc-pool-row-right">
                                             <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
-                                                @p.Median.ToString("F1")
+                                                @p.Proj.ToString("F1")
                                             </MudText>
                                             <span class="fc-pool-badge">@PoolBadge(p)</span>
                                         </div>
@@ -231,7 +232,8 @@
                     </MudGrid>
                     <MudSelect T="string" @bind-Value="_mode" Label="Score Mode"
                                Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" Clearable="true">
-                        <MudSelectItem Value="@("Median")">Median</MudSelectItem>
+                        <MudSelectItem Value="@("Mean")">Expected (Mean)</MudSelectItem>
+                            <MudSelectItem Value="@("Median")">Typical (Median)</MudSelectItem>
                         <MudSelectItem Value="@("Floor")">Floor</MudSelectItem>
                         <MudSelectItem Value="@("Ceiling")">Ceiling</MudSelectItem>
                     </MudSelect>
@@ -310,7 +312,7 @@
                                     </div>
                                     <div class="fc-pool-row-right">
                                         <MudText Typo="Typo.body2" Class="fc-stat fc-cyan">
-                                            @p.Median.ToString("F1")
+                                            @p.Proj.ToString("F1")
                                         </MudText>
                                         <span class="fc-pool-badge">@PoolBadge(p)</span>
                                     </div>
@@ -425,7 +427,8 @@
     // ── Shared settings ──────────────────────────────────────
     private int _season;
     private int _week;
-    private string _mode = "Median";
+    // Mean, not Median: the optimiser maximises a SUM, and expectations add.
+    private string _mode = "Mean";
     private string _riskProfile = "";
 
     // ── Full pool tab state ──────────────────────────────────
@@ -450,7 +453,7 @@
         .Where(p => _poolPosition == "ALL" || p.Position == _poolPosition)
         .Where(p => string.IsNullOrEmpty(_poolSearch) ||
             p.PlayerName.Contains(_poolSearch, StringComparison.OrdinalIgnoreCase))
-        .OrderByDescending(p => p.Median);
+        .OrderByDescending(p => p.Proj);
 
     protected override async Task OnInitializedAsync()
     {
@@ -528,11 +531,22 @@
                 .Select(p => p.SleeperPlayerId)
                 .ToHashSet();
 
-            _rosterPool = sims.Where(p => rosteredIds.Contains(p.PlayerId)).ToList();
+            // Join on SleeperPlayerId. This used to compare rosteredIds (Sleeper ids
+            // like "96") against PoolPlayer.PlayerId, which is the nflverse GSIS id
+            // ("00-0023459"). Those cannot be equal for any player, so the roster pool
+            // was ALWAYS empty and the tab silently bounced to Full Player Pool.
+            _rosterPool = sims
+                .Where(p => !string.IsNullOrEmpty(p.SleeperPlayerId)
+                            && rosteredIds.Contains(p.SleeperPlayerId!))
+                .ToList();
 
-            // If no roster matches (e.g. historical season), switch to full pool tab
-            if (_rosterPool.Count == 0 && _pool.Count > 0)
-                _activeTab = 1;
+            // Deliberately no tab switch. An empty roster pool is a condition worth
+            // seeing, not hiding — the auto-switch is exactly what kept the id
+            // mismatch above invisible for as long as it existed.
+            if (_rosterPool.Count == 0)
+                Snackbar.Add(
+                    $"No {_season} Week {_week} simulations matched your roster.",
+                    Severity.Warning);
         }
         catch (Exception ex)
         {
@@ -674,11 +688,22 @@
 
     private class PoolPlayer
     {
+        /// <summary>nflverse GSIS id, e.g. "00-0023459" — NOT the Sleeper id.</summary>
         public string PlayerId { get; set; } = "";
+        /// <summary>Sleeper id, e.g. "96" — the only key a Sleeper roster joins on.</summary>
+        public string? SleeperPlayerId { get; set; }
         public string PlayerName { get; set; } = "";
         public string Position { get; set; } = "";
         public string NflTeam { get; set; } = "";
         public decimal Median { get; set; }
+        public decimal Mean { get; set; }
+
+        /// <summary>
+        /// Expected points — what the optimiser maximises and what every other page
+        /// now shows. Falls back to Median for legacy rows written before Mean.
+        /// </summary>
+        public decimal Proj => Mean > 0m ? Mean : Median;
+
         public decimal Floor { get; set; }
         public decimal Ceiling { get; set; }
         public decimal BoomProbability { get; set; }

@@ -318,4 +318,92 @@ public class LineupOptimizerServiceTests
             StandardInput(OptimizationMode.Ceiling));
         result.Mode.Should().Be(OptimizationMode.Ceiling);
     }
+
+    // ── OptimizationMode.Mean ────────────────────────────────────────────
+    // The simulated distribution is right-skewed, so mean > median for every
+    // player, and summing medians understates a lineup total. These pin the
+    // behaviour that fix rests on: Mean mode scores off ProjectedMean, and the
+    // resulting total is the sum of means.
+
+    private static IReadOnlyList<PlayerSlot> SkewedPlayers() =>
+    [
+        Player("qb1", "Patrick Mahomes",    "QB", 32m, 22m, 48m),
+        Player("qb2", "Josh Allen",         "QB", 28m, 18m, 42m),
+        Player("rb1", "Christian McCaffrey","RB", 28m, 18m, 40m),
+        Player("rb2", "Austin Ekeler",      "RB", 20m, 12m, 30m),
+        Player("rb3", "Tony Pollard",       "RB", 16m,  9m, 26m),
+        Player("rb4", "Jahmyr Gibbs",       "RB", 18m, 10m, 28m),
+        Player("wr1", "Tyreek Hill",        "WR", 26m, 16m, 40m),
+        Player("wr2", "Stefon Diggs",       "WR", 22m, 14m, 34m),
+        Player("wr3", "Davante Adams",      "WR", 20m, 12m, 32m),
+        Player("wr4", "Justin Jefferson",   "WR", 24m, 15m, 38m),
+        Player("te1", "Travis Kelce",       "TE", 22m, 12m, 36m),
+        Player("te2", "Mark Andrews",       "TE", 18m, 10m, 28m),
+        Player("te3", "Sam LaPorta",        "TE", 14m,  7m, 22m),
+    ];
+
+    // Every player's mean sits 10% above his median — the direction the real
+    // distribution skews, and a clean multiple so the total is checkable.
+    private static IReadOnlyList<PlayerSlot> SkewedPlayersWithMean() =>
+        SkewedPlayers()
+            .Select(p => p with { ProjectedMean = p.ProjectedMedian * 1.10m })
+            .ToList();
+
+    private static LineupOptimizerInput SkewedInput(OptimizationMode mode) => new()
+    {
+        RosterConfig = RosterConfiguration.Standard,
+        Mode = mode,
+        AvailablePlayers = SkewedPlayersWithMean()
+    };
+
+    [Fact]
+    public void Optimize_MeanMode_ScoresOffProjectedMean_NotMedian()
+    {
+        var input = SkewedInput(OptimizationMode.Mean);
+        var result = LineupOptimizerService.Optimize(input);
+
+        result.Success.Should().BeTrue();
+        result.Mode.Should().Be(OptimizationMode.Mean);
+
+        foreach (var slot in result.Lineup)
+        {
+            var source = input.AvailablePlayers.Single(p => p.PlayerId == slot.PlayerId);
+            slot.ProjectedPoints.Should().Be(source.ProjectedMean);
+            slot.ProjectedPoints.Should().BeGreaterThan(source.ProjectedMedian);
+        }
+    }
+
+    [Fact]
+    public void Optimize_MeanMode_TotalExceedsMedianModeTotal()
+    {
+        var meanResult = LineupOptimizerService.Optimize(SkewedInput(OptimizationMode.Mean));
+        var medianResult = LineupOptimizerService.Optimize(SkewedInput(OptimizationMode.Median));
+
+        meanResult.Success.Should().BeTrue();
+        medianResult.Success.Should().BeTrue();
+
+        // Same pool, same slots — only the measure differs. This gap is exactly
+        // what was silently missing from every lineup and matchup total.
+        meanResult.TotalProjectedPoints.Should()
+            .BeApproximately(medianResult.TotalProjectedPoints * 1.10m, 0.05m);
+    }
+
+    [Fact]
+    public void Optimize_MeanMode_WithNoMeanPopulated_ScoresZero()
+    {
+        // Documents why callers fall back to Median when Mean is 0: a legacy
+        // simulation row has no Mean, and scoring it as 0 would silently drop
+        // the player. The guard lives in the callers, not the solver.
+        var input = new LineupOptimizerInput
+        {
+            RosterConfig = RosterConfiguration.Standard,
+            Mode = OptimizationMode.Mean,
+            AvailablePlayers = SkewedPlayers()   // ProjectedMean left at default 0m
+        };
+
+        var result = LineupOptimizerService.Optimize(input);
+
+        result.Success.Should().BeTrue();
+        result.TotalProjectedPoints.Should().Be(0m);
+    }
 }

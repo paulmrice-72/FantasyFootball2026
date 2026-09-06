@@ -36,14 +36,23 @@ public class OptimizeMyLineupTests
             CalculatedAt = DateTime.UtcNow
         };
 
+    /// <summary>
+    /// Re-created by every BuildHandler call so a test can assert what the handler
+    /// asked the league layer for. With no SleeperLeagueId on the command the handler
+    /// must not touch it at all and falls back to RosterConfiguration.Standard —
+    /// which is what every other assertion in this file was written against.
+    /// </summary>
+    private static ILeagueRepository _leagueRepo = Substitute.For<ILeagueRepository>();
+
     private static OptimizeLineupCommandHandler BuildHandler(
         IEnumerable<SimulationResultDocument> pool)
     {
+        _leagueRepo = Substitute.For<ILeagueRepository>();
         var repo = Substitute.For<ISimulationResultRepository>();
         repo.GetByWeekAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(pool.ToList().AsReadOnly());
         return new OptimizeLineupCommandHandler(
-            repo, NullLogger<OptimizeLineupCommandHandler>.Instance);
+            repo, _leagueRepo, NullLogger<OptimizeLineupCommandHandler>.Instance);
     }
 
     /// Full sim pool with 20 players — only 10 are "on the roster"
@@ -127,6 +136,46 @@ public class OptimizeMyLineupTests
             .ToHashSet();
 
         selectedIds.Should().OnlyContain(id => rosterPlayerIds.Contains(id));
+    }
+
+    [Fact]
+    public async Task League_id_supplied_resolves_that_league_s_roster_configuration()
+    {
+        // The optimiser used to hardcode RosterConfiguration.Standard, which starts
+        // two WRs. In a 3-WR league that silently produced a lineup one receiver short.
+        var (pool, rosterSleeperIds) = BuildPoolWithRoster();
+        var handler = BuildHandler(pool);
+
+        var cmd = new OptimizeLineupCommand(
+            Season: 2024,
+            Week: 1,
+            RosterSleeperIds: rosterSleeperIds,
+            SleeperLeagueId: "league-123");
+
+        await handler.Handle(cmd, CancellationToken.None);
+
+        await _leagueRepo.Received(1)
+            .GetBySleeperIdAsync("league-123", 2024, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task No_league_id_falls_back_to_standard_without_hitting_the_league_layer()
+    {
+        var (pool, rosterSleeperIds) = BuildPoolWithRoster();
+        var handler = BuildHandler(pool);
+
+        var cmd = new OptimizeLineupCommand(
+            Season: 2024,
+            Week: 1,
+            RosterSleeperIds: rosterSleeperIds);   // no SleeperLeagueId
+
+        var result = await handler.Handle(cmd, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Lineup.Should().HaveCount(RosterConfiguration.Standard.TotalStarters);
+
+        await _leagueRepo.DidNotReceive()
+            .GetBySleeperIdAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
