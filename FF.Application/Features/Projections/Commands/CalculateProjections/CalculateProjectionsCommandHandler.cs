@@ -118,6 +118,39 @@ public class CalculateProjectionsCommandHandler(
         // Tracks who pass 1 covered, so pass 2 never double-projects a player.
         var projectedSleeperIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // ── Depth-chart role gate (2026-09-07, FAN-137) ───────────────────
+        // Loaded for the REQUESTED season, not the basis season: the question
+        // this answers is "does he have the job now", and last season's chart
+        // answers the wrong question. QB only — see DepthRoleAdjustment for why
+        // this deliberately does not generalize to RB/WR/TE.
+        var qbDepthRows = await depthChartRepository.GetLatestByPositionAsync(
+            "QB", request.Season, cancellationToken);
+
+        var depthTeamBySleeperId = qbDepthRows
+            .GroupBy(d => d.SleeperPlayerId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().DepthTeam, StringComparer.OrdinalIgnoreCase);
+
+        if (depthTeamBySleeperId.Count == 0)
+        {
+            // Loud, because the failure is invisible otherwise: no depth data
+            // means every backup QB projects as though he were the starter, and
+            // the run still reports full success.
+            logger.LogWarning(
+                "No QB depth chart rows for season {Season} — the role gate will not " +
+                "fire and backup quarterbacks will project on their prior-season " +
+                "starter usage. Run the depth chart sync before trusting QB rankings.",
+                request.Season);
+        }
+        else
+        {
+            logger.LogInformation(
+                "QB role gate armed: {Total} depth rows, {Starters} at depth 1.",
+                depthTeamBySleeperId.Count,
+                depthTeamBySleeperId.Count(kv => kv.Value == 1));
+        }
+
+        var roleGated = 0;
+
         // ── Pass 1 — players with game logs ───────────────────────────────
         if (basis != ProjectionBasis.None)
         {
@@ -186,7 +219,25 @@ public class CalculateProjectionsCommandHandler(
                         continue;
                     }
 
-                    var doc = MapToDocument(projection, recentLog, request.Season, request.Week, correlation);
+                    int? depthTeam = null;
+                    if (!string.IsNullOrEmpty(recentLog.SleeperPlayerId)
+                        && depthTeamBySleeperId.TryGetValue(recentLog.SleeperPlayerId, out var dt))
+                    {
+                        depthTeam = dt;
+                    }
+
+                    var doc = MapToDocument(
+                        projection, recentLog, request.Season, request.Week, correlation, depthTeam);
+
+                    if (doc.RoleMultiplier < 1m)
+                    {
+                        roleGated++;
+                        logger.LogInformation(
+                            "Role gate: {Name} ({Pos}, {Team}) depth {Depth} → ×{Mult} [{Role}], " +
+                            "{Ppr} full-PPR pts/gm after adjustment.",
+                            doc.PlayerName, position, doc.NflTeam, depthTeam,
+                            doc.RoleMultiplier, doc.DepthRole, doc.ProjectedPointsPpr);
+                    }
 
                     await projectionRepository.UpsertAsync(doc, cancellationToken);
                     calculated++;
@@ -211,10 +262,11 @@ public class CalculateProjectionsCommandHandler(
 
         logger.LogInformation(
             "Projections complete — {Calculated} from history, {Rookies} rookie priors, " +
-            "{Skipped} skipped, {RookiesSkipped} rookies with no signal, in {Elapsed}ms " +
+            "{Skipped} skipped, {RookiesSkipped} rookies with no signal, " +
+            "{RoleGated} suppressed by the depth role gate, in {Elapsed}ms " +
             "(basis {Basis}/{BasisSeason}). QB:{QB} RB:{RB} WR:{WR} TE:{TE}",
-            calculated, rookiesProjected, skipped, rookiesSkipped, sw.ElapsedMilliseconds,
-            basis, basisSeason,
+            calculated, rookiesProjected, skipped, rookiesSkipped, roleGated,
+            sw.ElapsedMilliseconds, basis, basisSeason,
             countByPosition["QB"], countByPosition["RB"],
             countByPosition["WR"], countByPosition["TE"]);
 
@@ -317,9 +369,13 @@ public class CalculateProjectionsCommandHandler(
                 var spread = spreadByTeam.TryGetValue(team, out var s) ? s : 0m;
                 var correlation = GameScriptClassifier.Classify(spread);
 
+                // RookieProjectionService already consumes DepthTeam as a model
+                // input, so the rookie line is depth-aware before it gets here —
+                // no second multiplier, just stamp what it used so the two paths
+                // store the same explanatory fields.
                 var doc = MapRookieToDocument(
                     player.GsisId, sleeperId, player.FullName, position, team,
-                    result, request.Season, request.Week, correlation);
+                    result, request.Season, request.Week, correlation, depth?.DepthTeam);
 
                 await projectionRepository.UpsertAsync(doc, ct);
                 projected++;
@@ -359,10 +415,21 @@ public class CalculateProjectionsCommandHandler(
         PlayerGameLogDocument recentLog,
         int season,
         int week,
-        CorrelationMetadata correlation)
+        CorrelationMetadata correlation,
+        int? depthTeam = null)
     {
-        var statLine = projection.StatLine;
         var position = recentLog.Position;
+
+        // Role gate applies to the STAT LINE, before scoring — the stat line is
+        // canonical under Epic 20, so adjusting the cached point columns instead
+        // would leave the stored line disagreeing with its own points and every
+        // format-aware reader would recompute its way back to the un-gated
+        // number.
+        var (roleMultiplier, depthRole) = DepthRoleAdjustment.Resolve(position, depthTeam);
+
+        var statLine = roleMultiplier < 1m
+            ? projection.StatLine.Scale(roleMultiplier)
+            : projection.StatLine;
 
         var (standard, halfPpr, fullPpr) = ScoreAllFormats(statLine, position);
 
@@ -395,6 +462,10 @@ public class CalculateProjectionsCommandHandler(
             AvailabilityRate = projection.AvailabilityRate,
             GameSampleSize = projection.GameSampleSize,
 
+            DepthTeam = depthTeam,
+            RoleMultiplier = roleMultiplier,
+            DepthRole = depthRole,
+
             // Not produced by the stat-line model — the old value was the R² of a
             // points-on-week-index trend line, which no longer exists.
             RSquared = 0m,
@@ -420,7 +491,8 @@ public class CalculateProjectionsCommandHandler(
         RookieProjectionResult result,
         int season,
         int week,
-        CorrelationMetadata correlation)
+        CorrelationMetadata correlation,
+        int? depthTeam = null)
     {
         var statLine = result.StatLine;
         var (standard, halfPpr, fullPpr) = ScoreAllFormats(statLine, position);
@@ -458,6 +530,13 @@ public class CalculateProjectionsCommandHandler(
             TargetShareInput = 0m,
             UsageTrendMultiplier = 1m,
             AvailabilityRate = statLine.AvailabilityRate,
+
+            // Rookie priors are built FROM depth, not gated after it — the
+            // multiplier stays 1.0 and the role reads RookieDepthPrior so a
+            // query can tell the two mechanisms apart.
+            DepthTeam = depthTeam,
+            RoleMultiplier = 1m,
+            DepthRole = "RookieDepthPrior",
 
             // No games behind this number — that is the point of the basis flag.
             GameSampleSize = 0,

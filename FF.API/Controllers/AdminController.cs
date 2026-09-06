@@ -423,14 +423,17 @@ public class AdminController(
         var result = await mediator.Send(
             new RunCalibrationCommand(request.Season, request.ScoringFormat ?? "Superflex"), ct);
 
-        return Ok(new
-        {
-            result.SpearmanRho,
-            result.AvgAbsDelta,
-            result.Top10Overlap,
-            result.PlayerCount,
-            Top20Snapshot = result.Top20Snapshot
-        });
+        // 2026-09-07: this hand-enumerated projection is why the unmatched-count
+        // warning never appeared. UnmatchedCount and TopUnmatched were computed,
+        // persisted to calibration_results, and returned by the handler — then
+        // dropped here, at the API boundary, because the anonymous object lists
+        // fields by hand and nobody added them. The client deserialised the
+        // absent fields as 0/null and rendered nothing.
+        //
+        // Returning the result directly removes the class of bug rather than the
+        // instance: any field the handler adds from now on reaches the client
+        // without a second edit in a different project.
+        return Ok(result);
     }
 
     [HttpGet("calibration/latest")]

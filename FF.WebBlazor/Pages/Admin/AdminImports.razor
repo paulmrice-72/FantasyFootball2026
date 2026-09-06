@@ -467,6 +467,26 @@
                 </MudPaper>
             </MudItem>
         </MudGrid>
+        @* 2026-09-07: the join to FantasyPros is lossy, and it used to say nothing
+           about it. Every metric above is computed only on players present in both
+           lists, so the size of what fell out belongs next to the numbers rather
+           than buried in a Mongo document. *@
+        @if (_calibResult.UnmatchedCount > 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                <MudText Typo="Typo.body2" Style="font-weight:600;">
+                    @_calibResult.UnmatchedCount of our valuations had no FantasyPros row and were excluded.
+                </MudText>
+                <MudText Typo="Typo.caption" Style="display:block; margin-top:4px;">
+                    The metrics above describe the @_calibResult.PlayerCount players in both lists, not the whole board.
+                    @if (_calibResult.TopUnmatched is { Count: > 0 })
+                    {
+                        <span>Most valuable excluded: @string.Join(" · ", _calibResult.TopUnmatched.Take(5))</span>
+                    }
+                </MudText>
+            </MudAlert>
+        }
+
         <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Top-20 Comparison</MudText>
         <MudTable Items="_calibResult.Top20Snapshot" Dense="true" Hover="true" Elevation="0">
             <HeaderContent>
@@ -475,6 +495,7 @@
                 <MudTh>Pos</MudTh>
                 <MudTh>Our TV</MudTh>
                 <MudTh>FP Rank</MudTh>
+                <MudTh>FP (subset)</MudTh>
                 <MudTh>Δ</MudTh>
             </HeaderContent>
             <RowTemplate>
@@ -483,9 +504,47 @@
                 <MudTd>@context.Position</MudTd>
                 <MudTd>@context.OurTradeValue.ToString("F1")</MudTd>
                 <MudTd>@context.FpRank</MudTd>
-                <MudTd Style="@DeltaRowColor(context.Delta)">@(context.Delta > 0 ? $"+{context.Delta}" : context.Delta.ToString())</MudTd>
+                @* Both shown deliberately: the raw rank is what you'd look up on
+                   FantasyPros, the subset rank is the only one Δ can be measured
+                   against, since it ranks the same population Our Rank does. *@
+                <MudTd Style="opacity:0.7;">@context.FpSubsetRank.ToString("F1")</MudTd>
+                <MudTd Style="@DeltaRowColor(context.Delta)">@(context.Delta > 0 ? $"+{context.Delta:F1}" : context.Delta.ToString("F1"))</MudTd>
             </RowTemplate>
         </MudTable>
+
+        @* 2026-09-07: the table above is the top of OUR board, which turns out to
+           be the part that already agrees with FantasyPros — mean |Δ| across it
+           was 6.8 against a target of 8.0, while the remaining ~170 players
+           averaged 22.4. Tuning against it optimises the tenth of the list that
+           works. This second table is the same comparison ordered by how wrong we
+           are, which is where the headline metric can actually be moved. *@
+        @if (_calibResult.Worst20Snapshot is { Count: > 0 } worst)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-6 mb-1">Worst 20 by |Δ|</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2" Style="display:block;">
+                Largest disagreements anywhere in the compared population — this is what moves Avg |Δ|.
+            </MudText>
+            <MudTable Items="worst" Dense="true" Hover="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Our Rank</MudTh>
+                    <MudTh>Player</MudTh>
+                    <MudTh>Pos</MudTh>
+                    <MudTh>Our TV</MudTh>
+                    <MudTh>FP Rank</MudTh>
+                    <MudTh>FP (subset)</MudTh>
+                    <MudTh>Δ</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.OurRank</MudTd>
+                    <MudTd>@context.PlayerName</MudTd>
+                    <MudTd>@context.Position</MudTd>
+                    <MudTd>@context.OurTradeValue.ToString("F1")</MudTd>
+                    <MudTd>@context.FpRank</MudTd>
+                    <MudTd Style="opacity:0.7;">@context.FpSubsetRank.ToString("F1")</MudTd>
+                    <MudTd Style="@DeltaRowColor(context.Delta)">@(context.Delta > 0 ? $"+{context.Delta:F1}" : context.Delta.ToString("F1"))</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
     }
     @if (!string.IsNullOrEmpty(_calibStatus))
     {
@@ -1053,7 +1112,9 @@
     private string RhoColor   => _calibResult?.SpearmanRho   >= 0.85 ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
     private string DeltaColor => _calibResult?.AvgAbsDelta   <= 8.0  ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
     private string OverlapColor => _calibResult?.Top10Overlap >= 7   ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
-    private static string DeltaRowColor(int delta) => Math.Abs(delta) <= 5 ? "color: inherit"
+    // double, not int: Delta is now measured against the subset rank, which
+    // averages tied FP ranks and so is fractional.
+    private static string DeltaRowColor(double delta) => Math.Abs(delta) <= 5 ? "color: inherit"
         : Math.Abs(delta) <= 15 ? "color: var(--mud-palette-warning)" : "color: var(--mud-palette-error)";
 
     private async Task RunCalibration()
@@ -1116,8 +1177,11 @@
     }
 
     // ── DTOs ───────────────────────────────────────────────────────────────
-    private record CalibrationResultDto(double SpearmanRho, double AvgAbsDelta, int Top10Overlap, int PlayerCount, List<CalibrationPlayerSnapshotDto> Top20Snapshot);
-    private record CalibrationPlayerSnapshotDto(int OurRank, string PlayerName, string Position, double OurTradeValue, int FpRank, int Delta);
+    private record CalibrationResultDto(double SpearmanRho, double AvgAbsDelta, int Top10Overlap, int PlayerCount,
+        List<CalibrationPlayerSnapshotDto> Top20Snapshot, int UnmatchedCount, List<string>? TopUnmatched,
+        List<CalibrationPlayerSnapshotDto>? Worst20Snapshot);
+    private record CalibrationPlayerSnapshotDto(int OurRank, string PlayerName, string Position, double OurTradeValue,
+        int FpRank, double FpSubsetRank, double Delta);
     private record ImportResultDto(int Imported, int Unmatched, int Season);
     private record JobResultDto(string Message, int Count);
     private record BriefGenerateResultDto(int Generated, int Failed, List<string> Errors);

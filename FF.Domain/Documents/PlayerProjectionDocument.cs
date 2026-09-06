@@ -65,6 +65,29 @@ public class PlayerProjectionDocument
     /// <summary>Share of the basis window in which the player was actually active.</summary>
     public decimal AvailabilityRate { get; set; } = 1.0m;
 
+    /// <summary>
+    /// Depth-chart string this player occupied when the projection was built —
+    /// 1 = starter. Null when no depth row existed. Stored so a suppressed
+    /// projection can be explained from the row alone (2026-09-07, FAN-137).
+    /// </summary>
+    public int? DepthTeam { get; set; }
+
+    /// <summary>
+    /// The role multiplier applied to the stat line before scoring, produced by
+    /// DepthRoleAdjustment in the application layer (not referenced by type here
+    /// — Domain does not depend on Application). 1.0 = untouched. Anything below
+    /// 1.0 means this projection was deliberately suppressed and the stored
+    /// StatLine is post-adjustment.
+    /// </summary>
+    public decimal RoleMultiplier { get; set; } = 1.0m;
+
+    /// <summary>
+    /// Label behind <see cref="RoleMultiplier"/> — e.g. "BackupQB", "StartingQB",
+    /// "UnknownDepth", "NotGated". Deliberately a string, matching the
+    /// GameScript / Basis convention, so a Mongo query reads without a lookup.
+    /// </summary>
+    public string DepthRole { get; set; } = "NotGated";
+
     // Regression metadata
     public int GameSampleSize { get; set; }
     public decimal RSquared { get; set; }

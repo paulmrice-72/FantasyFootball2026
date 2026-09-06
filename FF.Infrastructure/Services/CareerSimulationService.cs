@@ -6,6 +6,7 @@ using FF.Domain.Enums;
 using MathNet.Numerics.Distributions;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
+using FF.Application.Services;
 
 namespace FF.Infrastructure.Services;
 
@@ -135,7 +136,7 @@ public class CareerSimulationService(
         // an inflated 5-year projection. Uses best single season only as fallback.
         var simByPlayerId = allSimResults
             .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0
-                        && r.Week == 0) // season-average sentinel only
+                        && IsSeasonAverageRow(r))
             .GroupBy(r => r.SleeperPlayerId!)
             .ToDictionary(
                 g => g.Key,
@@ -168,7 +169,7 @@ public class CareerSimulationService(
 
         var simByNamePos = allSimResults
             .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0
-                        && r.Week == 0)
+                        && IsSeasonAverageRow(r))
             .GroupBy(r => $"{r.PlayerName}|{r.Position}")
             .ToDictionary(
                 g => g.Key,
@@ -213,6 +214,14 @@ public class CareerSimulationService(
             foreach (var player in players)
             {
                 if (player.SleeperPlayerId is null) continue;
+
+                // 2026-09-07: Sleeper's player table carries placeholder rows for
+                // retired and void entries. SeedSeasonAverageSimsCommandHandler has
+                // always filtered them; this pipeline never did, so a row literally
+                // named "Duplicate Player" was simulated, valued, and surfaced on
+                // the dynasty board at TradeValue 81.8 — around 20th overall.
+                if (PlayerNameNormalizer.IsPlaceholder(player.FullName)) continue;
+
                 if (!player.Age.HasValue && player.YearsExperience != 0) continue;
                 if (player.Age.HasValue && player.Age.Value < 18) continue;
 
@@ -245,13 +254,19 @@ public class CareerSimulationService(
         var curve = await agingCurveRepository.GetByPositionAsync(posStr, ct);
 
         var allSimResults = await simulationResultRepository.GetAllSeasonAveragesAsync(ct);
+        // 2026-09-07: this single-player path did not filter on Week at all, so a
+        // one-off recompute could seed a career from a single WEEK's simulation
+        // while the bulk path used season averages. Same rows, same filter, both
+        // paths now.
         var simByPlayerId = allSimResults
-            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0)
+            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.Median > 0
+                        && IsSeasonAverageRow(r))
             .GroupBy(r => r.SleeperPlayerId!)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Season).First());
 
         var simByNamePos = allSimResults
-            .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0)
+            .Where(r => !string.IsNullOrEmpty(r.PlayerName) && r.Median > 0
+                        && IsSeasonAverageRow(r))
             .GroupBy(r => $"{r.PlayerName}|{r.Position}")
             .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.Season).First());
 
@@ -292,7 +307,20 @@ public class CareerSimulationService(
             baseFppg = GetDepthLevelFppg(position);
 
         var yearProjections = new List<CareerYearProjection>();
-        var rng = new Random();
+
+        // 2026-09-07: was `new Random()` — unseeded, so every run drew a
+        // different career for the same player on the same data. Two identical
+        // players came out 624.1 and 623.9 in a unit test, which is how this was
+        // noticed, but the consequence is larger than a flaky assertion:
+        // CareerValueScore fed TradeValue fed the dynasty board, so the board
+        // reshuffled on every recalculation and every FAN-95 calibration delta
+        // measured against FantasyPros carried dice in it. Some of those small
+        // run-to-run movements were the model and some were noise, and after the
+        // fact there was no way to tell which.
+        //
+        // Seeded per player and season: a given player's career is now
+        // reproducible, while the population still varies player to player.
+        var rng = new Random(StableSeed(player.SleeperPlayerId!, season));
 
         for (int yearOffset = 0; yearOffset < ProjectYears; yearOffset++)
         {
@@ -394,6 +422,9 @@ public class CareerSimulationService(
         foreach (var player in players)
         {
             if (player.SleeperPlayerId is null) continue;
+            // Same exclusion as the simulate loop — a placeholder must not occupy
+            // a slot in the elite tier ranking either.
+            if (PlayerNameNormalizer.IsPlaceholder(player.FullName)) continue;
 
             var raw = GetBaselineFppg(
                 player.SleeperPlayerId, player.FullName, position,
@@ -477,58 +508,59 @@ public class CareerSimulationService(
         FF.Domain.Entities.Player player)
     {
         var prior = PositionPriors.GetValueOrDefault(position, 9.0);
+        var depthLevel = GetDepthLevelFppg(position);
         var clampedExp = Math.Min(player.YearsExperience ?? 0, 5);
         var credibility = clampedExp / (clampedExp + ShrinkageK);
 
-        // Rookie QB with no sim data and no draft pedigree → depth-level,
-        // not prior. Prior (18.5) would put unknown QBs into the starter
-        // range via superflex inflation — only high picks earn it.
-        if (position == "QB" && (player.YearsExperience ?? 0) == 0 && rawFppg <= 0)
+        // ── 2026-09-07: two defects, one root ─────────────────────────────
+        //
+        // (1) Every gate below used to test `rawFppg <= 0` — literally no data
+        //     at all. The moment a player had ANY measured rate, however tiny,
+        //     all of them were bypassed and he fell through to the standard
+        //     blend, where a rookie's credibility of zero hands him 100% of the
+        //     STARTER prior.
+        //
+        //     Measured case: Joe Fagnano, Baltimore's QB3, carries a 2026 sim
+        //     median of 0.17 FPPG. That 0.17 was enough to skip the rookie gate,
+        //     and he emerged at 18.5 — the median starting quarterback — for a
+        //     five-year career. CareerValueScore 971, TradeValue 94.5, first
+        //     overall on the dynasty board, ahead of Mahomes.
+        //
+        //     Having a little evidence was strictly worse than having none. The
+        //     gate now asks whether a player has evidence of being a STARTER,
+        //     which is the question the starter prior is conditioned on.
+        //
+        // (2) Draft capital was two ad-hoc gates that disagreed with each other:
+        //     a QB earned the full starter prior only as a 1st-round pick, while
+        //     every other position earned it with ANY draft round on file. That
+        //     is how Max Bredeson, a late-round tight end, was modelled as a
+        //     proven TE1 at 9.0 FPPG. Both collapse into one curve below,
+        //     applied identically at every position.
+        //
+        // Note what is deliberately NOT touched: for anyone with real experience
+        // the prior is unchanged, so the FAN-95 calibration on the veteran
+        // population — the part that was tuned against FantasyPros consensus —
+        // sees no movement from this.
+        var hasStarterEvidence = rawFppg >= depthLevel;
+
+        // A rookie's credibility is zero, which means the prior IS his
+        // projection. Scale that prior by draft capital so an undrafted rookie
+        // cannot inherit the median starter's season simply by existing in the
+        // player table.
+        if ((player.YearsExperience ?? 0) == 0)
         {
-            var round = player.DraftRound ?? 99;
-            var pick = player.DraftPick ?? 999;
-            // Only 1st-round picks earn the starter prior; everyone else is depth.
-            // Widened from top-5 to full 1st round — a 1st-round QB is a legitimate
-            // dynasty prospect even at pick 20+.
-            return (round == 1)
-                ? prior  // 18.5 — 1st round pick, legitimate prospect
-                : GetDepthLevelFppg(position); // 6.0 — unknown/late round
+            prior = depthLevel + (DraftPedigreeWeight(player.DraftRound) * (prior - depthLevel));
         }
 
-        // Experienced player with NO sim data → depth-level, not prior.
-        // Having multiple years in the league with zero measurable production
-        // means career backup, not unknown starter. The prior (18.5 for QB)
-        // is designed for BLENDING with real observations, not as a standalone
-        // value. Only rookies (exp 0) get the full prior as their starting
-        // point — handled by the rookie gate above for QBs and by the
-        // credibility formula (0% weight on raw) for other positions.
-        if (rawFppg <= 0)
+        if (!hasStarterEvidence)
         {
+            // Experience with nothing to show for it is itself evidence: a
+            // career backup, not an unknown quantity.
             if ((player.YearsExperience ?? 0) >= 1)
-                return GetDepthLevelFppg(position);
+                return depthLevel;
 
-            // Fix 2026-08-27 (live calibration + Mongo/Postgres data pull):
-            // true zero-experience RB/WR/TE rookies with no sim data used to
-            // get the FULL position-average prior unconditionally — no
-            // pedigree check at all, unlike QB's gate above (1st-round only).
-            // Confirmed live for three UDFA TEs (Dallen Bentley, Matt Hibner,
-            // John Michael Gyllenborg — all YearsExperience 0, no DraftRound
-            // on file, no simulation_results doc): each got baseFppg ≈ 9.0
-            // (the flat TE prior) treated as a proven average TE1 for a full
-            // 5-year career, producing CareerValueScore ≈ 468-472 — nearly
-            // identical generic curves carrying no real signal about these
-            // specific players, high enough to land them in top TE guardrail
-            // tiers (TV 83-90) despite FP dynasty ranks in the 300s-400s.
-            // Fix: require actual draft pedigree (any DraftRound on file) to
-            // earn the full prior — undrafted zero-data rookies fall to
-            // depth level instead, same treatment as an experienced no-data
-            // backup. Mirrors the QB gate above; QB is exempted here since
-            // that gate already returned earlier in this method for QB.
-            if (position != "QB" && player.DraftRound is null)
-                return GetDepthLevelFppg(position);
-
-            // True rookie with no sim data and real draft pedigree — full
-            // prior is appropriate (credibility = 0%, blend = 100% prior)
+            // Zero experience and no starter-level production — draft capital
+            // is the only signal there is, and it is already folded into prior.
             return prior;
         }
 
@@ -564,6 +596,84 @@ public class CareerSimulationService(
         "WR" => 10.0,
         "TE" => 8.5,
         _ => 9.0
+    };
+
+    /// <summary>
+    /// Deterministic 32-bit FNV-1a over the player id and season, used to seed
+    /// the per-player RNG.
+    ///
+    /// Deliberately NOT <c>string.GetHashCode()</c>. .NET randomizes string
+    /// hashing per process, so seeding from it would produce a simulation that
+    /// looks reproducible, reads as reproducible, and quietly is not — the same
+    /// shape as the silent no-ops this pipeline has already collected. FNV-1a is
+    /// a few lines, has no dependency, and is stable across processes, machines
+    /// and framework versions, which is the entire point.
+    ///
+    /// Season is folded in so a re-run for a different season draws a different
+    /// career, while the same player and season always reproduce.
+    /// </summary>
+    private static int StableSeed(string sleeperPlayerId, int season)
+    {
+        const uint FnvOffsetBasis = 2166136261;
+        const uint FnvPrime = 16777619;
+
+        var hash = FnvOffsetBasis;
+
+        foreach (var c in sleeperPlayerId)
+        {
+            hash ^= c;
+            hash *= FnvPrime;
+        }
+
+        hash ^= (uint)season;
+        hash *= FnvPrime;
+
+        // Mask the sign bit rather than casting a value that may have the high
+        // bit set — a negative seed is legal but makes the mapping depend on
+        // two's-complement details for no benefit.
+        return (int)(hash & 0x7FFFFFFF);
+    }
+
+    /// <summary>
+    /// Whether a simulation row is a real historical season average, as opposed
+    /// to a current-season projection that merely shares the Week-0 sentinel.
+    ///
+    /// Week 0 is overloaded: <c>SeedSeasonAverageSimsCommand</c> writes it for a
+    /// season a player actually played, and the projection/simulation run writes
+    /// it for the season ahead. Career simulation wants only the first kind. Joe
+    /// Fagnano's Week-0 row (Median 0.17, PlayerRole "Unknown") is a projection
+    /// for a quarterback who has never taken a snap, and reading it as a track
+    /// record is what let him onto the dynasty board at all.
+    ///
+    /// Deliberately not an equality test on "SeasonAverage": rows written before
+    /// the field existed carry no label, and excluding those would strip every
+    /// baseline at once and turn the entire league into rookies. Keep the
+    /// unlabelled, drop what is explicitly labelled something else.
+    /// </summary>
+    private static bool IsSeasonAverageRow(SimulationResultDocument r) =>
+        r.Week == 0
+        && (string.IsNullOrEmpty(r.PlayerRole) || r.PlayerRole == "SeasonAverage");
+
+    /// <summary>
+    /// Draft capital as a continuous signal rather than a yes/no gate — the
+    /// share of the distance from depth level to the starter prior that a
+    /// player's draft slot earns him before he has played a down.
+    ///
+    /// A 7th-round tight end is not a proven TE1; a 2nd-round quarterback is not
+    /// a career backup. The previous pair of gates said otherwise in both
+    /// directions, and disagreed with each other by position.
+    ///
+    /// Undrafted returns 0.0 — depth level, not zero. An undrafted rookie is a
+    /// backup until proven otherwise, which is different from being worthless.
+    /// </summary>
+    private static double DraftPedigreeWeight(int? draftRound) => draftRound switch
+    {
+        1 => 1.00,
+        2 => 0.80,
+        3 => 0.55,
+        4 or 5 => 0.30,
+        6 or 7 => 0.15,
+        _ => 0.00
     };
 
     private static double GetDepthLevelFppg(string position) => position switch
