@@ -28,4 +28,9 @@ public record MyRosterPlayerDto(
     bool IsOnIr,
     bool IsOnTaxi,
     double? MedianProjectedPoints,
+    // Expected points — arithmetic mean of the simulated distribution. This is
+    // what the Roster tab's "Proj Pts" column shows, because that column is read
+    // as "what will he score", which is an expectation. Median stays on the DTO:
+    // it is the honest "typical week" figure and Start/Sit still ranks on it.
+    double? MeanProjectedPoints,
     string? ByeWeek);

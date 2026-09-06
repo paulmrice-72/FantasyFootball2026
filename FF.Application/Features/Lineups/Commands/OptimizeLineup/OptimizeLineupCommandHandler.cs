@@ -66,6 +66,7 @@ public class OptimizeLineupCommandHandler(
                 Position = s.Position,
                 NflTeam = s.NflTeam,
                 ProjectedMedian = s.Median,
+                ProjectedMean = s.Mean > 0m ? s.Mean : s.Median,
                 ProjectedFloor = s.Floor,
                 ProjectedCeiling = s.Ceiling,
                 BoomProbability = s.BoomProbability,

@@ -9,7 +9,9 @@ namespace FF.Application.Features.Lineups.Commands.OptimizeLineup;
 public record OptimizeLineupCommand(
     int Season,
     int Week,
-    OptimizationMode Mode = OptimizationMode.Median,
+    // Mean, not Median: the optimiser maximises a SUM, and expectations add.
+    // Median remains selectable from the Score Mode dropdown.
+    OptimizationMode Mode = OptimizationMode.Mean,
     RiskProfile? RiskProfile = null,
     IReadOnlyList<string>? LockedPlayerIds = null,
     IReadOnlyList<string>? ExcludedPlayerIds = null,
