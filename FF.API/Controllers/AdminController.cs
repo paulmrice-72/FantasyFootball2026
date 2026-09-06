@@ -285,12 +285,31 @@ public class AdminController(
 
         logger.LogInformation("Admin triggered snap count sync — season {Season}",
             season.HasValue ? season.Value.ToString() : "calendar");
-        await snapCountJob.RunAsync(season);
+
+        var result = await snapCountJob.RunAsync(season);
+
+        // The job used to log its failures and return void, so this endpoint answered
+        // 200 "complete" on a run that wrote nothing. Surface the outcome instead.
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                result.Season,
+                result.Error,
+                Message = $"Snap count sync FAILED for {result.Season}."
+            });
+        }
+
         return Ok(new
         {
-            Message = season.HasValue
-                ? $"Snap count sync complete for {season}."
-                : "Snap count sync complete (calendar season)."
+            result.Season,
+            result.Inserted,
+            result.Replaced,
+            result.Merged,
+            result.Unmatched,
+            Message = result.Inserted == 0 && result.Replaced == 0
+                ? $"Snap count sync for {result.Season} completed but wrote no rows."
+                : $"Snap count sync complete for {result.Season}."
         });
     }
 
