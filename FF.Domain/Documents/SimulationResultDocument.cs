@@ -36,6 +36,16 @@ public class SimulationResultDocument
     // Role context — from RoleClassificationService
     public string PlayerRole { get; set; } = "Unknown";
 
+    /// <summary>
+    /// Games behind this number. Zero on rows that predate the field or that were
+    /// not built from a counted sample. Added 2026-09-07 for the season-average
+    /// seed, where a two-game sample and a seventeen-game one were previously
+    /// indistinguishable once divided — which is how one afternoon became a
+    /// season-long rate. Store it so a consumer can weight or filter rather than
+    /// having to trust every average equally.
+    /// </summary>
+    public int GameSampleSize { get; set; }
+
     public string ScoringFormat { get; set; } = "HalfPpr";
     public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
     // Vegas context — stamped from VegasLineDocument at simulation time

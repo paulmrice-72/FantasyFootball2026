@@ -20,4 +20,18 @@ public interface IDepthChartRepository
     /// </summary>
     Task<IReadOnlyList<DepthChartDocument>> GetLatestBySleeperIdsAsync(
         IReadOnlyList<string> sleeperPlayerIds, int season, CancellationToken ct = default);
+
+    /// <summary>
+    /// Bulk-loads the most recent depth chart entry for every player at a
+    /// position, without needing the caller to know the ids up front.
+    ///
+    /// Added 2026-09-07 for the projection role gate. Pass 1 of
+    /// CalculateProjectionsCommandHandler iterates GSIS ids and only learns a
+    /// player's Sleeper id from his game log inside the loop, so
+    /// <see cref="GetLatestBySleeperIdsAsync"/> cannot be used to preload —
+    /// the alternative was a per-player query inside the loop, which is the
+    /// N+1 that method exists to avoid.
+    /// </summary>
+    Task<IReadOnlyList<DepthChartDocument>> GetLatestByPositionAsync(
+        string position, int season, CancellationToken ct = default);
 }

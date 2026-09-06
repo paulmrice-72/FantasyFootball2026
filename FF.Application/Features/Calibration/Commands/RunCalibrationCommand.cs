@@ -13,7 +13,10 @@ public record RunCalibrationResult(
     double AvgAbsDelta,
     int Top10Overlap,
     int PlayerCount,
-    List<CalibrationPlayerSnapshot> Top20Snapshot);
+    List<CalibrationPlayerSnapshot> Top20Snapshot,
+    int UnmatchedCount = 0,
+    List<string>? TopUnmatched = null,
+    List<CalibrationPlayerSnapshot>? Worst20Snapshot = null);
 
 public class RunCalibrationCommandHandler(
     IDynastyValuationRepository valuationRepo,
@@ -39,7 +42,15 @@ public class RunCalibrationCommandHandler(
             .Where(f => !string.IsNullOrEmpty(f.SleeperPlayerId))
             .ToDictionary(f => f.SleeperPlayerId, f => f.FantasyProsRank);
 
-        // Match our valuations to FP — only players present in both lists
+        // Match our valuations to FP — only players present in both lists.
+        //
+        // 2026-09-07: this join is lossy and used to be silent about it. Anyone we
+        // value who has no FantasyPros row — or whose FP row carries no Sleeper id
+        // — vanishes from every metric below with no trace in the output. That is
+        // not a rounding error: Patrick Mahomes, our #1, is one of the players it
+        // drops, which is exactly why the calibration table and the Dynasty
+        // Rankings page show different leaders. Count what falls out and name the
+        // most valuable casualties, so the numbers can be read for what they are.
         var matched = ourValuations
             .Where(v => fpBySleeperIdRank.ContainsKey(v.SleeperPlayerId))
             .OrderByDescending(v => v.TradeValue)
@@ -51,6 +62,16 @@ public class RunCalibrationCommandHandler(
                 v.TradeValue,
                 FpRank = fpBySleeperIdRank[v.SleeperPlayerId]
             })
+            .ToList();
+
+        var unmatched = ourValuations
+            .Where(v => !fpBySleeperIdRank.ContainsKey(v.SleeperPlayerId))
+            .OrderByDescending(v => v.TradeValue)
+            .ToList();
+
+        var topUnmatched = unmatched
+            .Take(10)
+            .Select(v => $"{v.PlayerName} ({v.Position}, TV {Math.Round(v.TradeValue, 1)})")
             .ToList();
 
         int n = Math.Min(matched.Count, 200);
@@ -88,24 +109,61 @@ public class RunCalibrationCommandHandler(
         // Avg absolute delta — same dense-rank basis as ρ, so it measures the same comparison
         double avgDelta = subset.Average(p => Math.Abs(p.OurRank - fpDenseRankBySubsetPosition[p.FpRank]));
 
-        // Top-10 overlap
-        var ourTop10SleeperIds = ourValuations.Take(10)
-            .Select(v => v.SleeperPlayerId).ToHashSet();
-        var fpTop10SleeperIds = fpRankings
-            .Where(f => f.FantasyProsRank <= 10 && !string.IsNullOrEmpty(f.SleeperPlayerId))
-            .Select(f => f.SleeperPlayerId).ToHashSet();
-        int top10Overlap = ourTop10SleeperIds.Intersect(fpTop10SleeperIds).Count();
+        // Top-10 overlap — on the matched subset, both sides.
+        //
+        // 2026-09-07: this used to take OUR top 10 from the unmatched list and
+        // compare it to FP's top 10 by raw rank, so it ran on a third population,
+        // different from the one ρ and Avg |Δ| use. Worse, it was capped: a player
+        // we rank in the top 10 who has no FP row at all occupies one of our ten
+        // slots and can never overlap with anything, so the metric could not reach
+        // 10/10 no matter how well calibrated the model was. With Mahomes
+        // unmatched, the ceiling was 9.
+        var ourTop10 = subset.Take(10)
+            .Select(p => p.PlayerName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var fpTop10 = subset
+            .OrderBy(p => fpDenseRankBySubsetPosition[p.FpRank])
+            .Take(10)
+            .Select(p => p.PlayerName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        int top10Overlap = ourTop10.Intersect(fpTop10).Count();
+
+        // Snapshot builder, shared by both views below so they cannot drift apart.
+        // Takes primitives rather than the anonymous type: `dynamic` would bind at
+        // runtime, and a typo here would surface as an exception during a
+        // calibration run rather than a compile error.
+        CalibrationPlayerSnapshot MakeSnapshot(
+            int ourRank, string playerName, string position, double tradeValue, int fpRank)
+        {
+            var fpSubsetRank = fpDenseRankBySubsetPosition[fpRank];
+            return new CalibrationPlayerSnapshot
+            {
+                OurRank = ourRank,
+                PlayerName = playerName,
+                Position = position,
+                OurTradeValue = Math.Round(tradeValue, 1),
+                FpRank = fpRank,
+                FpSubsetRank = Math.Round(fpSubsetRank, 1),
+                Delta = Math.Round(ourRank - fpSubsetRank, 1)
+            };
+        }
 
         // Top-20 snapshot
-        var snapshot = subset.Take(20).Select(p => new CalibrationPlayerSnapshot
-        {
-            OurRank = p.OurRank,
-            PlayerName = p.PlayerName,
-            Position = p.Position,
-            OurTradeValue = Math.Round(p.TradeValue, 1),
-            FpRank = p.FpRank,
-            Delta = p.OurRank - p.FpRank
-        }).ToList();
+        // Delta is on the SUBSET rank, matching Avg |Δ| above. It used to use the
+        // raw FpRank while the headline used the subset rank, so the two disagreed
+        // and the column could not be averaged to reach the number above it.
+        var snapshot = subset.Take(20)
+            .Select(p => MakeSnapshot(p.OurRank, p.PlayerName, p.Position, p.TradeValue, p.FpRank))
+            .ToList();
+
+        // The twenty biggest disagreements anywhere in the population. This is the
+        // view that actually points at the error: the top-20 table above sits
+        // comfortably inside the Avg |Δ| target while the tail is three times
+        // worse, so the headline metric can only be moved from down here.
+        var worstSnapshot = subset
+            .OrderByDescending(p => Math.Abs(p.OurRank - fpDenseRankBySubsetPosition[p.FpRank]))
+            .ThenBy(p => p.OurRank)
+            .Take(20)
+            .Select(p => MakeSnapshot(p.OurRank, p.PlayerName, p.Position, p.TradeValue, p.FpRank))
+            .ToList();
 
         // Persist result
         var doc = new CalibrationResultDocument
@@ -117,11 +175,16 @@ public class RunCalibrationCommandHandler(
             AvgAbsDelta = Math.Round(avgDelta, 2),
             Top10Overlap = top10Overlap,
             PlayerCount = n,
-            Top20Snapshot = snapshot
+            Top20Snapshot = snapshot,
+            Worst20Snapshot = worstSnapshot,
+            UnmatchedCount = unmatched.Count,
+            TopUnmatched = topUnmatched
         };
 
         await calibrationRepo.InsertAsync(doc, ct);
 
-        return new RunCalibrationResult(doc.SpearmanRho, doc.AvgAbsDelta, top10Overlap, n, snapshot);
+        return new RunCalibrationResult(
+            doc.SpearmanRho, doc.AvgAbsDelta, top10Overlap, n, snapshot,
+            unmatched.Count, topUnmatched, worstSnapshot);
     }
 }
