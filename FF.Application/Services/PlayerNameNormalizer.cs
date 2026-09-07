@@ -1,4 +1,7 @@
 // FF.Application/Services/PlayerNameNormalizer.cs
+using System.Globalization;
+using System.Text;
+
 namespace FF.Application.Services;
 
 /// <summary>
@@ -54,7 +57,7 @@ public static class PlayerNameNormalizer
     {
         if (string.IsNullOrWhiteSpace(name)) return string.Empty;
 
-        var chars = name.ToLowerInvariant()
+        var chars = RemoveDiacritics(name.ToLowerInvariant())
             .Select(c => char.IsLetterOrDigit(c) ? c : ' ');
 
         var collapsed = string.Join(
@@ -87,4 +90,34 @@ public static class PlayerNameNormalizer
     public static bool IsPlaceholder(string? name) =>
         !string.IsNullOrWhiteSpace(name)
         && PlaceholderNames.Contains(name.Trim());
+
+    /// <summary>
+    /// Folds accented letters to their base form: ñ → n, é → e, í → i.
+    ///
+    /// 2026-09-07. `char.IsLetterOrDigit('ñ')` is TRUE, so the punctuation filter
+    /// above passed accented letters straight through and "Piñeiro" never
+    /// normalized to "pineiro". Feeds disagree about accents — FFC publishes
+    /// "Eddy Piñeiro", Sleeper's player table carries the ASCII spelling — so
+    /// the two sides normalized to different strings and could not match. He was
+    /// the single remaining unmatched row in the FFC ADP sync after the kicker
+    /// token fix, which is how it surfaced: one kicker, invisible on the draft
+    /// board, for want of a tilde.
+    ///
+    /// Decompose to FormD, drop the combining marks, recompose. Characters that
+    /// have no decomposition — ø, ß — are left alone; that is a real limit, and
+    /// no current NFL name hits it.
+    /// </summary>
+    private static string RemoveDiacritics(string text)
+    {
+        var decomposed = text.Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(decomposed.Length);
+
+        foreach (var c in decomposed)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                builder.Append(c);
+        }
+
+        return builder.ToString().Normalize(NormalizationForm.FormC);
+    }
 }
