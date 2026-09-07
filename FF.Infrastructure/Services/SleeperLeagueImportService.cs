@@ -4,6 +4,7 @@ using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using FF.Domain.Entities;
+using FF.Domain.Enums;
 using FF.Infrastructure.ExternalApis.Sleeper;
 using FF.Infrastructure.ExternalApis.Sleeper.Mappers;
 using FF.Infrastructure.Persistence.SQL;
@@ -430,10 +431,10 @@ public class SleeperLeagueImportService(
         return imported;
     }
 
-    private static string MapLeagueType(int sleeperLeagueType) => sleeperLeagueType switch
-    {
-        2 => "Dynasty",
-        1 => "Keeper",
-        _ => "Redraft"
-    };
+    // 2026-09-07: the mapping moved to LeagueFormatExtensions.FromSleeperType so
+    // that the set of formats is declared in one place. This wrapper stays because
+    // League.LeagueType is persisted as a string; the enum is the interpretation
+    // layer, not the storage format, so no migration is involved.
+    private static string MapLeagueType(int sleeperLeagueType) =>
+        LeagueFormatExtensions.FromSleeperType(sleeperLeagueType).ToStorageString();
 }

@@ -90,4 +90,38 @@ public class PlayerNameNormalizerTests
     [InlineData(null)]
     public void RealPlayersAreNotFlaggedAsPlaceholders(string? name)
         => PlayerNameNormalizer.IsPlaceholder(name).Should().BeFalse();
+
+    // ── Diacritics ────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("Eddy Piñeiro", "Eddy Pineiro")]
+    [InlineData("José Ramírez", "Jose Ramirez")]
+    [InlineData("Renê Paredes", "Rene Paredes")]
+    public void AccentedAndAsciiSpellingsMatch(string accented, string ascii)
+    {
+        // 2026-09-07. `char.IsLetterOrDigit('ñ')` is TRUE, so accented letters
+        // passed straight through the punctuation filter and never folded.
+        // FFC publishes "Eddy Piñeiro"; Sleeper's player table carries the ASCII
+        // spelling. He was the single remaining unmatched row in the FFC ADP sync
+        // after the kicker-token fix — one kicker invisible on the draft board
+        // for want of a tilde.
+        PlayerNameNormalizer.Normalize(accented)
+            .Should().Be(PlayerNameNormalizer.Normalize(ascii));
+    }
+
+    [Fact]
+    public void DiacriticFoldingDoesNotMergeDifferentPlayers()
+    {
+        // Folding accents must not make distinct surnames collide.
+        PlayerNameNormalizer.Normalize("Eddy Piñeiro")
+            .Should().NotBe(PlayerNameNormalizer.Normalize("Eddy Pinero"));
+    }
+
+    [Fact]
+    public void FoldingSurvivesTheSuffixRules()
+    {
+        // Accent folding runs before suffix stripping, so both still apply.
+        PlayerNameNormalizer.Normalize("José Ramírez Jr.")
+            .Should().Be("jose ramirez");
+    }
 }

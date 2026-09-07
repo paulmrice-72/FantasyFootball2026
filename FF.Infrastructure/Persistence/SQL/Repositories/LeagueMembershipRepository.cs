@@ -27,7 +27,8 @@ public class LeagueMembershipRepository(FFDbContext dbContext) : ILeagueMembersh
                     m.IsActive,
                     l.LeagueType,
                     l.Avatar,
-                    l.TotalTeams))   // ← NEW: map from League entity
+                    l.TotalTeams,        // ← map from League entity
+                    l.RosterPositions))  // ← FAN-100: carry the real starting lineup to clients
             .ToListAsync(cancellationToken);
     }
 
