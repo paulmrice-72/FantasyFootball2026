@@ -94,8 +94,19 @@ public class FantasyFootballCalculatorService(
         "RB" => "RB",
         "WR" => "WR",
         "TE" => "TE",
-        "K" => "K",
-        "D" or "DST" or "DEF" => "DST",
+        // 2026-09-07: "PK" was missing and fell through to the default arm, so
+        // every kicker kept the token "PK" and matched nothing downstream —
+        // 0 of 21 in the first live run, against 192 kickers sitting available
+        // in the Players table. FFC publishes place kickers as "PK"; Sleeper and
+        // FF.Domain.Enums.Position both say "K". Normalise to "K".
+        "K" or "PK" => "K",
+        // 2026-09-07: was "DST". Sleeper — which supplies every OTHER position
+        // string in this system, including the ones on live draft picks — calls a
+        // team defense "DEF", and so does FF.Domain.Enums.Position. Emitting a
+        // third spelling here meant an ADP row and a drafted-player row for the
+        // same defense compared unequal, so a defense could never be matched,
+        // counted, or marked as drafted. One vocabulary.
+        "D" or "DST" or "DEF" => "DEF",
         _ => pos?.ToUpperInvariant() ?? "?"
     };
 

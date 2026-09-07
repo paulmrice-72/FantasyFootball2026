@@ -2,6 +2,8 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
+@using FF.Domain.ValueObjects
+@using FF.Domain.Enums
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -105,6 +107,13 @@
             <MudChip T="string" Value="@("RB")" Variant="Variant.Filled" Color="@(_selectedPosition == "RB" ? Color.Success : Color.Default)" Size="Size.Small">RB</MudChip>
             <MudChip T="string" Value="@("WR")" Variant="Variant.Filled" Color="@(_selectedPosition == "WR" ? Color.Primary : Color.Default)" Size="Size.Small">WR</MudChip>
             <MudChip T="string" Value="@("TE")" Variant="Variant.Filled" Color="@(_selectedPosition == "TE" ? Color.Secondary : Color.Default)" Size="Size.Small">TE</MudChip>
+            @* K and DEF only in redraft — the dynasty rookie pool genuinely has
+               neither, and an always-empty filter chip is its own small lie. *@
+            @if (_isRedraftMode)
+            {
+                <MudChip T="string" Value="@("K")" Variant="Variant.Filled" Color="@(_selectedPosition == "K" ? Color.Tertiary : Color.Default)" Size="Size.Small">K</MudChip>
+                <MudChip T="string" Value="@("DEF")" Variant="Variant.Filled" Color="@(_selectedPosition == "DEF" ? Color.Dark : Color.Default)" Size="Size.Small">DEF</MudChip>
+            }
         </MudChipSet>
 
         <MudTextField Value="@SearchText" ValueChanged="@((string v) => SearchText = v)"
@@ -450,32 +459,63 @@
                         @foreach (var need in _rosterNeeds)
                         {
                             <div class="d-flex align-center gap-2 mb-1">
-                                <MudText Typo="Typo.caption" Style="@($"min-width:24px; font-weight:700; color:{GetPositionHex(need.Position)};")">
-                                    @need.Position
-                                </MudText>
+                                <MudTooltip Text="@(need.Detail ?? need.Position)">
+                                    <MudText Typo="Typo.caption" Style="@($"min-width:30px; font-weight:700; cursor:help; color:{GetPositionHex(need.Position)};")">
+                                        @need.Position
+                                    </MudText>
+                                </MudTooltip>
                                 <MudProgressLinear Value="@Math.Min(need.TotalCount * 20, 100)"
                                                    Color="@GetNeedColor(need.Level)"
                                                    Style="flex:1; height:6px; border-radius:3px;" />
                                 <MudText Typo="Typo.caption"
-                                         Style="@($"min-width:44px; font-weight:700; font-size:0.65rem; text-align:right; color:{GetNeedHex(need.Level)};")">
+                                         Style="@($"min-width:56px; font-weight:700; font-size:0.65rem; text-align:right; color:{GetNeedHex(need.Level)};")">
                                     @need.Level
                                 </MudText>
                             </div>
                         }
 
-                        @* Starting slots. Editable because the league's real
-                           roster configuration is not exposed to this layer yet
-                           (FAN-100) — and an unstated assumption is what made
-                           this panel wrong for a 3-WR league in the first place. *@
+                        @* Starting slots — read from the league's own Sleeper
+                           roster_positions (FAN-100), still editable so a stale
+                           sync can be corrected at the table. *@
                         <MudDivider Class="my-2" />
                         <div class="d-flex align-center justify-space-between mb-1">
                             <MudText Typo="Typo.caption" Class="mud-text-secondary"
                                      Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
                                 Starting Slots
                             </MudText>
-                            <MudTooltip Text="Set these to match your league. Needs and Best Fit are measured against them.">
-                                <MudIcon Icon="@Icons.Material.Filled.Tune" Style="font-size:0.8rem; color:var(--mud-palette-text-secondary);" />
-                            </MudTooltip>
+                            <div class="d-flex align-center gap-1">
+                                @if (_slotsUserEdited)
+                                {
+                                    <MudTooltip Text="You have edited these. Click to go back to the league's own settings.">
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" Class="pa-0"
+                                                   Style="min-width:0; height:auto; font-size:0.58rem; text-transform:none; color:#F59E0B;"
+                                                   OnClick="ResetSlotsToLeague">
+                                            edited · reset
+                                        </MudButton>
+                                    </MudTooltip>
+                                }
+                                else if (_slotsFromLeague)
+                                {
+                                    <MudTooltip Text="Read from your league's Sleeper settings.">
+                                        <MudText Typo="Typo.caption"
+                                                 Style="font-size:0.58rem; color:#10B981; cursor:help;">
+                                            from league
+                                        </MudText>
+                                    </MudTooltip>
+                                }
+                                else
+                                {
+                                    <MudTooltip Text="Sleeper has not reported roster_positions for this league — re-sync it, or set these by hand.">
+                                        <MudText Typo="Typo.caption"
+                                                 Style="font-size:0.58rem; color:#F87171; cursor:help;">
+                                            not synced
+                                        </MudText>
+                                    </MudTooltip>
+                                }
+                                <MudTooltip Text="Needs and Best Fit are measured against these.">
+                                    <MudIcon Icon="@Icons.Material.Filled.Tune" Style="font-size:0.8rem; color:var(--mud-palette-text-secondary);" />
+                                </MudTooltip>
+                            </div>
                         </div>
                         <div class="d-flex align-center gap-1 flex-wrap">
                             @foreach (var slot in StarterPositions)
@@ -520,6 +560,37 @@
                             }
                         </div>
 
+                        @* Slots Sleeper reported that this board cannot model.
+                           Named rather than dropped: a starting slot we ignore
+                           makes the roster look more complete than it is. *@
+                        @if (_unsupportedSlots.Count > 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mt-1"
+                                     Style="font-size:0.62rem; color:#F59E0B;">
+                                ⚠ Not modelled: @(string.Join(", ", _unsupportedSlots)) —
+                                needs below exclude @(_unsupportedSlots.Count == 1 ? "this slot" : "these slots").
+                            </MudText>
+                        }
+
+                        @* Deadline state. The single number that decides whether a
+                           required-but-empty slot is worth anything yet. *@
+                        @if (MyRemainingPicks > 0)
+                        {
+                            var unfillable = _unfillableStarterSlots;
+                            var slack = MyRemainingPicks - unfillable;
+                            var deadlineHex = unfillable > 0 && slack < RosterNeedModel.MandatoryUrgencyHorizon
+                                ? "#F87171"
+                                : "var(--mud-palette-text-secondary)";
+                            <MudText Typo="Typo.caption" Class="mt-1"
+                                     Style="@($"font-size:0.62rem; color:{deadlineHex};")">
+                                @MyRemainingPicks pick@(MyRemainingPicks == 1 ? "" : "s") left
+                                @if (unfillable > 0)
+                                {
+                                    <text> · @unfillable starting slot@(unfillable == 1 ? "" : "s") still unfilled</text>
+                                }
+                            </MudText>
+                        }
+
                         @if (_rosterNeedsStale)
                         {
                             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1" Style="font-style:italic; font-size:0.65rem;">
@@ -561,7 +632,11 @@
                     }
                     else
                     {
-                        @foreach (var pick in _myPicksList)
+                        @* 2026-09-07: was rendering _myPicksList in insertion order,
+                           which is whatever order the session resume and the sync
+                           happened to append in — 13.05 sat between 2.05 and 3.05
+                           on Paul's board. Sort by round then slot. *@
+                        @foreach (var pick in _myPicksList.OrderBy(p => p.Round).ThenBy(p => p.Slot))
                         {
                             <div class="d-flex align-center gap-2 mb-2">
                                 <MudText Typo="Typo.caption"
@@ -618,7 +693,7 @@
                                  Style="font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--fc-cyan); font-size:0.7rem;">
                             BEST PICK (YOU)
                         </MudText>
-                        <MudTooltip Text="BPA = best score available. Best Fit = best at a position you need.">
+                        <MudTooltip Text="BPA = best value on the board, ignoring your roster. Best Fit = the same value plus roster need: a slot he would start in, a starting slot with nobody behind it, or a required slot you are running out of picks to fill. Each row says which.">
                             <MudIcon Icon="@Icons.Material.Filled.Info" Style="font-size:0.85rem; color:var(--mud-palette-text-secondary);" />
                         </MudTooltip>
                     </div>
@@ -666,16 +741,52 @@
                                 </div>
                             }
 
-                            @if (_bestFitRedraft.Count > 0)
+                            <MudDivider Class="my-2" />
+                            @* 2026-09-07: when every need term is zero this list is
+                               mathematically identical to the one above — same
+                               players, same order, same numbers. It used to print
+                               anyway, under a heading claiming roster need had been
+                               considered. Now it says so. *@
+                            @if (_unfillableNeedPositions.Count > 0)
                             {
-                                <MudDivider Class="my-2" />
+                                @* A required slot is empty and nothing on this board can
+                                   fill it. Naming the position beats a reassurance the
+                                   roster does not support. *@
+                                <MudText Typo="Typo.caption" Class="mb-1"
+                                         Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase; color:#F87171;">
+                                    Best Fit — @(string.Join(" / ", _unfillableNeedPositions)) not on this board
+                                </MudText>
+                                <MudText Typo="Typo.caption"
+                                         Style="font-size:0.68rem; color:#F87171;">
+                                    You still need @(string.Join(" and ", _unfillableNeedPositions))
+                                    and there @(_unfillableNeedPositions.Count == 1 ? "is none" : "are none")
+                                    available here. Draft @(_unfillableNeedPositions.Count == 1 ? "one" : "them")
+                                    in Sleeper directly, or check the position filter.
+                                </MudText>
+                            }
+                            else if (_bestFitIsBpa)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1"
+                                         Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
+                                    Best Fit
+                                </MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                         Style="font-size:0.68rem; font-style:italic;">
+                                    Every starting slot is filled and covered — roster need has nothing
+                                    to add here, so this would just repeat the list above. Take the best
+                                    player.
+                                </MudText>
+                            }
+                            else if (_bestFitRedraft.Count > 0)
+                            {
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1"
                                          Style="font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase;">
                                     Best Fit (Value + Roster Need)
                                 </MudText>
-                                @foreach (var rec in _bestFitRedraft)
+                                @foreach (var fit in _bestFitRedraft)
                                 {
-                                    <div class="d-flex align-center gap-2 mb-1">
+                                    var rec = fit.Player;
+                                    <div class="d-flex align-center gap-2" style="margin-bottom:2px;">
                                         <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(rec.Position)"
                                                  Variant="Variant.Filled"
                                                  Style="height:20px; font-size:0.65rem; min-width:32px; flex-shrink:0;">
@@ -688,15 +799,31 @@
                                                 @rec.PlayerName
                                             </MudButton>
                                         </div>
-                                        <MudIcon Icon="@Icons.Material.Filled.Star"
-                                                 Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
-                                        @* Picks of surplus against the pick on the clock, plus the
-                                           starter-gap weight. Positive = the market would take him
-                                           later than you can have him. *@
+                                        @if (fit.NeedBonus > 0)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Star"
+                                                     Style="color:#F59E0B; font-size:0.75rem; flex-shrink:0;" />
+                                        }
+                                        @* Draft-value surplus against the pick on the clock, plus
+                                           whatever roster need added. The reason line below says
+                                           which of the two is doing the work. *@
                                         <MudText Typo="Typo.caption"
-                                                 Style="@($"font-family:'JetBrains Mono',monospace; color:{((rec.ValueVsPick ?? 0) >= 0 ? "#10B981" : "#F87171")}; min-width:34px; text-align:right; flex-shrink:0; font-size:0.72rem;")">
-                                            @((rec.ValueVsPick ?? 0) >= 0 ? "+" : "")@((rec.ValueVsPick ?? 0).ToString("F0"))
+                                                 Style="@($"font-family:'JetBrains Mono',monospace; font-weight:700; color:{(fit.Score >= 0 ? "#10B981" : "#F87171")}; min-width:34px; text-align:right; flex-shrink:0; font-size:0.72rem;")">
+                                            @(fit.Score >= 0 ? "+" : "")@fit.Score.ToString("F0")
                                         </MudText>
+                                    </div>
+                                    <div class="d-flex align-center gap-2 mb-2" style="padding-left:40px;">
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                                                 Style="font-size:0.6rem; font-style:italic; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            @(string.IsNullOrEmpty(fit.Reason) ? "value only" : fit.Reason)
+                                        </MudText>
+                                        @if (fit.NeedBonus > 0)
+                                        {
+                                            <MudText Typo="Typo.caption"
+                                                     Style="font-family:'JetBrains Mono',monospace; font-size:0.6rem; color:#F59E0B; flex-shrink:0;">
+                                                need +@fit.NeedBonus.ToString("F0")
+                                            </MudText>
+                                        }
                                     </div>
                                 }
                             }
@@ -840,21 +967,59 @@
     private List<RosterNeedEntry> _rosterNeeds = [];
     private List<RookiePlayerDto> _bestAvailable = [];   // pure BPA by score
     private List<RookiePlayerDto> _bestFit = [];          // best available at NEED positions
-    private List<RedraftBoardPlayerDto> _bestAvailableRedraft = [];  // redraft: scored by ProjectedPoints
-    private List<RedraftBoardPlayerDto> _bestFitRedraft = [];
+    private List<RedraftBoardPlayerDto> _bestAvailableRedraft = [];  // redraft: ADP order
+    private List<BestFitEntry> _bestFitRedraft = [];
+
+    // True when every need term came out at zero for every available player —
+    // i.e. Best Fit has nothing to say that Best Player Available did not
+    // already say. Shown, not hidden. See RecomputeRedraftNeedsAndBestAvailable.
+    private bool _bestFitIsBpa = false;
+
+    // True when a position IS short of a required slot but no player at that
+    // position is on the board to fill it. Distinct from _bestFitIsBpa: one
+    // means "you have no needs", this means "you have a need I cannot fill from
+    // here". Conflating them is how the panel came to announce that every
+    // starting slot was covered while Paul had no kicker.
+    private List<string> _unfillableNeedPositions = [];
+
+    // 2026-09-07: computed once in the recompute rather than called again from
+    // the markup. The sidebar was rendering "N starting slots still unfilled"
+    // from a fresh CurrentPositionCounts() while the needs list above it came
+    // from the last recompute — two answers to the same question, on screen
+    // together, disagreeing whenever a sync landed between them.
+    private int _unfillableStarterSlots = 0;
+
+    // This league's format. Parsed once; every branch below asks a named
+    // question of it rather than comparing LeagueType strings.
+    private LeagueFormat _leagueFormat = LeagueFormat.Redraft;
     private Dictionary<string, int>? _liveRosterPositionCounts;
     private bool _rosterNeedsStale = false;
 
     // 2026-09-07: true when the redraft board has live ADP to order by.
     private bool _hasAdp = false;
 
-    // Starting-lineup slots for THIS league. Deliberately user-set rather than
-    // guessed: League.RosterPositions exists in Postgres but is not exposed to
-    // the Blazor layer (FAN-100), and the previous code silently assumed a
-    // 2-WR league — which is how a 3-WR league got told one receiver was
-    // enough. A visible, editable stopgap beats an invisible wrong default.
+    // Starting-lineup slots for THIS league.
+    //
+    // 2026-09-07 (FAN-100): these are now READ from the league's Sleeper
+    // roster_positions and remain editable. The value had been sitting in
+    // Postgres since April — League.RosterPositions, written on every import
+    // and sync — and had simply never been carried to any client, so the board
+    // asked Paul to retype his own starting lineup every draft and had no way
+    // at all to express the K and DEF his league requires.
+    //
+    // The edit boxes stay. A user override beats a stale sync, and the panel
+    // says which of the two you are looking at.
     private Dictionary<string, int> _starterSlots = new(StringComparer.OrdinalIgnoreCase)
-        { ["QB"] = 1, ["RB"] = 2, ["WR"] = 2, ["TE"] = 1 };
+        { ["QB"] = 1, ["RB"] = 2, ["WR"] = 2, ["TE"] = 1, ["K"] = 0, ["DEF"] = 0 };
+
+    // Where the numbers above came from, so the panel can say so.
+    private bool _slotsFromLeague = false;
+    private bool _slotsUserEdited = false;
+
+    // Starting slots Sleeper reported that this board does not model (IDP and
+    // anything new). Surfaced rather than dropped — a slot we silently ignore
+    // understates how many players the roster still owes.
+    private List<string> _unsupportedSlots = [];
 
     // 2026-09-07: flex used to be a single FLEX count against a hardcoded
     // RB/WR/TE eligibility list, which cannot express the leagues people actually
@@ -876,7 +1041,12 @@
     private Dictionary<string, int> _flexSlots = new(StringComparer.OrdinalIgnoreCase)
         { ["FLEX"] = 1, ["WRRB"] = 0, ["RECFLEX"] = 0, ["SUPERFLEX"] = 0 };
 
-    private static readonly string[] StarterPositions = ["QB", "RB", "WR", "TE"];
+    // The slot boxes in the sidebar, in display order. The split between skill
+    // positions (which take part in the flex simulation) and mandatory ones
+    // (K/DEF, which get urgency instead of gap credit) is defined once, in
+    // RosterNeedModel, and read from there rather than restated here.
+    private static readonly string[] StarterPositions =
+        [.. RosterNeedModel.SkillPositions, .. RosterNeedModel.MandatoryPositions];
 
     private bool _hideDrafted = false;
     private string? _selectedLeagueId;
@@ -912,7 +1082,16 @@
         }
 
         var league = _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId);
-        _isRedraftMode = league?.LeagueType != "Dynasty";
+        // 2026-09-07: was `LeagueType != "Dynasty"`, which silently made a
+        // KEEPER league redraft here while MyTeam.razor's opposite-polarity
+        // `!= "Redraft"` made the same league dynasty there. Both now ask the
+        // same named question of a parsed format.
+        _leagueFormat = LeagueFormatExtensions.ParseLeagueFormat(league?.LeagueType);
+        _isRedraftMode = !_leagueFormat.UsesRookieDraftPool();
+
+        // FAN-100: take the starting lineup from the league before anything is
+        // measured against it.
+        ApplyLeagueRosterConfiguration(league);
 
         await LoadCurrentMode();
 
@@ -928,7 +1107,15 @@
         if (league is null) return;
         _selectedLeagueId = league.LeagueId;
         _selectedLeagueName = league.LeagueName;
-        _isRedraftMode = league.LeagueType != "Dynasty";
+        _leagueFormat = LeagueFormatExtensions.ParseLeagueFormat(league.LeagueType);
+        _isRedraftMode = !_leagueFormat.UsesRookieDraftPool();
+
+        // A different league is a different starting lineup — take its own
+        // configuration rather than carrying the last one's over, and drop any
+        // manual override with it, since that override was about another league.
+        _slotsUserEdited = false;
+        ApplyLeagueRosterConfiguration(league, force: true);
+
         ResetSessionState();
         StopSyncTimer();
         _ = InvokeAsync(async () =>
@@ -948,7 +1135,8 @@
         _redraftPlayers = []; _filteredRedraft = []; _isPreseasonAdpFallback = false;
         _totalPicksInDraft = 0; _remainingPicks = [];
         _rosterNeeds = []; _bestAvailable = []; _bestFit = [];
-        _bestAvailableRedraft = []; _bestFitRedraft = [];
+        _bestAvailableRedraft = []; _bestFitRedraft = []; _bestFitIsBpa = false;
+        _unfillableNeedPositions = []; _unfillableStarterSlots = 0;
         _liveRosterPositionCounts = null; _rosterNeedsStale = false;
     }
 
@@ -1150,6 +1338,7 @@
     private void SetStarterSlot(string slot, int value)
     {
         _starterSlots[slot] = Math.Max(0, value);
+        _slotsUserEdited = true;
         RecomputeAfterSlotChange();
     }
 
@@ -1159,6 +1348,16 @@
     private void SetFlexSlot(string key, int value)
     {
         _flexSlots[key] = Math.Max(0, value);
+        _slotsUserEdited = true;
+        RecomputeAfterSlotChange();
+    }
+
+    /// <summary>Discards a manual override and re-reads the league's own configuration.</summary>
+    private void ResetSlotsToLeague()
+    {
+        _slotsUserEdited = false;
+        ApplyLeagueRosterConfiguration(
+            _leagues.FirstOrDefault(l => l.LeagueId == _selectedLeagueId), force: true);
         RecomputeAfterSlotChange();
     }
 
@@ -1168,107 +1367,97 @@
         else RecomputeNeedsAndBestAvailable();
     }
 
+    /// <summary>
+    /// The roster these needs are measured against.
+    ///
+    /// 2026-09-07, two fixes in one. This used to seed the dictionary from
+    /// `_liveRosterPositionCounts` and then ADD every draft pick on top:
+    ///
+    ///     combined[kv.Key] = kv.Value;                      // live roster
+    ///     combined[pick.Position] = ...existing + 1;        // ...plus picks
+    ///
+    /// 1. It summed two overlapping sets. `_liveRosterPositionCounts` comes from
+    ///    SyncSleeperPicksQueryHandler, which fetches your LIVE Sleeper roster —
+    ///    and during a draft that roster already contains everything you have
+    ///    drafted. Every player you picked was counted twice. On Paul's board
+    ///    Josh Allen, Kenneth Walker, Puka Nacua and Garrett Wilson each counted
+    ///    two, which is why a roster one-deep at tight end reported STRONG.
+    ///
+    /// 2. It counted a keeper league's carried-over roster as though it were the
+    ///    current team. See LeagueFormat.CarriedRosterCountsTowardDraftNeeds —
+    ///    that roster held a kicker and a defense Paul was not keeping, so the
+    ///    board marked both mandatory slots filled and never surfaced a kicker.
+    ///
+    /// The two sources are alternatives, never addends. Where the live roster is
+    /// authoritative it is used alone (it already includes the picks); otherwise
+    /// the draft's own picks are the roster.
+    /// </summary>
     private Dictionary<string, int> CurrentPositionCounts()
     {
-        var combined = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        if (_liveRosterPositionCounts is not null)
-            foreach (var kv in _liveRosterPositionCounts)
-                combined[kv.Key] = kv.Value;
+        if (_leagueFormat.CarriedRosterCountsTowardDraftNeeds()
+            && _liveRosterPositionCounts is { Count: > 0 })
+        {
+            // Already includes this draft's picks — Sleeper updates the roster as
+            // picks land. A pick made since the last sync is missing for at most
+            // one sync interval, which is a far smaller error than double-counting
+            // every player on the roster.
+            return new Dictionary<string, int>(
+                _liveRosterPositionCounts, StringComparer.OrdinalIgnoreCase);
+        }
 
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var pick in _myPicksList)
-            combined[pick.Position] = combined.TryGetValue(pick.Position, out var c) ? c + 1 : 1;
+            counts[pick.Position] = counts.TryGetValue(pick.Position, out var c) ? c + 1 : 1;
 
-        return combined;
+        return counts;
     }
+    // ── Roster need ──────────────────────────────────────────────────────────
+    //
+    // 2026-09-07: the math moved to FF.Domain.ValueObjects.RosterNeedModel.
+    // It lived here, in a .razor file that FF.Tests cannot reference and that
+    // has no bUnit harness — so it shipped untested, and what shipped was a
+    // single term that silently evaluated to zero for every player from about
+    // round six of every draft onward. The model now carries its own tests;
+    // this page just supplies the league and the counts.
 
     /// <summary>
-    /// How many starting slots this roster can actually fill. Dedicated slots are
-    /// filled first, then flex slots take from whatever surplus remains — most
-    /// restrictive flex first, each drawing from the eligible position with the
-    /// deepest surplus, so a W/R slot cannot be "used up" by a tight end that a
-    /// broader FLEX slot could have taken instead.
+    /// This league's starting lineup, as the domain models it. Built from the
+    /// sidebar's slot boxes — which are themselves seeded from the league's real
+    /// Sleeper roster_positions — so the user's override and the league's own
+    /// settings flow through exactly the same path.
     /// </summary>
-    private int CountFilledStarters(Dictionary<string, int> counts)
+    private RosterConfiguration CurrentRosterConfiguration()
     {
-        var leftover = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var filled = 0;
+        var flex = new List<FlexSlotDefinition>();
 
-        foreach (var pos in StarterPositions)
+        foreach (var t in FlexTypes)
         {
-            var owned = counts.TryGetValue(pos, out var c) ? c : 0;
-            var required = _starterSlots.TryGetValue(pos, out var r) ? Math.Max(0, r) : 0;
-            var used = Math.Min(owned, required);
-            filled += used;
-            leftover[pos] = owned - used;
+            var n = _flexSlots.TryGetValue(t.Key, out var v) ? Math.Max(0, v) : 0;
+            for (var i = 0; i < n; i++)
+                flex.Add(new FlexSlotDefinition([.. t.Eligible]));
         }
 
-        var slots = FlexTypes
-            .SelectMany(t => Enumerable.Repeat(
-                t, _flexSlots.TryGetValue(t.Key, out var n) ? Math.Max(0, n) : 0))
-            .OrderBy(t => t.Eligible.Length)
-            .ToList();
-
-        foreach (var slot in slots)
+        return new RosterConfiguration
         {
-            var best = slot.Eligible
-                .Where(p => leftover.TryGetValue(p, out var l) && l > 0)
-                .OrderByDescending(p => leftover[p])
-                .FirstOrDefault();
-
-            if (best is null) continue;
-
-            leftover[best]--;
-            filled++;
-        }
-
-        return filled;
+            QbSlots = GetStarterSlot("QB"),
+            RbSlots = GetStarterSlot("RB"),
+            WrSlots = GetStarterSlot("WR"),
+            TeSlots = GetStarterSlot("TE"),
+            KSlots = GetStarterSlot("K"),
+            DefSlots = GetStarterSlot("DEF"),
+            FlexSlotDefinitions = flex
+        };
     }
 
-    // Diminishing: your first receiver matters more than your fourth, even in a
-    // league that can start four. Without this a 2×W/R league weights RB and WR so
-    // heavily that a top-five tight end falling a full round never surfaces.
-    private static readonly double[] StarterGapWeights = [1.0, 0.6, 0.3];
+    private RosterNeedModel NeedModel() => new(CurrentRosterConfiguration());
 
     /// <summary>
-    /// How many more players at this position would each turn into a starter,
-    /// capped at three. Answered by simulation rather than arithmetic: add one,
-    /// ask whether the number of fillable starting slots went up, repeat.
-    ///
-    /// This is what makes flex types work without special-casing any of them. In a
-    /// 2 × W/R league a receiver keeps converting through WR1, WR2 and both flex
-    /// slots (gap 3 after the cap), while a tight end converts once and stops —
-    /// because there is no slot left he is eligible for. Superflex falls out the
-    /// same way: a second quarterback starts, so QB gap becomes 2.
+    /// My picks left in this draft. Comes from the live remaining-pick queue, so
+    /// it is zero when there is no live session — in which case the urgency term
+    /// stays silent rather than inventing a deadline.
     /// </summary>
-    private double StarterGap(string pos, Dictionary<string, int> counts)
-    {
-        var probe = new Dictionary<string, int>(counts, StringComparer.OrdinalIgnoreCase);
-        var previous = CountFilledStarters(probe);
-        var gap = 0;
+    private int MyRemainingPicks => _remainingPicks.Count(r => r.IsMyPick);
 
-        for (var i = 0; i < StarterGapWeights.Length; i++)
-        {
-            probe[pos] = (probe.TryGetValue(pos, out var c) ? c : 0) + 1;
-            var now = CountFilledStarters(probe);
-
-            if (now <= previous) break;
-
-            gap++;
-            previous = now;
-        }
-
-        return gap;
-    }
-
-    /// <summary>Weighted need value, with the diminishing curve applied.</summary>
-    private double StarterGapWeight(string pos, Dictionary<string, int> counts)
-    {
-        var gap = (int)StarterGap(pos, counts);
-        var total = 0d;
-        for (var i = 0; i < gap && i < StarterGapWeights.Length; i++)
-            total += StarterGapWeights[i];
-        return total;
-    }
 
     // 2026-09-07: this used to fire NEED only at count == 0 and STRONG at fixed
     // counts (WR >= 5 and so on), reading nothing about the league. In a 3-WR
@@ -1280,22 +1469,57 @@
     private List<RosterNeedEntry> ComputeRosterNeeds()
     {
         var counts = CurrentPositionCounts();
+        var model = NeedModel();
+        var fill = model.FillLineup(counts);
 
-        return new[] { "RB", "WR", "TE", "QB" }.Select(pos =>
+        var rows = new List<RosterNeedEntry>();
+
+        foreach (var pos in new[] { "RB", "WR", "TE", "QB" })
         {
             int total = counts.TryGetValue(pos, out var c) ? c : 0;
             int required = _starterSlots.TryGetValue(pos, out var r) ? r : 0;
-            var gap = (int)StarterGap(pos, counts);
+            var gap = model.StarterGap(pos, counts);
+            var starting = fill.UsedByPosition.TryGetValue(pos, out var u) ? u : 0;
+            var behind = total - starting;
 
-            // NEED = the next player here starts for you. OK = he doesn't start
-            // but the position isn't yet stocked. STRONG = you have two deep
-            // behind every slot he could occupy.
+            // NEED    = the next player here starts for you.
+            // THIN    = the lineup is full but nobody is behind the starters.
+            // OK      = covered.
+            // STRONG  = two deep behind every slot he could occupy.
             var level = gap >= 1 ? "NEED"
+                      : starting > 0 && behind <= 0 ? "THIN"
                       : total >= (required * 2) + 1 ? "STRONG"
                       : "OK";
 
-            return new RosterNeedEntry(pos, total, level);
-        }).ToList();
+            var detail = gap >= 1
+                ? $"{gap} would start"
+                : starting > 0
+                    ? $"{starting} starting · {behind} behind"
+                    : null;
+
+            rows.Add(new RosterNeedEntry(pos, total, level, detail));
+        }
+
+        // 2026-09-07: K and DEF were absent from this list entirely, so a league
+        // that requires both showed a fully green Roster Needs panel while two
+        // of its ten starting slots sat empty. They only appear when the league
+        // actually plays them.
+        foreach (var pos in RosterNeedModel.MandatoryPositions)
+        {
+            int required = _starterSlots.TryGetValue(pos, out var r) ? Math.Max(0, r) : 0;
+            if (required == 0) continue;
+
+            int total = counts.TryGetValue(pos, out var c) ? c : 0;
+            var short_ = required - total;
+
+            rows.Add(new RosterNeedEntry(
+                pos,
+                total,
+                short_ > 0 ? "REQUIRED" : "OK",
+                short_ > 0 ? $"{short_} unfilled" : $"{total}/{required}"));
+        }
+
+        return rows;
     }
 
     private void RecomputeNeedsAndBestAvailable()
@@ -1324,6 +1548,13 @@
                 .OrderByDescending(r => r.DynastyScore)
                 .Take(3)
                 .ToList();
+
+        // Same deadline figure the redraft path computes. Set here too, or the
+        // sidebar's "N starting slots still unfilled" silently reads 0 for every
+        // dynasty draft — the exact stale-second-source bug this field replaced.
+        _unfillableStarterSlots =
+            NeedModel().UnfillableStarterSlots(CurrentPositionCounts());
+        _unfillableNeedPositions = [];
 
         _rosterNeedsStale = false;
     }
@@ -1355,31 +1586,139 @@
             .Select(r => r with { ValueVsPick = DraftValueFor(r) })
             .ToList();
 
-        // One unfilled starting slot is worth roughly a round of draft capital in
-        // the middle of a draft — enough to break a tie between adjacent players,
-        // deliberately not enough to reach past a tier.
+        // Need is scored per POSITION, so assess each one once rather than once
+        // per available player — StarterGap runs a lineup simulation per probe
+        // and the board is a few hundred rows.
         //
-        // Worth knowing rather than treating as a magic number: because pick value
+        // Worth knowing rather than treating as magic numbers: because pick value
         // decays, need is a SMALL term early (a 10-pick fall in round one is worth
-        // ~15, dwarfing 8) and a LARGE one late (the same fall in round twelve is
-        // worth ~2). That is the behaviour you want. Early, take the best player.
-        // Late, when everyone left is worth about the same, roster construction is
-        // the only thing left to decide on.
-        const double ValuePerStarterGap = 8.0;
+        // ~15, dwarfing the 8 a starter gap adds) and a LARGE one late (the same
+        // fall in round twelve is worth ~2). That is the behaviour you want.
+        // Early, take the best player. Late, when everyone left is worth about the
+        // same, roster construction is the only thing left to decide on.
+        var model = NeedModel();
+        var picksLeft = MyRemainingPicks;
 
-        _bestFitRedraft = available
-            .Select(r => new
+        var needByPosition = available
+            .Select(r => r.Position)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                pos => pos,
+                pos => model.Assess(pos, counts, picksLeft),
+                StringComparer.OrdinalIgnoreCase);
+
+        var scored = available
+            .Select(r =>
             {
-                p = r,
-                score = DraftValueFor(r) + (ValuePerStarterGap * StarterGapWeight(r.Position, counts))
+                var dv = DraftValueFor(r);
+                var need = needByPosition[r.Position];
+                return new BestFitEntry(
+                    r, dv + need.Bonus, dv, need.Bonus, need.Reason);
             })
-            .OrderByDescending(x => x.score)
-            .ThenBy(x => x.p.Rank)
+            .ToList();
+
+        // If nothing anywhere on the board earned a need bonus, Best Fit has
+        // nothing to add over BPA. Say so instead of reprinting BPA under a
+        // heading that claims otherwise.
+        _bestFitIsBpa = scored.Count > 0 && scored.All(x => x.NeedBonus <= 0);
+
+        // 2026-09-07. _bestFitIsBpa alone was not enough, and the gap between
+        // what it means and what the panel SAID cost Paul a kicker.
+        //
+        // It is computed over AVAILABLE PLAYERS, so it can only ever answer
+        // "did anything on this board earn a need bonus". When a required slot
+        // is empty and no player at that position is on the board, every row
+        // scores zero, the flag goes true, and the panel announced "every
+        // starting slot is filled and covered" — a claim about the ROSTER,
+        // which it had no standing to make.
+        //
+        // Ask the roster directly instead, and name the positions.
+        var availablePositions = needByPosition.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _unfillableNeedPositions = StarterPositions
+            .Where(pos =>
+            {
+                var required = _starterSlots.TryGetValue(pos, out var r) ? Math.Max(0, r) : 0;
+                if (required == 0) return false;
+                var owned = counts.TryGetValue(pos, out var c) ? c : 0;
+                return owned < required && !availablePositions.Contains(pos);
+            })
+            .ToList();
+
+        _unfillableStarterSlots = model.UnfillableStarterSlots(counts);
+
+        _bestFitRedraft = scored
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.Player.Rank)
             .Take(3)
-            .Select(x => x.p with { ValueVsPick = x.score })
+            .Select(x => x with { Player = x.Player with { ValueVsPick = x.Score } })
             .ToList();
 
         _rosterNeedsStale = false;
+    }
+
+    // ── League roster configuration (FAN-100) ────────────────────────────────
+
+    /// <summary>
+    /// Loads the starting lineup from the league's Sleeper roster_positions.
+    /// A user edit wins over a later sync — the whole point of keeping the boxes
+    /// editable is that Paul can correct us, and silently overwriting his
+    /// correction on the next league change would be its own quiet bug.
+    /// </summary>
+    private void ApplyLeagueRosterConfiguration(LeagueItem? league, bool force = false)
+    {
+        if (league?.RosterPositions is not { Length: > 0 } raw)
+        {
+            _slotsFromLeague = false;
+            _unsupportedSlots = [];
+            return;
+        }
+
+        if (_slotsUserEdited && !force) return;
+
+        var tokens = raw.Split(',', StringSplitOptions.RemoveEmptyEntries
+                                  | StringSplitOptions.TrimEntries);
+
+        int CountOf(params string[] want) =>
+            tokens.Count(t => want.Contains(t, StringComparer.OrdinalIgnoreCase));
+
+        _starterSlots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["QB"] = CountOf("QB"),
+            ["RB"] = CountOf("RB"),
+            ["WR"] = CountOf("WR"),
+            ["TE"] = CountOf("TE"),
+            ["K"] = CountOf("K"),
+            // Sleeper says DEF; some feeds say DST or D. Accept all three so a
+            // spelling difference cannot cost the roster a starting slot.
+            ["DEF"] = CountOf("DEF", "DST", "D"),
+        };
+
+        _flexSlots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["FLEX"] = CountOf("FLEX"),
+            ["WRRB"] = CountOf("WRRB_FLEX"),
+            ["RECFLEX"] = CountOf("REC_FLEX"),
+            ["SUPERFLEX"] = CountOf("SUPER_FLEX"),
+        };
+
+        // Anything Sleeper listed as a starting slot that this board cannot
+        // model — IDP mostly. Named on screen rather than dropped, because a
+        // slot we ignore makes the roster look more complete than it is.
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "QB","RB","WR","TE","K","DEF","DST","D",
+            "FLEX","WRRB_FLEX","REC_FLEX","SUPER_FLEX",
+            "BN","IR","TAXI"
+        };
+
+        _unsupportedSlots = tokens
+            .Where(t => !known.Contains(t))
+            .GroupBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.Count() > 1 ? $"{g.Key}×{g.Count()}" : g.Key)
+            .ToList();
+
+        _slotsFromLeague = true;
     }
 
     private async Task LoadCurrentMode()
@@ -1715,11 +2054,17 @@
 
     private static Color GetPositionColor(string pos) => pos switch
     {
-        "QB" => Color.Warning, "WR" => Color.Primary, "TE" => Color.Secondary, "RB" => Color.Success, _ => Color.Default
+        "QB" => Color.Warning, "WR" => Color.Primary, "TE" => Color.Secondary, "RB" => Color.Success,
+        "K" => Color.Tertiary, "DEF" or "DST" => Color.Dark,
+        _ => Color.Default
     };
     private static string GetPositionHex(string pos) => pos switch
     {
-        "QB" => "#F59E0B", "WR" => "#6366F1", "TE" => "#A855F7", "RB" => "#22C55E", _ => "#9CA3AF"
+        "QB" => "#F59E0B", "WR" => "#6366F1", "TE" => "#A855F7", "RB" => "#22C55E",
+        // 2026-09-07: K and DEF fell through to grey, which was academic while
+        // neither could appear on the board at all.
+        "K" => "#14B8A6", "DEF" or "DST" => "#64748B",
+        _ => "#9CA3AF"
     };
     private static Color GetScoreColor(double score) => score switch
     {
@@ -1727,11 +2072,22 @@
     };
     private static Color GetNeedColor(string level) => level switch
     {
-        "NEED" => Color.Error, "STRONG" => Color.Success, _ => Color.Default
+        "REQUIRED" => Color.Error,
+        "NEED" => Color.Error,
+        "THIN" => Color.Warning,
+        "STRONG" => Color.Success,
+        _ => Color.Default
     };
     private static string GetNeedHex(string level) => level switch
     {
-        "NEED" => "#F87171", "STRONG" => "#22C55E", _ => "#9CA3AF"
+        // REQUIRED is louder than NEED on purpose: NEED means the next player
+        // here would start, REQUIRED means the slot is empty and the league
+        // will score it as a zero.
+        "REQUIRED" => "#EF4444",
+        "NEED" => "#F87171",
+        "THIN" => "#F59E0B",
+        "STRONG" => "#22C55E",
+        _ => "#9CA3AF"
     };
 
     private record RookiePlayerDto(
@@ -1774,8 +2130,35 @@
     private record MyPickEntry(string SleeperPlayerId, string PlayerName, string Position, string? NflTeam, int Round, int Slot);
     private record PickDetailEntry(string PlayerName, int Round, int Slot, string? PickedByTeamName);
     private record RemainingPickEntry(int Round, int Slot, string TeamName, string SleeperRosterId, bool IsMyPick);
-    private record RosterNeedEntry(string Position, int TotalCount, string Level);
-    private record LeagueItem(string LeagueId, string LeagueName, int Season, string Role, bool IsActive = false, string LeagueType = "Redraft", int TotalTeams = 12);
+    private record RosterNeedEntry(string Position, int TotalCount, string Level, string? Detail = null);
+
+    /// <summary>
+    /// A Best Fit row carrying WHY it is there. 2026-09-07: the panel used to
+    /// emit a bare score, which meant that when the need terms all came out at
+    /// zero it printed the Best Player Available list under a heading claiming
+    /// roster need had been considered, and nothing on screen could contradict
+    /// that. A row that has to state its own reason cannot do this.
+    /// </summary>
+    private record BestFitEntry(
+        RedraftBoardPlayerDto Player,
+        double Score,
+        double DraftValue,
+        double NeedBonus,
+        string Reason);
+
+    private record LeagueItem(
+        string LeagueId,
+        string LeagueName,
+        int Season,
+        string Role,
+        bool IsActive = false,
+        string LeagueType = "Redraft",
+        int TotalTeams = 12,
+        // FAN-100: Sleeper roster_positions, e.g.
+        // "QB,RB,RB,WR,WR,TE,WRRB_FLEX,WRRB_FLEX,K,DEF,BN,BN,BN".
+        // Null = Sleeper has not reported it; the sidebar then keeps whatever
+        // the user set rather than guessing.
+        string? RosterPositions = null);
     private record UserContextResponse(bool IsSleeperLinked, List<LeagueItem>? Leagues, string? ActiveLeagueId);
     private record SessionStartResponse(string SessionId);
     private record DraftSessionDto(string Id, string LeagueId, bool IsActive, string? SleeperDraftId, List<DraftPickDto> Picks);
