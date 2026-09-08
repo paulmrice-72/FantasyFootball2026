@@ -374,4 +374,139 @@ public class DfvCalculationServiceTests
         result.Should().AllSatisfy(v => v.ModelValue.Should().Be(v.TradeValue));
     }
 
+    // ── FAN-166: RawValue — the value before the positional guardrail caps ──
+
+    /// <summary>
+    /// RawValue has to reach the document, and the guardrails must only ever
+    /// lower a value. The second half is the invariant that makes
+    /// <c>RawValue - ModelValue</c> readable as "what the caps cost": if a
+    /// guardrail could ever raise a player, the difference would be a mixture of
+    /// two effects with opposite signs and the decomposition would mean nothing.
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_StampsRawValue_AndGuardrailsOnlyEverLowerIt()
+    {
+        var valuations = new List<DynastyValuationDocument>
+        {
+            MakeValuation("top", "WR", 24),
+            MakeValuation("mid", "WR", 26),
+            MakeValuation("low", "WR", 30)
+        };
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(valuations);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeCareerSim("top", "WR", 24, yearOneValue: 220),
+                MakeCareerSim("mid", "WR", 26, yearOneValue: 140),
+                MakeCareerSim("low", "WR", 30, yearOneValue: 70)
+            ]);
+
+        var sut = CreateSut();
+        var result = await sut.CalculateAllAsync(2026);
+
+        result.First(r => r.SleeperPlayerId == "top").RawValue.Should().BeGreaterThan(0);
+        result.Should().AllSatisfy(v => v.RawValue.Should().BeInRange(0, 100));
+        result.Should().AllSatisfy(v => v.ModelValue.Should().BeLessThanOrEqualTo(v.RawValue,
+            "the positional guardrails are ceilings — a value that rose through one " +
+            "would make RawValue - ModelValue unreadable as the caps' contribution"));
+    }
+
+    /// <summary>
+    /// The defect FAN-166 was raised for, pinned as a test so a fix has a target
+    /// and a regression has a tripwire.
+    ///
+    /// <para>
+    /// Measured in dev on 2026-09-08: sorted by raw DFV, A.J. Brown is 428 and
+    /// Jeremy Ruckert is 195; sorted by ModelValue, Ruckert is ahead.
+    /// <c>NormalizeAcrossAllPositions</c> is a single global sort and cannot
+    /// invert an ordering, so the inversion is entirely
+    /// <c>ApplyPositionalGuardrails</c> — the only stage that partitions by
+    /// position. The cap tables were fitted against the blended distribution, in
+    /// which the FantasyPros blend had already corrected each player's positional
+    /// rank; applied to the model's own uncorrected order they bind somewhere
+    /// else entirely.
+    /// </para>
+    ///
+    /// <para>
+    /// The fixture reproduces the shape rather than the players: a receiver who
+    /// is strong on the whole board but only ~50th at his own position (cap 35),
+    /// against a tight end who is far weaker on the board but ~10th at his
+    /// position (cap 70). A deep filler pool puts both high enough on the P2
+    /// curve that the caps actually bind, which is what production looks like at
+    /// N≈600 and what a small fixture would miss.
+    /// </para>
+    ///
+    /// <para>
+    /// This test asserts the current, wrong behaviour on ModelValue deliberately.
+    /// When the cross-position basis is fixed — replacement level per FAN-153, or
+    /// the deep cap tiers removed — this test should FAIL, and the correct
+    /// response is to invert the ModelValue assertion, not to delete it.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_GuardrailCaps_InvertTheModelsCrossPositionOrdering()
+    {
+        // 60 receivers, descending. Our subject is the 50th — comfortably inside
+        // the top tenth of the whole board, and just past the 45/46 cliff in
+        // GetWrGuardrailCap where the ceiling drops from 50 to 35.
+        var wrs = Enumerable.Range(0, 60)
+            .Select(i => (Id: $"wr{i + 1}", Value: 300.0 - i * 4)).ToList();
+
+        // 12 tight ends, all far weaker in raw terms than any of those receivers.
+        // Our subject is the 10th, which sits in GetTeGuardrailCap's rank <=12
+        // band — a ceiling of 70.
+        var tes = Enumerable.Range(0, 12)
+            .Select(i => (Id: $"te{i + 1}", Value: 60.0 - i)).ToList();
+
+        // Filler below both groups so the pool is production-sized. Without it
+        // the P2 curve collapses and neither cap binds, which would make the
+        // test pass for the wrong reason.
+        var filler = Enumerable.Range(0, 500)
+            .Select(i => (Id: $"rb{i + 1}", Value: 10.0 - i * 0.01)).ToList();
+
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(wrs.Select(w => MakeValuation(w.Id, "WR", 26)).ToList());
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("TE", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(tes.Select(t => MakeValuation(t.Id, "TE", 26)).ToList());
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("RB", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(filler.Select(f => MakeValuation(f.Id, "RB", 26)).ToList());
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("QB", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                .. wrs.Select(w => MakeCareerSim(w.Id, "WR", 26, w.Value)),
+                .. tes.Select(t => MakeCareerSim(t.Id, "TE", 26, t.Value)),
+                .. filler.Select(f => MakeCareerSim(f.Id, "RB", 26, f.Value))
+            ]);
+
+        var sut = CreateSut();
+        var result = await sut.CalculateAllAsync(2026);
+
+        var wr = result.First(r => r.SleeperPlayerId == "wr50");
+        var te = result.First(r => r.SleeperPlayerId == "te10");
+
+        // What the model produced. The receiver's five-year discounted value is
+        // roughly double the tight end's, and the normalization preserved it.
+        wr.RawValue.Should().BeGreaterThan(te.RawValue,
+            "a global sort cannot invert an ordering — if this fails, the defect " +
+            "is upstream of the guardrails and this test is pointed at the wrong stage");
+
+        // What gets stamped. Current behaviour, and the thing FAN-166 is about:
+        // the cap tables reverse the model across positions.
+        te.ModelValue.Should().BeGreaterThan(wr.ModelValue,
+            "the guardrail cap tables currently invert the model's cross-position " +
+            "ordering — when this is fixed, invert this assertion rather than removing it");
+    }
 }

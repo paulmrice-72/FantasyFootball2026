@@ -24,6 +24,22 @@ public interface IDynastyValuationRepository
     /// </para>
     /// </summary>
     Task<List<DynastyValuationDocument>> GetTopByModelValueAsync(int count, string? position = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// FAN-166. Top N by <see cref="DynastyValuationDocument.RawValue"/> — the
+    /// same pipeline one step before <see cref="GetTopByModelValueAsync"/>,
+    /// with the positional guardrail caps not yet applied.
+    ///
+    /// <para>
+    /// The selection rule is the same as ModelValue's and exists for the same
+    /// reason: selecting on one basis and ranking on another biases the sample
+    /// by exactly the mechanism under measurement. Here the population of
+    /// interest is the players the caps moved, and those are precisely the ones
+    /// a ModelValue-ordered top 250 would drop.
+    /// </para>
+    /// </summary>
+    Task<List<DynastyValuationDocument>> GetTopByRawValueAsync(int count, string? position = null, CancellationToken ct = default);
+
     Task UpsertAsync(DynastyValuationDocument document, CancellationToken ct = default);
     Task UpsertBatchAsync(IEnumerable<DynastyValuationDocument> documents, CancellationToken ct = default);
 

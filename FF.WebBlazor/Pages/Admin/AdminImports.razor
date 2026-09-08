@@ -438,7 +438,21 @@
             <MudSelect T="string" @bind-Value="_calibBasis" Label="Value basis"
                        Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
                 <MudSelectItem T="string" Value="@("Model")">Model Value (FP blend removed)</MudSelectItem>
+                @* FAN-166. The gap between Raw and Model from two runs on the same
+                   DFV output is what the positional guardrail caps contribute to ρ. *@
+                <MudSelectItem T="string" Value="@("Raw")">Raw Value (pre-guardrail)</MudSelectItem>
                 <MudSelectItem T="string" Value="@("Blended")">Trade Value (blended — self-referential)</MudSelectItem>
+            </MudSelect>
+            @* FAN-166. A positional run drops the cross-position ladder out of the
+               comparison, leaving only within-position ordering. Whole board is the
+               default and the historical behaviour. *@
+            <MudSelect T="string" @bind-Value="_calibPosition" Label="Position"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
+                <MudSelectItem T="string" Value="@("")">Whole board</MudSelectItem>
+                <MudSelectItem T="string" Value="@("QB")">QB only</MudSelectItem>
+                <MudSelectItem T="string" Value="@("RB")">RB only</MudSelectItem>
+                <MudSelectItem T="string" Value="@("WR")">WR only</MudSelectItem>
+                <MudSelectItem T="string" Value="@("TE")">TE only</MudSelectItem>
             </MudSelect>
             <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.BarChart"
@@ -462,6 +476,12 @@
                 pipeline with the FantasyPros-derived steps removed. Expect it to score worse; that is
                 the measurement getting honest, not the model getting worse.
             </MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2" Style="display:block;">
+                A whole-board ρ answers two questions at once — is the cross-position ladder right,
+                and is the ordering inside each position right. On 2026-09-08 those had opposite
+                signs. Restricting to one position removes the ladder from the comparison, so run the
+                same basis with and without a position and the difference is the ladder. See FAN-166.
+            </MudText>
         </MudItem>
     </MudGrid>
     @if (_calibResult is not null)
@@ -482,10 +502,32 @@
                 </MudText>
             </MudAlert>
         }
+        else if (string.Equals(_calibResult.ValueBasis, "Raw", StringComparison.OrdinalIgnoreCase))
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                <MudText Typo="Typo.body2" Style="font-weight:600;">
+                    Measured on Raw Value — before the positional guardrail caps.
+                </MudText>
+                <MudText Typo="Typo.caption" Style="display:block; margin-top:4px;">
+                    Compare this against a Model Value run on the same DFV output: the difference is
+                    what the QB/RB/WR/TE cap tables contribute. See FAN-166.
+                </MudText>
+            </MudAlert>
+        }
         else
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3" Style="display:block;">
-                Measured on Model Value — FantasyPros blend removed.
+                Measured on Model Value — FantasyPros blend removed, our guardrail caps applied.
+            </MudText>
+        }
+        @* FAN-166. Scope belongs next to the number for the same reason the basis
+           does: a positional ρ and a whole-board ρ are not comparable, and nothing
+           in the three tiles below says which one is on screen. *@
+        @if (!string.IsNullOrWhiteSpace(_calibResult.Position))
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display:block;">
+                <b>@_calibResult.Position only</b> — within-position ordering. The cross-position
+                ladder is not part of this number; compare against a whole-board run on the same basis.
             </MudText>
         }
         <MudGrid Spacing="2" Class="mt-3">
@@ -1152,14 +1194,19 @@
     // FAN-159. "Model" ranks on ModelValue (the FP blend removed); "Blended"
     // ranks on TradeValue and reproduces the pre-2026-09-07 figures.
     private string _calibBasis = "Model";
+    // FAN-166. Empty string = whole board; the API treats null/empty the same way.
+    private string _calibPosition = "";
 
     // The snapshot column holds whichever value the run ranked on, so the header
     // has to say which. Read off the RESULT, not the selector — the selector can
     // be changed after a run without re-running, and a table labelled MV showing
     // TV numbers is worse than no label at all.
-    private string OurValueHeader =>
-        string.Equals(_calibResult?.ValueBasis, "Blended", StringComparison.OrdinalIgnoreCase)
-            ? "Our TV" : "Our MV";
+    private string OurValueHeader => _calibResult?.ValueBasis switch
+    {
+        var b when string.Equals(b, "Blended", StringComparison.OrdinalIgnoreCase) => "Our TV",
+        var b when string.Equals(b, "Raw", StringComparison.OrdinalIgnoreCase) => "Our RV",
+        _ => "Our MV"
+    };
 
     private string RhoColor   => _calibResult?.SpearmanRho   >= 0.85 ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
     private string DeltaColor => _calibResult?.AvgAbsDelta   <= 8.0  ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
@@ -1176,14 +1223,27 @@
         {
             var http = HttpFactory.CreateClient("AuthAPI");
             var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-calibration",
-                new { Season = _season, ScoringFormat = _scoringFormat, ValueBasis = _calibBasis });
+                new
+                {
+                    Season = _season,
+                    ScoringFormat = _scoringFormat,
+                    ValueBasis = _calibBasis,
+                    Position = string.IsNullOrWhiteSpace(_calibPosition) ? null : _calibPosition
+                });
             if (resp.IsSuccessStatusCode)
             {
                 _calibResult = await resp.Content.ReadFromJsonAsync<CalibrationResultDto>();
                 _calibSeverity = Severity.Success;
-                var basisLabel = string.Equals(_calibResult?.ValueBasis, "Blended", StringComparison.OrdinalIgnoreCase)
-                    ? "blended Trade Value" : "Model Value";
-                _calibStatus = $"✓ Calibration complete on {basisLabel} — {_calibResult?.PlayerCount} players compared.";
+                var basisLabel = _calibResult?.ValueBasis switch
+                {
+                    var b when string.Equals(b, "Blended", StringComparison.OrdinalIgnoreCase) => "blended Trade Value",
+                    var b when string.Equals(b, "Raw", StringComparison.OrdinalIgnoreCase) => "pre-guardrail Raw Value",
+                    _ => "Model Value"
+                };
+                var scopeLabel = string.IsNullOrWhiteSpace(_calibResult?.Position)
+                    ? "whole board"
+                    : $"{_calibResult!.Position} only";
+                _calibStatus = $"✓ Calibration complete on {basisLabel}, {scopeLabel} — {_calibResult?.PlayerCount} players compared.";
             }
             else
             {
@@ -1238,7 +1298,7 @@
     // no false claim either way.
     private record CalibrationResultDto(double SpearmanRho, double AvgAbsDelta, int Top10Overlap, int PlayerCount,
         List<CalibrationPlayerSnapshotDto> Top20Snapshot, int UnmatchedCount, List<string>? TopUnmatched,
-        List<CalibrationPlayerSnapshotDto>? Worst20Snapshot, string? ValueBasis = null);
+        List<CalibrationPlayerSnapshotDto>? Worst20Snapshot, string? ValueBasis = null, string? Position = null);
     private record CalibrationPlayerSnapshotDto(int OurRank, string PlayerName, string Position, double OurTradeValue,
         int FpRank, double FpSubsetRank, double Delta);
     private record ImportResultDto(int Imported, int Unmatched, int Season);

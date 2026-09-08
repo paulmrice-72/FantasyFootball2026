@@ -12,9 +12,11 @@ public class CalibrationResultDocument
     public string ScoringFormat { get; set; } = "Superflex";
 
     /// <summary>
-    /// FAN-159. Which of our two values this run ranked players by: "Model"
-    /// (ModelValue — the pipeline with every FantasyPros-derived step removed)
-    /// or "Blended" (TradeValue — what the site serves, 65% FantasyPros rank).
+    /// FAN-159, extended by FAN-166. Which of our three values this run ranked
+    /// players by: "Raw" (RawValue — post-normalization, before the positional
+    /// guardrail caps), "Model" (ModelValue — the pipeline with every
+    /// FantasyPros-derived step removed but the caps applied) or "Blended"
+    /// (TradeValue — what the site serves, 65% FantasyPros rank).
     ///
     /// <para>
     /// This is not a display detail; it decides whether the numbers beside it
@@ -33,6 +35,28 @@ public class CalibrationResultDocument
     /// </para>
     /// </summary>
     public string ValueBasis { get; set; } = "Blended";
+
+    /// <summary>
+    /// FAN-166. The single position this run was restricted to ("QB", "RB",
+    /// "WR", "TE"), or null for the whole board.
+    ///
+    /// <para>
+    /// A whole-board ρ is two different questions added together: does the
+    /// pipeline get the cross-position ladder right, and does it order players
+    /// correctly inside a position. On 2026-09-08 those two had opposite signs —
+    /// the Raw basis scored 0.8047 against Model's 0.5875 while simultaneously
+    /// putting Blake Bortles in the top 15% of the board — so the combined
+    /// number could not say which half was moving.
+    /// </para>
+    ///
+    /// <para>
+    /// Restricting to one position removes the cross-position ladder from the
+    /// comparison entirely: both series are dense-ranked within the matched
+    /// subset, so what is left is purely within-position ordering. Run the same
+    /// basis with and without a position and the difference is the ladder.
+    /// </para>
+    /// </summary>
+    public string? Position { get; set; }
 
     /// <summary>Spearman rank-order correlation vs FantasyPros top-200. Target ≥ 0.85.</summary>
     public double SpearmanRho { get; set; }

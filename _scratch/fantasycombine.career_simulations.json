@@ -1,0 +1,841 @@
+[{
+  "CareerValueScore": 601,
+  "CurrentAge": 26,
+  "PlayerName": "Trey McBride",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 11.27,
+  "MeanAging": 0.971,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.994375,
+    0.9775,
+    0.949375
+  ],
+  "SeasonV": [
+    153.8,
+    165.9,
+    159.4,
+    153.2,
+    142.8
+  ]
+},
+{
+  "CareerValueScore": 505.7,
+  "CurrentAge": 25,
+  "PlayerName": "Tucker Kraft",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 9.82,
+  "MeanAging": 0.95,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9901562500000001,
+    0.960625
+  ],
+  "SeasonV": [
+    124.4,
+    131,
+    140.2,
+    134.8,
+    127.3
+  ]
+},
+{
+  "CareerValueScore": 481.9,
+  "CurrentAge": 23,
+  "PlayerName": "Brock Bowers",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 10.12,
+  "MeanAging": 0.867,
+  "Ages": [
+    23,
+    24,
+    25,
+    26,
+    27
+  ],
+  "Aging": [
+    0.7333333333333333,
+    0.8,
+    0.8666666666666667,
+    0.9333333333333332,
+    1
+  ],
+  "SeasonV": [
+    108.5,
+    117.1,
+    127.6,
+    139.2,
+    146.1
+  ]
+},
+{
+  "CareerValueScore": 476.5,
+  "CurrentAge": 25,
+  "PlayerName": "Sam LaPorta",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 9.03,
+  "MeanAging": 0.95,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9901562500000001,
+    0.960625
+  ],
+  "SeasonV": [
+    114.5,
+    123.6,
+    133.2,
+    128.4,
+    121.4
+  ]
+},
+{
+  "CareerValueScore": 387,
+  "CurrentAge": 32,
+  "PlayerName": "George Kittle",
+  "YearsOfPrimeRemaining": 3,
+  "BaseFppg": 10.85,
+  "MeanAging": 0.732,
+  "Ages": [
+    32,
+    33,
+    34,
+    35,
+    36
+  ],
+  "Aging": [
+    0.859375,
+    0.7974999999999999,
+    0.724375,
+    0.64,
+    0.64
+  ],
+  "SeasonV": [
+    120.5,
+    110.6,
+    95.7,
+    81.5,
+    77.6
+  ]
+},
+{
+  "CareerValueScore": 286.1,
+  "CurrentAge": 31,
+  "PlayerName": "Dallas Goedert",
+  "YearsOfPrimeRemaining": 3,
+  "BaseFppg": 8.89,
+  "MeanAging": 0.626,
+  "Ages": [
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "Aging": [
+    0.8425,
+    0.75390625,
+    0.6456249999999999,
+    0.5176562499999999,
+    0.37
+  ],
+  "SeasonV": [
+    99.4,
+    85.9,
+    72.1,
+    54.7,
+    37.6
+  ]
+},
+{
+  "CareerValueScore": 280.9,
+  "CurrentAge": 30,
+  "PlayerName": "David Njoku",
+  "YearsOfPrimeRemaining": 2,
+  "BaseFppg": 8.46,
+  "MeanAging": 0.62,
+  "Ages": [
+    30,
+    31,
+    32,
+    33,
+    34
+  ],
+  "Aging": [
+    0.8734375,
+    0.775,
+    0.6484375,
+    0.4937499999999999,
+    0.3109375
+  ],
+  "SeasonV": [
+    100.5,
+    87.6,
+    69.2,
+    51.4,
+    31.6
+  ]
+},
+{
+  "CareerValueScore": 182,
+  "CurrentAge": 25,
+  "PlayerName": "Jared Wiley",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.48,
+  "MeanAging": 0.946,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375
+  ],
+  "SeasonV": [
+    44.2,
+    47.9,
+    50.3,
+    48.6,
+    45.7
+  ]
+},
+{
+  "CareerValueScore": 181.8,
+  "CurrentAge": 26,
+  "PlayerName": "Brevin Jordan",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.47,
+  "MeanAging": 0.947,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375,
+    0.8734375
+  ],
+  "SeasonV": [
+    47.4,
+    50.8,
+    49.4,
+    45.2,
+    40.5
+  ]
+},
+{
+  "CareerValueScore": 181.7,
+  "CurrentAge": 26,
+  "PlayerName": "Cade Stover",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.5,
+  "MeanAging": 0.947,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375,
+    0.8734375
+  ],
+  "SeasonV": [
+    47.8,
+    51,
+    48.3,
+    45.5,
+    40.5
+  ]
+},
+{
+  "CareerValueScore": 181.4,
+  "CurrentAge": 25,
+  "PlayerName": "Brenton Strange",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.5,
+  "MeanAging": 0.946,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375
+  ],
+  "SeasonV": [
+    44.2,
+    47.5,
+    50.8,
+    48.5,
+    44.8
+  ]
+},
+{
+  "CareerValueScore": 181.3,
+  "CurrentAge": 25,
+  "PlayerName": "Elijah Higgins",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.5,
+  "MeanAging": 0.946,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375
+  ],
+  "SeasonV": [
+    44.3,
+    47.4,
+    50.1,
+    48.9,
+    45.1
+  ]
+},
+{
+  "CareerValueScore": 181.2,
+  "CurrentAge": 26,
+  "PlayerName": "Josh Whyle",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.5,
+  "MeanAging": 0.947,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375,
+    0.8734375
+  ],
+  "SeasonV": [
+    47.9,
+    50.3,
+    48.5,
+    45.1,
+    40.7
+  ]
+},
+{
+  "CareerValueScore": 181.1,
+  "CurrentAge": 26,
+  "PlayerName": "Tommy Tremble",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.5,
+  "MeanAging": 0.947,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375,
+    0.8734375
+  ],
+  "SeasonV": [
+    47.9,
+    50.8,
+    48.1,
+    44.8,
+    40.5
+  ]
+},
+{
+  "CareerValueScore": 181,
+  "CurrentAge": 26,
+  "PlayerName": "Julian Hill",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.48,
+  "MeanAging": 0.947,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375,
+    0.8734375
+  ],
+  "SeasonV": [
+    47.5,
+    50.5,
+    48.4,
+    45.4,
+    40.4
+  ]
+},
+{
+  "CareerValueScore": 181,
+  "CurrentAge": 25,
+  "PlayerName": "Luke Musgrave",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.46,
+  "MeanAging": 0.946,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375
+  ],
+  "SeasonV": [
+    43.9,
+    47.2,
+    50,
+    48.7,
+    45.8
+  ]
+},
+{
+  "CareerValueScore": 180.6,
+  "CurrentAge": 26,
+  "PlayerName": "Dalton Kincaid",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.43,
+  "MeanAging": 0.947,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375,
+    0.8734375
+  ],
+  "SeasonV": [
+    46.8,
+    50.8,
+    48.4,
+    45.3,
+    40.7
+  ]
+},
+{
+  "CareerValueScore": 180.6,
+  "CurrentAge": 25,
+  "PlayerName": "Davis Allen",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.46,
+  "MeanAging": 0.946,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375
+  ],
+  "SeasonV": [
+    43.8,
+    47.1,
+    50.4,
+    48.7,
+    44.9
+  ]
+},
+{
+  "CareerValueScore": 180.6,
+  "CurrentAge": 25,
+  "PlayerName": "Dallen Bentley",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.47,
+  "MeanAging": 0.946,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375
+  ],
+  "SeasonV": [
+    44.1,
+    47.1,
+    50,
+    48.4,
+    45.3
+  ]
+},
+{
+  "CareerValueScore": 180.4,
+  "CurrentAge": 25,
+  "PlayerName": "Kyle Pitts",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.43,
+  "MeanAging": 0.946,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375
+  ],
+  "SeasonV": [
+    43.4,
+    47.1,
+    51,
+    48.6,
+    44.7
+  ]
+},
+{
+  "CareerValueScore": 180.3,
+  "CurrentAge": 25,
+  "PlayerName": "Daniel Bellinger",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.5,
+  "MeanAging": 0.946,
+  "Ages": [
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "Aging": [
+    0.8666666666666667,
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375
+  ],
+  "SeasonV": [
+    44.2,
+    47.1,
+    49.8,
+    48.4,
+    44.8
+  ]
+},
+{
+  "CareerValueScore": 180.3,
+  "CurrentAge": 26,
+  "PlayerName": "Isaiah Likely",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.43,
+  "MeanAging": 0.947,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375,
+    0.8734375
+  ],
+  "SeasonV": [
+    46.8,
+    51.1,
+    48.3,
+    45.2,
+    39.9
+  ]
+},
+{
+  "CareerValueScore": 180.2,
+  "CurrentAge": 26,
+  "PlayerName": "Jeremy Ruckert",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 3.38,
+  "MeanAging": 0.947,
+  "Ages": [
+    26,
+    27,
+    28,
+    29,
+    30
+  ],
+  "Aging": [
+    0.9333333333333332,
+    1,
+    0.9859375,
+    0.94375,
+    0.8734375
+  ],
+  "SeasonV": [
+    46.1,
+    51,
+    48.5,
+    45.4,
+    40.7
+  ]
+},
+{
+  "CareerValueScore": 137.2,
+  "CurrentAge": 29,
+  "PlayerName": "T.J. Hockenson",
+  "YearsOfPrimeRemaining": 3,
+  "BaseFppg": 3.39,
+  "MeanAging": 0.747,
+  "Ages": [
+    29,
+    30,
+    31,
+    32,
+    33
+  ],
+  "Aging": [
+    0.94375,
+    0.8734375,
+    0.775,
+    0.6484375,
+    0.4937499999999999
+  ],
+  "SeasonV": [
+    44.6,
+    40.6,
+    35.5,
+    28.3,
+    20.8
+  ]
+},
+{
+  "CareerValueScore": 131.2,
+  "CurrentAge": 36,
+  "PlayerName": "Travis Kelce",
+  "YearsOfPrimeRemaining": 5,
+  "BaseFppg": 8.51,
+  "MeanAging": 0.37,
+  "Ages": [
+    36,
+    37,
+    38,
+    39,
+    40
+  ],
+  "Aging": [
+    0.37,
+    0.37,
+    0.37,
+    0.37,
+    0.37
+  ],
+  "SeasonV": [
+    36.4,
+    34.7,
+    34.3,
+    32,
+    30.8
+  ]
+},
+{
+  "CareerValueScore": 113.4,
+  "CurrentAge": 30,
+  "PlayerName": "Mark Andrews",
+  "YearsOfPrimeRemaining": 3,
+  "BaseFppg": 3.41,
+  "MeanAging": 0.62,
+  "Ages": [
+    30,
+    31,
+    32,
+    33,
+    34
+  ],
+  "Aging": [
+    0.8734375,
+    0.775,
+    0.6484375,
+    0.4937499999999999,
+    0.3109375
+  ],
+  "SeasonV": [
+    40.6,
+    34.6,
+    28.6,
+    20.9,
+    12.8
+  ]
+},
+{
+  "CareerValueScore": 113.2,
+  "CurrentAge": 30,
+  "PlayerName": "Dalton Schultz",
+  "YearsOfPrimeRemaining": 2,
+  "BaseFppg": 3.41,
+  "MeanAging": 0.62,
+  "Ages": [
+    30,
+    31,
+    32,
+    33,
+    34
+  ],
+  "Aging": [
+    0.8734375,
+    0.775,
+    0.6484375,
+    0.4937499999999999,
+    0.3109375
+  ],
+  "SeasonV": [
+    40.5,
+    35.3,
+    28.1,
+    20.6,
+    12.7
+  ]
+},
+{
+  "CareerValueScore": 86,
+  "CurrentAge": 31,
+  "PlayerName": "Evan Engram",
+  "YearsOfPrimeRemaining": 2,
+  "BaseFppg": 3.43,
+  "MeanAging": 0.466,
+  "Ages": [
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "Aging": [
+    0.775,
+    0.6484375,
+    0.4937499999999999,
+    0.3109375,
+    0.1
+  ],
+  "SeasonV": [
+    35.3,
+    28.2,
+    20.6,
+    12.7,
+    3.9
+  ]
+},
+{
+  "CareerValueScore": 85.8,
+  "CurrentAge": 31,
+  "PlayerName": "Hunter Henry",
+  "YearsOfPrimeRemaining": 2,
+  "BaseFppg": 3.41,
+  "MeanAging": 0.466,
+  "Ages": [
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "Aging": [
+    0.775,
+    0.6484375,
+    0.4937499999999999,
+    0.3109375,
+    0.1
+  ],
+  "SeasonV": [
+    35,
+    28.2,
+    20.8,
+    12.6,
+    4
+  ]
+}]
