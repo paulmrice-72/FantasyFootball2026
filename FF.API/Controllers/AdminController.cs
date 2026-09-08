@@ -8,7 +8,10 @@ using FF.Application.Features.Simulations.Commands.SeedSeasonAverageSims;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
+using FF.Application.Services;
+using FF.Domain.Documents;
 using FF.Domain.Enums;
+using FF.Domain.ValueObjects;
 using FF.Infrastructure.Identity;
 using FF.Infrastructure.Jobs;
 using FF.Infrastructure.Services;
@@ -187,6 +190,149 @@ public class AdminController(
             Message = $"Dynasty pipeline queued — job {jobId}. Monitor at /hangfire.",
             JobId = jobId
         });
+    }
+
+    /// <summary>
+    /// Builds the positional value curves behind league-aware replacement level —
+    /// FAN-153 phase 1.
+    ///
+    /// <para>
+    /// Reads the career simulations already in Mongo and writes one curve per
+    /// projected season per position. <b>Nothing reads these yet</b> — no served
+    /// value changes when this runs. It exists so the curves can be inspected and
+    /// argued with before anything depends on them.
+    /// </para>
+    ///
+    /// <para>
+    /// The number to look at in the response is <c>replacementLevelPreview</c>: the
+    /// same curves resolved against a standard league and a superflex league. If
+    /// the superflex QB level is not markedly lower than the standard one, the
+    /// curves are not carrying the scarcity signal and phase 2 has nothing to stand
+    /// on.
+    /// </para>
+    /// </summary>
+    [HttpPost("jobs/build-value-curves")]
+    public async Task<IActionResult> BuildValueCurves(
+        [FromBody] BuildValueCurvesRequest request,
+        [FromServices] ICareerSimulationRepository careerSimRepository,
+        [FromServices] IPositionalValueCurveRepository curveRepository,
+        CancellationToken ct)
+    {
+        var scoringFormat = ScoringFormat.Superflex;
+        if (!string.IsNullOrWhiteSpace(request.ScoringFormat)
+            && Enum.TryParse<ScoringFormat>(request.ScoringFormat, ignoreCase: true, out var parsed))
+        {
+            scoringFormat = parsed;
+        }
+
+        var depth = request.Depth ?? PositionalValueCurveBuilder.DefaultDepth;
+        var teamCount = request.TeamCount ?? 12;
+
+        logger.LogInformation(
+            "Admin triggered value-curve build — season {Season}, format {Format}, depth {Depth}",
+            request.Season, scoringFormat, depth);
+
+        var sims = await careerSimRepository.GetAllBySeasonAsync(request.Season, ct);
+        if (sims.Count == 0)
+        {
+            return BadRequest(new
+            {
+                Message = $"No career simulations found for season {request.Season}. "
+                        + "Run jobs/run-career-sims first — a curve built from an empty pool "
+                        + "would be a fabricated replacement level of zero."
+            });
+        }
+
+        var curves = PositionalValueCurveBuilder.Build(sims, depth);
+        var computedAt = DateTime.UtcNow;
+        var formatName = scoringFormat.ToString();
+
+        var documents = curves.Select(c => new PositionalValueCurveDocument
+        {
+            Id = $"{request.Season}:{formatName}:{c.Year}:{c.Position}",
+            Season = request.Season,
+            ScoringFormat = formatName,
+            Year = c.Year,
+            Position = c.Position,
+            DescendingSeasonValues = [.. c.DescendingSeasonValues],
+            PoolSize = c.PoolSize,
+            Depth = c.DescendingSeasonValues.Count,
+            ComputedAt = computedAt
+        }).ToList();
+
+        await curveRepository.UpsertBatchAsync(documents, ct);
+
+        foreach (var c in curves)
+        {
+            logger.LogInformation(
+                "FAN-153 curve: {Year} {Position} — pool {PoolSize}, stored {Stored}, "
+                + "top {Top:F1}, at 12 {At12:F1}, at 24 {At24:F1}, at 36 {At36:F1}",
+                c.Year, c.Position, c.PoolSize, c.DescendingSeasonValues.Count,
+                ValueAt(c.DescendingSeasonValues, 0),
+                ValueAt(c.DescendingSeasonValues, 12),
+                ValueAt(c.DescendingSeasonValues, 24),
+                ValueAt(c.DescendingSeasonValues, 36));
+        }
+
+        // The whole point of phase 1, in one comparison: the same curves read by
+        // two different leagues. A SUPER_FLEX slot makes quarterbacks eligible for
+        // a flex, which pushes the QB cutoff roughly a full round deeper and drops
+        // the QB baseline — which is the entire reason elite QBs cost more there.
+        var firstYear = curves.Count > 0 ? curves.Min(c => c.Year) : request.Season;
+        var preview = new
+        {
+            Year = firstYear,
+            TeamCount = teamCount,
+            Standard = ResolvePreview(curves, firstYear, RosterConfiguration.Standard, teamCount),
+            Superflex = ResolvePreview(curves, firstYear, RosterConfiguration.Superflex, teamCount)
+        };
+
+        logger.LogInformation(
+            "FAN-153 replacement-level preview, year {Year} at {Teams} teams — standard [{Standard}], superflex [{Superflex}]",
+            preview.Year, preview.TeamCount,
+            string.Join(", ", preview.Standard.Select(kv => $"{kv.Key} {kv.Value}")),
+            string.Join(", ", preview.Superflex.Select(kv => $"{kv.Key} {kv.Value}")));
+
+        return Ok(new
+        {
+            Message = "Positional value curves built. Nothing reads them yet — no served value changed.",
+            Season = request.Season,
+            ScoringFormat = formatName,
+            CurvesWritten = documents.Count,
+            SimulationsRead = sims.Count,
+            Depth = depth,
+            ReplacementLevelPreview = preview
+        });
+
+        static double ValueAt(IReadOnlyList<double> values, int index)
+            => index < values.Count ? values[index] : double.NaN;
+
+        static Dictionary<string, string> ResolvePreview(
+            IReadOnlyList<PositionalValueCurve> allCurves,
+            int year,
+            RosterConfiguration config,
+            int teams)
+        {
+            var forYear = allCurves.Where(c => c.Year == year).ToList();
+
+            var descending = forYear.ToDictionary(
+                c => c.Position,
+                c => (IReadOnlyList<decimal>)c.DescendingSeasonValues.Select(v => (decimal)v).ToList(),
+                StringComparer.OrdinalIgnoreCase);
+
+            var poolSizes = forYear.ToDictionary(
+                c => c.Position, c => c.PoolSize, StringComparer.OrdinalIgnoreCase);
+
+            var resolved = ReplacementLevelService.ResolveFromCurves(
+                descending, poolSizes, config, teams);
+
+            return resolved.ToDictionary(
+                kv => kv.Key,
+                kv => kv.Value.BeyondStoredDepth
+                    ? $"cutoff {kv.Value.StartersAbsorbed} beyond stored depth"
+                    : $"{kv.Value.StructuralLevel:F1} at cutoff {kv.Value.StartersAbsorbed}"
+                      + (kv.Value.PoolExhausted ? " (pool exhausted)" : ""));
+        }
     }
 
     /// <summary>
@@ -529,6 +675,16 @@ public class AdminController(
     /// ScoringFormat string is parsed to the enum server-side; invalid values default to Superflex.
     /// </summary>
     public record RunDfvRequest(int Season, string? ScoringFormat = null);
+
+    /// <summary>
+    /// FAN-153 phase 1. <c>Depth</c> and <c>TeamCount</c> both default rather than
+    /// being required: depth to <see cref="PositionalValueCurveBuilder.DefaultDepth"/>,
+    /// team count to 12 — and the team count affects only the preview in the
+    /// response, never what is stored. The stored curve is league-agnostic on
+    /// purpose; that is the whole design.
+    /// </summary>
+    public record BuildValueCurvesRequest(
+        int Season, string? ScoringFormat = null, int? Depth = null, int? TeamCount = null);
 
     public record NflContextOverrideRequest(int? Season, int? Week);
     /// <summary>

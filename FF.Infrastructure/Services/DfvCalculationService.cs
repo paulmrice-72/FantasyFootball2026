@@ -289,6 +289,12 @@ public class DfvCalculationService(
 
         // ── Build raw DFV for every player ───────────────────────────────
         var rawDfvMap = new Dictionary<string, double>();
+
+        // FAN-170: the cohort the deleted year 0-1 depth gate used to zero.
+        // Logged rather than acted on — it is the attribution key for any
+        // change in a within-position rho on the next calibration run.
+        var admittedByGateRemoval = new List<DynastyValuationDocument>();
+
         foreach (var valuation in valuations)
         {
             if (string.IsNullOrEmpty(valuation.SleeperPlayerId)) continue;
@@ -314,14 +320,56 @@ public class DfvCalculationService(
                 continue;
             }
 
-            // Depth gate — year 0-1 unranked players with sub-starter projections.
+            // FAN-170: the year 0-1 depth gate used to sit here and zero any
+            // non-QB with <= 1 year of experience, no FP rookie rank, and no
+            // projected season clearing StarterThresholdDfv(position). It is
+            // deleted, along with the threshold table itself — the last
+            // surviving member of the three-way constant collision FAN-165
+            // recorded and FAN-168 removed from CareerSimulationService.
+            //
+            // Why it had to go, in order of weight:
+            //
+            // 1. It compared a projection against the prior that produced it.
+            //    A year 0-1 player with no FP rookie row is projected almost
+            //    entirely from PositionPriors[position]; the gate then asked
+            //    whether that projection cleared StarterThresholdDfv(position)
+            //    — 9.0 against a 9.0 TE prior. The answer was decided by the
+            //    aging multiplier applied to a constant, never by the player.
+            // 2. FAN-168 removed the reason it existed. The gate was
+            //    compensating for a starter prior being applied to backups;
+            //    the prior is role-conditioned now, so a backup is projected
+            //    low at source instead of being inflated and then deleted.
+            // 3. Ranking a player low and removing him from the board are
+            //    different claims. The two guards above this one are genuine
+            //    absences of data — no NFL team, no career simulation. This
+            //    one was a judgement about a projection that exists, and
+            //    because NormalizeAcrossAllPositions only ranks raw > 0, it
+            //    also dropped its victims out of the P2 population entirely.
+            //    Measured 2026-09-08: Elijah Arroyo at RV 0, TE 91 of 92,
+            //    against an FP rank of 243.
+            //
+            // The Position != "QB" asymmetry went with it; it never had a
+            // stated reason.
+            //
+            // Attribution note for the next calibration run: removing this
+            // gate cannot reorder any player who was already being measured.
+            // P2 normalization is rank-based, so admitting players lowers
+            // every surviving player's rankFraction by the same construction
+            // and preserves their relative order exactly. Any delta in a
+            // within-position rho is therefore attributable entirely to the
+            // newly admitted cohort logged below, and to nothing else.
+            //
+            // This tracks the gate's POPULATION, not the subset it caught —
+            // reproducing the caught subset would mean keeping the threshold
+            // table alive to measure a threshold table. Non-QB only, because
+            // the gate never fired on QB. Players in here who were already
+            // clearing the old threshold are unaffected by this change and
+            // are simply carried in the count.
             if (valuation.Position != "QB"
                 && (valuation.YearsExperience ?? -1) <= 1
-                && !fpRookieRankMap.ContainsKey(valuation.SleeperPlayerId)
-                && careerSim.YearProjections.All(y => y.MedianFppg < StarterThresholdDfv(valuation.Position)))
+                && !fpRookieRankMap.ContainsKey(valuation.SleeperPlayerId))
             {
-                rawDfvMap[valuation.SleeperPlayerId] = 0;
-                continue;
+                admittedByGateRemoval.Add(valuation);
             }
 
             double scarcity = isSuperflexFormat
@@ -338,6 +386,33 @@ public class DfvCalculationService(
 
             var faPenalty = isFaSkillPlayer ? 0.60 : 1.0;
             rawDfvMap[valuation.SleeperPlayerId] = (raw + ascentBonus) * faPenalty;
+        }
+
+        // FAN-170: who the deleted depth gate would have removed, and where
+        // they actually landed. A large cohort carrying real values is the
+        // expected outcome; a large cohort clustered near the top would mean
+        // the gate was suppressing phantom value rather than deleting real
+        // players, and would point at an absence-based rule to replace it.
+        if (admittedByGateRemoval.Count > 0)
+        {
+            var admittedByPosition = admittedByGateRemoval
+                .GroupBy(v => v.Position)
+                .OrderBy(g => g.Key)
+                .Select(g => $"{g.Key}={g.Count()}");
+
+            logger.LogInformation(
+                "FAN-170: {Count} non-QB year 0-1 unranked players scored — the removed depth gate's population, of which the sub-threshold subset used to be zeroed ({ByPosition})",
+                admittedByGateRemoval.Count, string.Join(", ", admittedByPosition));
+
+            var admittedTop10 = admittedByGateRemoval
+                .Where(v => rawDfvMap.ContainsKey(v.SleeperPlayerId))
+                .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
+                .Take(10)
+                .Select(v => $"{v.PlayerName} ({v.Position}) {rawDfvMap[v.SleeperPlayerId]:F1}");
+
+            logger.LogInformation(
+                "FAN-170: highest-valued of that cohort — {Players}",
+                string.Join(", ", admittedTop10));
         }
 
         var top20Raw = rawDfvMap
@@ -835,12 +910,11 @@ public class DfvCalculationService(
         }
     }
 
-    private static double StarterThresholdDfv(string position) => position switch
-    {
-        "QB" => 16.0,
-        "RB" => 7.0,
-        "WR" => 7.5,
-        "TE" => 9.0,
-        _ => 7.0
-    };
+    // FAN-170: StarterThresholdDfv (QB 16.0 / RB 7.0 / WR 7.5 / TE 9.0) was
+    // removed here along with its only caller. It was the third and last
+    // member of the constant collision FAN-165 recorded — one concept
+    // ("is this player a starter") expressed as three numbers across two
+    // services, with TE's threshold set equal to the TE prior it was
+    // implicitly testing. FAN-168 deleted the other two. Do not reintroduce
+    // a starter threshold without a replacement-level number behind it.
 }
