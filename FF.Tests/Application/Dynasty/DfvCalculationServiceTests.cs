@@ -29,7 +29,8 @@ public class DfvCalculationServiceTests
     }
 
     private static CareerSimulationDocument MakeCareerSim(
-        string sleeperPlayerId, string position, int currentAge, double yearOneValue = 150.0)
+        string sleeperPlayerId, string position, int currentAge, double yearOneValue = 150.0,
+        double medianFppg = 12.0)
     {
         var projections = new List<CareerYearProjection>();
         for (int i = 0; i < 5; i++)
@@ -39,7 +40,7 @@ public class DfvCalculationServiceTests
                 Year = 2026 + i,
                 AgeAtYear = currentAge + i,
                 SeasonValue = yearOneValue * Math.Pow(0.9, i),
-                MedianFppg = 12.0,
+                MedianFppg = medianFppg,
                 FloorFppg = 8.0,
                 CeilingFppg = 18.0,
                 InjuryRisk = 0.15,
@@ -247,6 +248,70 @@ public class DfvCalculationServiceTests
         var highBo = result.First(r => r.SleeperPlayerId == "high-bo");
         var lowBo = result.First(r => r.SleeperPlayerId == "low-bo");
         highBo.TradeValue.Should().BeGreaterThan(lowBo.TradeValue);
+    }
+
+    // ── FAN-170: the year 0-1 depth gate, and why it is gone ───────────────
+
+    /// <summary>
+    /// The removed gate zeroed any non-QB with <= 1 year of experience, no FP
+    /// rookie rank, and no projected season clearing StarterThresholdDfv —
+    /// 9.0 for a TE, which was the same number as the TE prior the projection
+    /// was generated from. A player it caught was not ranked low, he was
+    /// removed: NormalizeAcrossAllPositions only ranks raw > 0, so he left the
+    /// P2 population entirely (measured 2026-09-08: Elijah Arroyo at RV 0,
+    /// TE 91 of 92, against an FP rank of 243).
+    ///
+    /// This pins the replacement behaviour: a weak projection is a low rank,
+    /// not a deletion. All three TEs here project below the old 9.0 threshold,
+    /// and the year-1 player's projection sits between the other two — he must
+    /// come back with a real value, ranked where his simulation puts him.
+    ///
+    /// The fixture needs a third player below him on purpose. P2 normalization
+    /// scores the last-ranked player `ceiling * (1 - 1)^exponent`, which is
+    /// exactly 0 — so with only two players the weaker one reads 0 whatever
+    /// this method does, and the test would be measuring the normalizer's
+    /// bottom rank rather than the gate. Worth knowing more generally: a
+    /// RawValue of 0 is ambiguous at the very bottom of the board.
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_YearOneUnrankedPlayerBelowTheOldStarterThreshold_IsRankedNotZeroed()
+    {
+        var valuations = new List<DynastyValuationDocument>
+        {
+            MakeValuation("veteran",        "TE", 28, yearsExperience: 6),
+            MakeValuation("year-one-depth", "TE", 23, yearsExperience: 1),
+            MakeValuation("tail",           "TE", 31, yearsExperience: 9)
+        };
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("TE", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(valuations);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "TE"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        // Every one of these projects under the old TE threshold of 9.0 in
+        // every year — the two veterans only escaped the gate because of their
+        // experience, not their numbers.
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeCareerSim("veteran",        "TE", 28, yearOneValue: 140, medianFppg: 8.0),
+                MakeCareerSim("year-one-depth", "TE", 23, yearOneValue: 90,  medianFppg: 4.0),
+                MakeCareerSim("tail",           "TE", 31, yearOneValue: 30,  medianFppg: 3.0)
+            ]);
+
+        var sut = CreateSut();
+        var result = await sut.CalculateAllAsync(2026);
+
+        var yearOne = result.First(r => r.SleeperPlayerId == "year-one-depth");
+        var veteran = result.First(r => r.SleeperPlayerId == "veteran");
+
+        yearOne.RawValue.Should().BeGreaterThan(0,
+            "a projection below a threshold is a reason to rank a player low, not to " +
+            "remove him from the board — and the threshold it failed was equal to the " +
+            "prior that generated the projection");
+        veteran.RawValue.Should().BeGreaterThan(yearOne.RawValue,
+            "the stronger career simulation must still outrank the weaker one");
     }
 
     // ── FAN-159: ModelValue — the value the FP blend has not touched ────────

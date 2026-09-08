@@ -25,6 +25,31 @@ public sealed record PositionReplacement(
     string? FreeAgentBestPlayerId);
 
 /// <summary>
+/// One position's replacement level resolved from a stored curve — FAN-153.
+///
+/// <para>
+/// <c>StructuralLevel</c> is null only when <c>BeyondStoredDepth</c> is set. The two
+/// failure modes are kept apart on purpose:
+/// </para>
+///
+/// <list type="bullet">
+/// <item><c>PoolExhausted</c> — the league starts more players at this position than
+/// the model projects. Real, if unusual; the weakest projection is the honest
+/// baseline and is returned.</item>
+/// <item><c>BeyondStoredDepth</c> — the cutoff ran past the stored curve while the
+/// pool goes deeper still. Nothing is returned, because the last stored value would
+/// read as an exhausted pool and inflate every value above it. The fix is a deeper
+/// curve, not a guess.</item>
+/// </list>
+/// </summary>
+public sealed record CurveReplacement(
+    string Position,
+    int StartersAbsorbed,
+    decimal? StructuralLevel,
+    bool PoolExhausted,
+    bool BeyondStoredDepth);
+
+/// <summary>
 /// L3 — league-aware replacement level. FAN-118.
 ///
 /// <para>
@@ -146,7 +171,51 @@ public static class ReplacementLevelService
         Dictionary<string, List<ReplacementCandidate>> byPosition,
         RosterConfiguration config,
         int teamCount)
+        => AllocateStarters(
+            byPosition.ToDictionary(
+                kv => kv.Key,
+                kv => (IReadOnlyList<decimal>)kv.Value.Select(c => c.ProjectedPoints).ToList(),
+                StringComparer.OrdinalIgnoreCase),
+            config,
+            teamCount);
+
+    /// <summary>
+    /// The same greedy allocation, over positional value curves rather than
+    /// candidate records — FAN-153.
+    ///
+    /// <para>
+    /// Allocation never needed player identity: it walks each position's descending
+    /// projections and spends flex slots on whoever is best. Taking values only
+    /// lets the stored curves
+    /// (<see cref="PositionalValueCurveBuilder"/>) feed the identical algorithm, so
+    /// a league resolving its replacement level at read time and the live L3 path
+    /// cannot drift apart — there is one implementation of the flex rules, not two.
+    /// </para>
+    ///
+    /// <para>
+    /// Each list must be sorted descending. Nothing here re-sorts: a curve arrives
+    /// sorted from storage, and quietly re-sorting would hide the day one arrives
+    /// that is not.
+    /// </para>
+    /// </summary>
+    public static Dictionary<string, int> AllocateStarters(
+        IReadOnlyDictionary<string, IReadOnlyList<decimal>> descendingByPosition,
+        RosterConfiguration config,
+        int teamCount)
     {
+        ArgumentNullException.ThrowIfNull(descendingByPosition);
+        ArgumentNullException.ThrowIfNull(config);
+        if (teamCount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(teamCount), teamCount,
+                "Team count must be positive — replacement level is meaningless without a league size.");
+
+        var byPosition = ScoredPositions.ToDictionary(
+            pos => pos,
+            pos => descendingByPosition.TryGetValue(pos, out var v)
+                ? v
+                : (IReadOnlyList<decimal>)Array.Empty<decimal>(),
+            StringComparer.OrdinalIgnoreCase);
+
         var pointer = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
             ["QB"] = config.QbSlots * teamCount,
@@ -172,7 +241,7 @@ public static class ReplacementLevelService
                 if (idx >= byPosition[pos].Count) continue;              // pool exhausted here
                 if (!slots.Any(s => s.IsEligible(pos))) continue;        // nothing left he can fill
 
-                var pts = byPosition[pos][idx].ProjectedPoints;
+                var pts = byPosition[pos][idx];
                 if (pts > bestPts)
                 {
                     bestPts = pts;
@@ -196,6 +265,72 @@ public static class ReplacementLevelService
         }
 
         return pointer;
+    }
+
+    /// <summary>
+    /// Resolves a replacement level per position from stored positional value
+    /// curves — FAN-153.
+    ///
+    /// <para>
+    /// This is the read-time half of league-aware replacement level. The curves
+    /// come from the nightly simulation; the roster configuration and team count
+    /// come from the league asking. Same greedy flex allocation as the live path,
+    /// so a SUPER_FLEX slot pulls the QB cutoff deeper here exactly as it does
+    /// there.
+    /// </para>
+    ///
+    /// <para>
+    /// A cutoff past the end of a curve is reported, never guessed. The two ways
+    /// that happens are genuinely different and the caller has to be able to tell
+    /// them apart — see <see cref="CurveReplacement"/>.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, CurveReplacement> ResolveFromCurves(
+        IReadOnlyDictionary<string, IReadOnlyList<decimal>> descendingByPosition,
+        IReadOnlyDictionary<string, int> poolSizes,
+        RosterConfiguration config,
+        int teamCount)
+    {
+        ArgumentNullException.ThrowIfNull(descendingByPosition);
+        ArgumentNullException.ThrowIfNull(poolSizes);
+
+        var absorbed = AllocateStarters(descendingByPosition, config, teamCount);
+        var results = new Dictionary<string, CurveReplacement>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var pos in ScoredPositions)
+        {
+            var curve = descendingByPosition.TryGetValue(pos, out var c)
+                ? c
+                : (IReadOnlyList<decimal>)Array.Empty<decimal>();
+            var poolSize = poolSizes.TryGetValue(pos, out var n) ? n : curve.Count;
+            var cutoff = absorbed[pos];
+
+            // Past the stored values, but the pool itself goes deeper — the curve
+            // was simply not stored deep enough for this league. Answering with the
+            // last stored value would look like an exhausted pool and would inflate
+            // every value above it, so the level is left unset and flagged.
+            var beyondDepth = cutoff >= curve.Count && cutoff < poolSize;
+
+            // Past the pool itself — the league genuinely starts more players at
+            // this position than exist projections for. A real state, and the
+            // weakest projection is the honest baseline for it.
+            var exhausted = cutoff >= poolSize;
+
+            decimal? level = beyondDepth
+                ? null
+                : exhausted
+                    ? (curve.Count > 0 ? curve[^1] : 0m)
+                    : curve[cutoff];
+
+            results[pos] = new CurveReplacement(
+                Position:          pos,
+                StartersAbsorbed:  cutoff,
+                StructuralLevel:   level,
+                PoolExhausted:     exhausted,
+                BeyondStoredDepth: beyondDepth);
+        }
+
+        return results;
     }
 
     /// <summary>
