@@ -11,6 +11,29 @@ public class CalibrationResultDocument
     public DateTime RunAt { get; set; }
     public string ScoringFormat { get; set; } = "Superflex";
 
+    /// <summary>
+    /// FAN-159. Which of our two values this run ranked players by: "Model"
+    /// (ModelValue — the pipeline with every FantasyPros-derived step removed)
+    /// or "Blended" (TradeValue — what the site serves, 65% FantasyPros rank).
+    ///
+    /// <para>
+    /// This is not a display detail; it decides whether the numbers beside it
+    /// mean anything. On the Blended basis the harness ranks by a value that is
+    /// mostly FantasyPros rank and then scores it against FantasyPros rank, so ρ
+    /// is inflated by construction and a model producing noise would still post
+    /// a high one.
+    /// </para>
+    ///
+    /// <para>
+    /// Rows written before 2026-09-07 have no value here and were all measured
+    /// on the blended basis. Read a missing value as "Blended", and do not
+    /// compare a pre-2026-09-07 ρ against a post-2026-09-07 one — they are
+    /// measuring different things, and the drop between them is the correction,
+    /// not a regression.
+    /// </para>
+    /// </summary>
+    public string ValueBasis { get; set; } = "Blended";
+
     /// <summary>Spearman rank-order correlation vs FantasyPros top-200. Target ≥ 0.85.</summary>
     public double SpearmanRho { get; set; }
 

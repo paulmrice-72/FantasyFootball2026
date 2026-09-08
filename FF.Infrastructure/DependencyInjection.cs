@@ -27,6 +27,7 @@ using FF.Infrastructure.Persistence.Sql.Repositories;
 using FF.Infrastructure.Persistence.SQL;
 using FF.Infrastructure.Persistence.SQL.Repositories;
 using FF.Infrastructure.Services;
+using Microsoft.Extensions.Logging;
 
 using Hangfire;
 using Hangfire.PostgreSql;
@@ -114,7 +115,24 @@ public static class DependencyInjection
         services.AddScoped<IEmergenceAlertRepository, EmergenceAlertRepository>();
         services.AddScoped<EmergenceDetectionJob>();
         services.AddScoped<IAgingCurveRepository, AgingCurveRepository>();
-        services.AddScoped<IAgingCurveService, AgingCurveService>();
+        // FAN-157: estimatorTrusted stays FALSE until the chained-ratio aging
+        // estimator is replaced by one that can hold player and season constant
+        // at once. Measured 2026-09-07: the chained version carries a roughly
+        // constant sample-selection drift (WR -6.9%/yr across every age) that it
+        // cannot separate from aging, and the drift drags every fitted peak
+        // years early. Curves still build and log their diagnostics; the fitted
+        // result is discarded and each position uses the analytic fallback.
+        //
+        // This is the one line to change when that work lands. Do not change it
+        // to make a build "work" — RecalculateDynastyValuationsJob reads the
+        // curve collection on a schedule, so a wrong curve here goes live
+        // unattended.
+        services.AddScoped<IAgingCurveService>(sp => new AgingCurveService(
+            sp.GetRequiredService<IPlayerGameLogRepository>(),
+            sp.GetRequiredService<IPlayerRepository>(),
+            sp.GetRequiredService<IAgingCurveRepository>(),
+            sp.GetRequiredService<ILogger<AgingCurveService>>(),
+            estimatorTrusted: false));
         services.AddScoped<ICareerSimulationRepository, CareerSimulationRepository>();
         services.AddScoped<ICareerSimulationService, CareerSimulationService>();
         services.AddScoped<IDynastyValuationRepository, DynastyValuationRepository>();

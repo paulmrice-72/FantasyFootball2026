@@ -13,6 +13,13 @@ public class AgingCurveDocument
     public int MaxAge { get; set; }
     public Dictionary<int, double> AgeValueMap { get; set; } = []; // age → normalized value 0-100
     public DateTime ComputedAt { get; set; }
-    public int SampleSize { get; set; }                          // number of player-seasons used
+
+    /// <summary>
+    /// Number of year-over-year player transitions the fit consumed (FAN-157).
+    /// Before the switch to a longitudinal estimator this held the raw game-log
+    /// count, which overstated the sample by roughly an order of magnitude and
+    /// did not match this field's own description.
+    /// </summary>
+    public int SampleSize { get; set; }
     public bool IsDefaultCurve { get; set; }
 }

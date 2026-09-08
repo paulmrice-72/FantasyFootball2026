@@ -423,13 +423,23 @@
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudText Typo="Typo.caption" Style="color:var(--fc-amber); font-weight:700; text-transform:uppercase; letter-spacing:.06em;">Targets</MudText>
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Spearman ρ ≥ 0.85 · Avg |Δ rank| ≤ 8.0 · Top-10 overlap ≥ 7/10. Run after any DFV pipeline execution to measure calibration drift. Current best: ρ = -10.02 (needs improvement).</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Spearman ρ ≥ 0.85 · Avg |Δ rank| ≤ 8.0 · Top-10 overlap ≥ 7/10. Run after any DFV pipeline execution to measure calibration drift. Targets restated 2026-09-07 against Model Value — every figure recorded before that date was measured on the blended value and is not comparable.</MudText>
                 </MudItem>
             </MudGrid>
         </MudExpansionPanel>
     </MudExpansionPanels>
+
+    @* FAN-159. The basis is the first thing to know about a calibration number,
+       so it sits next to the button rather than in a tooltip. Model is default;
+       Blended exists to reproduce the pre-2026-09-07 figures, and is labelled
+       for what it is rather than offered as an equal option. *@
     <MudGrid Spacing="2" AlignItems="Center">
         <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string" @bind-Value="_calibBasis" Label="Value basis"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2">
+                <MudSelectItem T="string" Value="@("Model")">Model Value (FP blend removed)</MudSelectItem>
+                <MudSelectItem T="string" Value="@("Blended")">Trade Value (blended — self-referential)</MudSelectItem>
+            </MudSelect>
             <MudButton FullWidth="true" Variant="Variant.Filled" Color="Color.Warning"
                        StartIcon="@Icons.Material.Filled.BarChart"
                        OnClick="RunCalibration" Disabled="_calibBusy">
@@ -444,9 +454,40 @@
                 }
             </MudButton>
         </MudItem>
+        <MudItem xs="12" sm="6" md="9">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Trade Value is blended 65% toward a FantasyPros-rank anchor (85% for TEs) and is then
+                scored here against FantasyPros rank — on that basis the harness is grading the anchor
+                against itself, and ρ is inflated whatever the model does. Model Value is the same
+                pipeline with the FantasyPros-derived steps removed. Expect it to score worse; that is
+                the measurement getting honest, not the model getting worse.
+            </MudText>
+        </MudItem>
     </MudGrid>
     @if (_calibResult is not null)
     {
+        @* Which basis produced these three numbers, stated where the numbers are.
+           A ρ with no basis beside it is not readable — the same model scores
+           very differently on the two. *@
+        @if (string.Equals(_calibResult.ValueBasis, "Blended", StringComparison.OrdinalIgnoreCase))
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                <MudText Typo="Typo.body2" Style="font-weight:600;">
+                    Measured on blended Trade Value — self-referential.
+                </MudText>
+                <MudText Typo="Typo.caption" Style="display:block; margin-top:4px;">
+                    Players were ranked by a value that is 65% FantasyPros rank and then scored against
+                    FantasyPros rank. These figures are comparable to the pre-2026-09-07 history and to
+                    nothing else. Re-run on Model Value to measure the model.
+                </MudText>
+            </MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary mt-3" Style="display:block;">
+                Measured on Model Value — FantasyPros blend removed.
+            </MudText>
+        }
         <MudGrid Spacing="2" Class="mt-3">
             <MudItem xs="4" sm="4">
                 <MudPaper Class="pa-3 text-center" Elevation="0" Style="background: var(--mud-palette-surface);">
@@ -493,7 +534,7 @@
                 <MudTh>Our Rank</MudTh>
                 <MudTh>Player</MudTh>
                 <MudTh>Pos</MudTh>
-                <MudTh>Our TV</MudTh>
+                <MudTh>@OurValueHeader</MudTh>
                 <MudTh>FP Rank</MudTh>
                 <MudTh>FP (subset)</MudTh>
                 <MudTh>Δ</MudTh>
@@ -529,7 +570,7 @@
                     <MudTh>Our Rank</MudTh>
                     <MudTh>Player</MudTh>
                     <MudTh>Pos</MudTh>
-                    <MudTh>Our TV</MudTh>
+                    <MudTh>@OurValueHeader</MudTh>
                     <MudTh>FP Rank</MudTh>
                     <MudTh>FP (subset)</MudTh>
                     <MudTh>Δ</MudTh>
@@ -1108,6 +1149,17 @@
     private string _calibStatus = string.Empty;
     private Severity _calibSeverity = Severity.Info;
     private CalibrationResultDto? _calibResult;
+    // FAN-159. "Model" ranks on ModelValue (the FP blend removed); "Blended"
+    // ranks on TradeValue and reproduces the pre-2026-09-07 figures.
+    private string _calibBasis = "Model";
+
+    // The snapshot column holds whichever value the run ranked on, so the header
+    // has to say which. Read off the RESULT, not the selector — the selector can
+    // be changed after a run without re-running, and a table labelled MV showing
+    // TV numbers is worse than no label at all.
+    private string OurValueHeader =>
+        string.Equals(_calibResult?.ValueBasis, "Blended", StringComparison.OrdinalIgnoreCase)
+            ? "Our TV" : "Our MV";
 
     private string RhoColor   => _calibResult?.SpearmanRho   >= 0.85 ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
     private string DeltaColor => _calibResult?.AvgAbsDelta   <= 8.0  ? "color: var(--mud-palette-success)" : "color: var(--mud-palette-error)";
@@ -1124,12 +1176,14 @@
         {
             var http = HttpFactory.CreateClient("AuthAPI");
             var resp = await http.PostAsJsonAsync("api/v1/admin/jobs/run-calibration",
-                new { Season = _season, ScoringFormat = _scoringFormat });
+                new { Season = _season, ScoringFormat = _scoringFormat, ValueBasis = _calibBasis });
             if (resp.IsSuccessStatusCode)
             {
                 _calibResult = await resp.Content.ReadFromJsonAsync<CalibrationResultDto>();
                 _calibSeverity = Severity.Success;
-                _calibStatus = $"✓ Calibration complete — {_calibResult?.PlayerCount} players compared.";
+                var basisLabel = string.Equals(_calibResult?.ValueBasis, "Blended", StringComparison.OrdinalIgnoreCase)
+                    ? "blended Trade Value" : "Model Value";
+                _calibStatus = $"✓ Calibration complete on {basisLabel} — {_calibResult?.PlayerCount} players compared.";
             }
             else
             {
@@ -1177,9 +1231,14 @@
     }
 
     // ── DTOs ───────────────────────────────────────────────────────────────
+    // ValueBasis defaults to null rather than "Model" deliberately: a null here
+    // means the API did not send the field, i.e. an older server, and that is a
+    // different thing from a run that measured on Model Value. The header and
+    // banner treat only an explicit "Blended" as blended, so an old server shows
+    // no false claim either way.
     private record CalibrationResultDto(double SpearmanRho, double AvgAbsDelta, int Top10Overlap, int PlayerCount,
         List<CalibrationPlayerSnapshotDto> Top20Snapshot, int UnmatchedCount, List<string>? TopUnmatched,
-        List<CalibrationPlayerSnapshotDto>? Worst20Snapshot);
+        List<CalibrationPlayerSnapshotDto>? Worst20Snapshot, string? ValueBasis = null);
     private record CalibrationPlayerSnapshotDto(int OurRank, string PlayerName, string Position, double OurTradeValue,
         int FpRank, double FpSubsetRank, double Delta);
     private record ImportResultDto(int Imported, int Unmatched, int Season);

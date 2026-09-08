@@ -355,6 +355,22 @@ public class DfvCalculationService(
         // others by ≤1 rank.
         NormalizeAcrossAllPositions(valuations, rawDfvMap, NormCeiling);
 
+        // ── FAN-159: fork the model's own answer here ────────────────────
+        // Everything below this line that touches rawDfvMap is either a
+        // FantasyPros-derived correction (the blend, the TE anchor cap, the
+        // rookie floor) or one of our own guardrails. modelOnlyMap follows the
+        // second set and none of the first, so it ends up as this pipeline's
+        // unborrowed opinion.
+        //
+        // Why this exists: the calibration harness ranked players by TradeValue
+        // and scored that ordering against FantasyPros rank — while TradeValue
+        // is itself blended 65% toward a FantasyPros-rank anchor. It was
+        // grading FantasyPros against itself, and every ρ it has ever produced
+        // is inflated by construction. Splitting the value in two lets the
+        // product keep serving the blend (a good prior) while the harness
+        // measures something the blend has not touched.
+        var modelOnlyMap = new Dictionary<string, double>(rawDfvMap);
+
         // ── FP dynasty consensus blend — POST-normalize ──────────────────
         // Blends every dynasty-ranked player's model value toward their FP
         // consensus anchor — in BOTH directions.
@@ -463,6 +479,41 @@ public class DfvCalculationService(
             getCap: (rank, _) => GetRbGuardrailCap(rank),
             logLabel: "RB guardrail");
 
+        // ── FAN-159: the same guardrails, on the unblended track ─────────
+        // The guardrails are ours, so the model-only value gets them too —
+        // otherwise "the model" would mean "the model with its known outlier
+        // corrections switched off", which is not a thing we ship and not a
+        // thing worth measuring.
+        //
+        // One deliberate difference: TE uses the plain tier cap here, not
+        // GetTeEffectiveCap. That cap folds in the player's own FP dynasty
+        // anchor (min(tierCap, anchor + headroom)), which is exactly the
+        // borrowed signal this track is meant to exclude. Every other position
+        // uses the identical cap function as above.
+        ApplyPositionalGuardrails(
+            valuations, modelOnlyMap,
+            position: "QB",
+            getCap: (rank, _) => GetQbGuardrailCap(rank),
+            logLabel: "QB guardrail (model-only)");
+
+        ApplyPositionalGuardrails(
+            valuations, modelOnlyMap,
+            position: "TE",
+            getCap: (rank, _) => GetTeGuardrailCap(rank),
+            logLabel: "TE guardrail (model-only)");
+
+        ApplyPositionalGuardrails(
+            valuations, modelOnlyMap,
+            position: "WR",
+            getCap: (rank, _) => GetWrGuardrailCap(rank),
+            logLabel: "WR guardrail (model-only)");
+
+        ApplyPositionalGuardrails(
+            valuations, modelOnlyMap,
+            position: "RB",
+            getCap: (rank, _) => GetRbGuardrailCap(rank),
+            logLabel: "RB guardrail (model-only)");
+
         // ── Rookie floor — POST-guardrails ────────────────────────────────
         // Catches rookies NOT YET in FP dynasty rankings (very recent
         // draftees the dynasty consensus hasn't priced in yet) using their
@@ -536,6 +587,15 @@ public class DfvCalculationService(
             valuation.TradeValue = Math.Round(final, 2);
             valuation.ScoringFormat = scoringFormat;
             valuation.TradeValueComputedAt = DateTime.UtcNow;
+
+            // FAN-159. Stamped alongside TradeValue rather than in a pass of its
+            // own so the two can never be written from different runs — a
+            // calibration comparing this run's model value against a previous
+            // run's blended value would be measuring the gap between two
+            // pipelines, and would look like a model change.
+            valuation.ModelValue = modelOnlyMap.TryGetValue(valuation.SleeperPlayerId, out var modelOnly)
+                ? Math.Round(modelOnly, 2)
+                : 0.0;
         }
 
         // ── Log final top-30 for diagnostics ─────────────────────────────
