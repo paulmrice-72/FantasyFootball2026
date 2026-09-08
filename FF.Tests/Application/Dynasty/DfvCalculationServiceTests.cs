@@ -249,4 +249,129 @@ public class DfvCalculationServiceTests
         highBo.TradeValue.Should().BeGreaterThan(lowBo.TradeValue);
     }
 
+    // ── FAN-159: ModelValue — the value the FP blend has not touched ────────
+
+    private static FantasyProsRookieRankingDocument MakeFpDynastyRank(
+        string sleeperPlayerId, int fpRank, string position = "WR")
+        => new()
+        {
+            SleeperPlayerId = sleeperPlayerId,
+            PlayerName = sleeperPlayerId,
+            Position = position,
+            FantasyProsRank = fpRank,
+            Season = 2026,
+            RankingType = "Dynasty"
+        };
+
+    /// <summary>
+    /// The property FAN-159 turns on, pinned as a test rather than an argument:
+    /// when the FantasyPros blend disagrees with the model hard enough to
+    /// reverse two players' order, TradeValue follows FantasyPros and ModelValue
+    /// follows the model.
+    ///
+    /// <para>
+    /// Without this, the calibration harness ranks by a value that is 65%
+    /// FantasyPros rank and scores it against FantasyPros rank — it grades the
+    /// anchor against itself, and a model producing noise still posts a high ρ.
+    /// If someone later "simplifies" ModelValue into an alias for TradeValue,
+    /// every calibration number silently goes back to being self-referential and
+    /// nothing else in the suite would notice. This test is the thing that
+    /// notices.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_WhenFpBlendReversesTheModelsOrder_ModelValueKeepsTheModelsOrder()
+    {
+        // "a" is the model's clear favourite; "b" is FantasyPros'. The gap in
+        // both directions is deliberately wide enough that the outcome does not
+        // depend on the exact blend weight or normalisation exponent — only on
+        // whether the FP anchor is applied at all.
+        var valuations = new List<DynastyValuationDocument>
+        {
+            MakeValuation("a", "WR", 24),
+            MakeValuation("b", "WR", 24),
+            MakeValuation("c", "WR", 29)
+        };
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(valuations);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeCareerSim("a", "WR", 24, yearOneValue: 240),
+                MakeCareerSim("b", "WR", 24, yearOneValue: 120),
+                MakeCareerSim("c", "WR", 29, yearOneValue: 60)
+            ]);
+
+        // FantasyPros takes the opposite view: b is a top-5 dynasty asset,
+        // a is barely rostered.
+        _fpRookieRepo
+            .Setup(r => r.GetAllBySeasonAndTypeAsync(It.IsAny<int>(), "Dynasty", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeFpDynastyRank("b", fpRank: 1),
+                MakeFpDynastyRank("a", fpRank: 300)
+            ]);
+
+        var sut = CreateSut();
+        var result = await sut.CalculateAllAsync(2026);
+
+        var a = result.First(r => r.SleeperPlayerId == "a");
+        var b = result.First(r => r.SleeperPlayerId == "b");
+
+        // What the site serves: FantasyPros wins, as intended — the blend is a
+        // deliberate product decision and is not what this ticket changes.
+        b.TradeValue.Should().BeGreaterThan(a.TradeValue,
+            "the FP blend is supposed to move TradeValue toward consensus");
+
+        // What the harness measures: the model's own ordering, intact.
+        a.ModelValue.Should().BeGreaterThan(b.ModelValue,
+            "ModelValue must not carry the FantasyPros anchor, or calibration is " +
+            "grading FantasyPros against itself");
+    }
+
+    /// <summary>
+    /// ModelValue has to actually reach the document. A field that is computed
+    /// and then dropped is the shape of FAN-138/140/141 — the pipeline reports
+    /// success and the harness reads zeros.
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_StampsModelValue_OnEveryScoredPlayer()
+    {
+        var valuations = new List<DynastyValuationDocument>
+        {
+            MakeValuation("top", "WR", 24),
+            MakeValuation("mid", "WR", 26),
+            MakeValuation("low", "WR", 30)
+        };
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(valuations);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeCareerSim("top", "WR", 24, yearOneValue: 220),
+                MakeCareerSim("mid", "WR", 26, yearOneValue: 140),
+                MakeCareerSim("low", "WR", 30, yearOneValue: 70)
+            ]);
+
+        var sut = CreateSut();
+        var result = await sut.CalculateAllAsync(2026);
+
+        result.First(r => r.SleeperPlayerId == "top").ModelValue.Should().BeGreaterThan(0);
+        result.Should().AllSatisfy(v => v.ModelValue.Should().BeInRange(0, 100));
+
+        // With no FantasyPros rows at all there is nothing to blend toward, so
+        // the two values must agree exactly. If they ever diverge here, a step
+        // has been added to one track and not the other.
+        result.Should().AllSatisfy(v => v.ModelValue.Should().Be(v.TradeValue));
+    }
+
 }
