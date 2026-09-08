@@ -426,16 +426,18 @@ public class AdminController(
             : request.ValueBasis;
 
         logger.LogInformation(
-            "Admin triggered calibration harness — season {Season}, format {Format}, basis {Basis}",
-            request.Season, request.ScoringFormat, basis);
+            "Admin triggered calibration harness — season {Season}, format {Format}, " +
+            "basis {Basis}, position {Position}",
+            request.Season, request.ScoringFormat, basis, request.Position ?? "(all)");
 
         var result = await mediator.Send(
-            new RunCalibrationCommand(request.Season, request.ScoringFormat ?? "Superflex", basis), ct);
+            new RunCalibrationCommand(
+                request.Season, request.ScoringFormat ?? "Superflex", basis, request.Position), ct);
 
         logger.LogInformation(
-            "Calibration complete on {Basis} basis — rho {Rho:F4}, avg abs delta {Delta:F2}, " +
-            "top-10 overlap {Overlap}/10, {N} compared, {Unmatched} excluded",
-            result.ValueBasis, result.SpearmanRho, result.AvgAbsDelta,
+            "Calibration complete on {Basis} basis, position {Position} — rho {Rho:F4}, " +
+            "avg abs delta {Delta:F2}, top-10 overlap {Overlap}/10, {N} compared, {Unmatched} excluded",
+            result.ValueBasis, result.Position ?? "(all)", result.SpearmanRho, result.AvgAbsDelta,
             result.Top10Overlap, result.PlayerCount, result.UnmatchedCount);
 
         // 2026-09-07: this hand-enumerated projection is why the unmatched-count
@@ -530,11 +532,21 @@ public class AdminController(
 
     public record NflContextOverrideRequest(int? Season, int? Week);
     /// <summary>
-    /// ValueBasis: "Model" (default — ModelValue, the FP blend removed) or
-    /// "Blended" (TradeValue, what the site serves). An unrecognised value is
-    /// rejected by the handler rather than defaulted, so a typo cannot silently
-    /// fall back to the flattering basis. See FAN-159.
+    /// ValueBasis: "Model" (default — ModelValue, the FP blend removed but our
+    /// guardrail caps applied), "Raw" (RawValue, one step earlier — before the
+    /// positional guardrail caps, FAN-166) or "Blended" (TradeValue, what the
+    /// site serves). An unrecognised value is rejected by the handler rather
+    /// than defaulted, so a typo cannot silently fall back to the flattering
+    /// basis. See FAN-159 and FAN-166.
+    ///
+    /// Position: "QB", "RB", "WR" or "TE" to restrict the run to one position,
+    /// or null/empty for the whole board. A positional run removes the
+    /// cross-position ladder from the comparison, so it measures only how well
+    /// players are ordered within that position — run the same basis with and
+    /// without it and the difference is the ladder. Also rejected rather than
+    /// defaulted if unrecognised. See FAN-166.
     /// </summary>
-    public record RunCalibrationRequest(int Season, string? ScoringFormat, string? ValueBasis = null);
+    public record RunCalibrationRequest(
+        int Season, string? ScoringFormat, string? ValueBasis = null, string? Position = null);
     public record AdminImportFantasyProsRequest(string CsvContent, int Season);
 }

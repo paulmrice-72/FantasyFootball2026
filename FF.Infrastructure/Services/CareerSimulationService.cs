@@ -15,11 +15,32 @@ public class CareerSimulationService(
     IPlayerRepository playerRepository,
     IAgingCurveRepository agingCurveRepository,
     ISimulationResultRepository simulationResultRepository,
+    IDepthChartRepository depthChartRepository,
     ILogger<CareerSimulationService> logger) : ICareerSimulationService
 {
     private const int Iterations = 1000;
     private const int ProjectYears = 5;
     private const int CurrentSeason = 2026;
+
+    // ── FAN-168: weight on the most recent of the two merged seasons ────────
+    //
+    // The merge below used to average the two most recent seasons equally, to
+    // stop "one outlier season (Darnold 2024: 18.1) from seeding an inflated
+    // 5-year projection". Sound goal; a 50/50 average cannot tell an outlier
+    // from a trend, and it fails in the direction that hurts ascending players.
+    //
+    // Measured 2026-09-08 at TE, where the failure was total because the
+    // shrinkage gate downstream was a cliff:
+    //   David Njoku  10.59 → 6.35  (declining)  merged 8.47 → cleared, model TE1
+    //   Kyle Pitts    6.34 → 9.81  (ascending)  merged 8.08 → floored to 3.5
+    // Both defects are fixed in this change. This constant is the first half.
+    //
+    // 0.5 reproduces the previous behaviour EXACTLY, which is deliberate: the
+    // gate removal and this weighting land together, so setting this to 0.5 and
+    // re-running calibration isolates one from the other without splitting the
+    // change. Do that before tuning it — a weight moved against a number that
+    // is also absorbing the gate fix is a weight tuned against nothing.
+    private const decimal RecentSeasonWeight = 0.65m;
 
     // ── Empirical Bayes shrinkage ─────────────────────────────────────────
     // credibility = min(YearsExp, 5) / (min(YearsExp, 5) + K)
@@ -122,17 +143,59 @@ public class CareerSimulationService(
     private static int PeakAgeFor(string position) =>
         AgingFallbackCurve.WindowFor(position).PeakAge;
 
-    // FAN-52: TE threshold raised from 6.0 → 8.5.
-    // 6.0 allowed any TE whose blended FPPG cleared a backup RB's average
-    // to be treated as a starter. At 8.5, only genuine TE1-caliber players
-    // (confirmed targets, inline starters) pass; TE2s fall to depth level (3.5).
-    private static readonly Dictionary<string, double> StarterThreshold = new()
+    // ── FAN-168: the prior is conditioned on depth-chart role ───────────────
+    //
+    // PositionPriors above is documented as "average STARTER FPPG by position"
+    // and used to be applied to every player regardless of role. Shrinking a
+    // backup toward a starter prior inflates him, so two gates existed to undo
+    // that — a pre-blend `rawFppg >= depthLevel` test and a post-blend
+    // `StarterThreshold` test, both of which returned the flat depth level.
+    // Both are deleted here, because both were patching a prior that should not
+    // have needed patching.
+    //
+    // What they cost, measured against dev on 2026-09-08. At TE the post-blend
+    // threshold (8.5) sat ABOVE the prior (9.0), so clearing it required raw
+    // >= 8.2 FPPG and everything below dropped to a flat 3.5:
+    //
+    //   Kyle Pitts     raw 8.08 → blended 8.422 → missed by 0.078 → 3.5
+    //   Mark Andrews   raw 7.89 → blended 8.306 → missed by 0.194 → 3.5
+    //   T.J. Hockenson raw 6.21 → blended 7.256 →                  → 3.5
+    //   David Njoku    raw 8.47 → blended 8.669 → cleared by 0.169 → 8.67
+    //
+    // Eight tight ends kept a real baseline; every other one in the position
+    // collapsed onto 3.5, after which age was the only thing left to sort on.
+    // Within-position Spearman at TE was 0.213 against 0.66 at QB and WR.
+    //
+    // The prior having been above the threshold also made the gate run backwards
+    // on evidence: a 1-year TE needed raw 7.0 to pass, a 3-year TE 8.0, a
+    // veteran 8.2. The less the model knew about a player, the easier the bar.
+    //
+    // Role weight is expressed the same way DraftPedigreeWeight is — the share
+    // of the distance from depth level to the starter prior that a player's
+    // role earns him — so the two compose for rookies and read the same way.
+    private static double DepthRoleWeight(int? depthTeam)
     {
-        ["QB"] = 16.0,
-        ["RB"] = 7.0,
-        ["WR"] = 7.5,
-        ["TE"] = 8.5, // FAN-52: raised from 6.0
-    };
+        // Unknown depth shrinks toward the midpoint of the two priors rather
+        // than either end. DepthRoleAdjustment resolves a missing row to 1.0 on
+        // the grounds that absence of evidence is not evidence of being a
+        // backup, and that is right for a MULTIPLIER applied to an observed
+        // projection — being wrong there costs a player 75% of a real number.
+        // A prior is the opposite case: it is what we fall back on when we have
+        // little evidence, so answering "we do not know" with the starter's
+        // number is a claim, not a neutral default. 0.5 is the neutral one.
+        //
+        // Deliberately not branching on the player's own production to guess a
+        // role: that reintroduces a discontinuity at exactly the boundary this
+        // change exists to remove.
+        if (depthTeam is null || depthTeam <= 0) return 0.50;
+
+        return depthTeam.Value switch
+        {
+            1 => 1.00,
+            2 => 0.35,
+            _ => 0.10
+        };
+    }
 
     public async Task<List<CareerSimulationDocument>> SimulateAllPlayersAsync(
         int season, CancellationToken ct = default)
@@ -175,11 +238,14 @@ public class CareerSimulationService(
                         NflTeam = recent.NflTeam,
                         Season = recent.Season,
                         Week = 0,
-                        Median = Math.Round((recent.Median + prior.Median) / 2, 2),
-                        Floor = Math.Round((recent.Floor + prior.Floor) / 2, 2),
-                        Ceiling = Math.Round((recent.Ceiling + prior.Ceiling) / 2, 2),
-                        Mean = Math.Round((recent.Mean + prior.Mean) / 2, 2),
-                        BaseProjection = Math.Round((recent.BaseProjection + prior.BaseProjection) / 2, 2),
+                        // FAN-168: weighted toward the recent season, not a flat
+                        // mean. See RecentSeasonWeight — 0.5 restores the old
+                        // behaviour exactly.
+                        Median = Weighted(recent.Median, prior.Median),
+                        Floor = Weighted(recent.Floor, prior.Floor),
+                        Ceiling = Weighted(recent.Ceiling, prior.Ceiling),
+                        Mean = Weighted(recent.Mean, prior.Mean),
+                        BaseProjection = Weighted(recent.BaseProjection, prior.BaseProjection),
                         StandardDeviation = recent.StandardDeviation,
                         ScoringFormat = recent.ScoringFormat,
                         CalculatedAt = DateTime.UtcNow,
@@ -206,11 +272,14 @@ public class CareerSimulationService(
                         Position = recent.Position,
                         Season = recent.Season,
                         Week = 0,
-                        Median = Math.Round((recent.Median + prior.Median) / 2, 2),
-                        Floor = Math.Round((recent.Floor + prior.Floor) / 2, 2),
-                        Ceiling = Math.Round((recent.Ceiling + prior.Ceiling) / 2, 2),
-                        Mean = Math.Round((recent.Mean + prior.Mean) / 2, 2),
-                        BaseProjection = Math.Round((recent.BaseProjection + prior.BaseProjection) / 2, 2),
+                        // FAN-168: weighted toward the recent season, not a flat
+                        // mean. See RecentSeasonWeight — 0.5 restores the old
+                        // behaviour exactly.
+                        Median = Weighted(recent.Median, prior.Median),
+                        Floor = Weighted(recent.Floor, prior.Floor),
+                        Ceiling = Weighted(recent.Ceiling, prior.Ceiling),
+                        Mean = Weighted(recent.Mean, prior.Mean),
+                        BaseProjection = Weighted(recent.BaseProjection, prior.BaseProjection),
                         StandardDeviation = recent.StandardDeviation,
                         ScoringFormat = recent.ScoringFormat,
                         CalculatedAt = DateTime.UtcNow,
@@ -227,9 +296,14 @@ public class CareerSimulationService(
                 .ToList();
             var posStr = position.ToString();
 
-            // FAN-95: rank this position's players by shrunk baseline FPPG so
-            // SimulatePlayer can dampen post-peak decay for the proven top tier.
-            var eliteTierByPlayerId = BuildEliteTierMap(players, posStr, simByPlayerId, simByNamePos);
+            // FAN-168: depth-chart role, bulk-loaded per position. The prior a
+            // player shrinks toward depends on it, so it has to be resolved
+            // before the elite-tier ranking as well — that ranking is itself
+            // built on shrunk baselines.
+            var depthByPlayerId = await LoadDepthRolesAsync(posStr, season, ct);
+
+            var eliteTierByPlayerId = BuildEliteTierMap(
+                players, posStr, simByPlayerId, simByNamePos, depthByPlayerId);
 
             foreach (var player in players)
             {
@@ -250,7 +324,8 @@ public class CareerSimulationService(
                     var eliteTier = eliteTierByPlayerId.GetValueOrDefault(player.SleeperPlayerId, 0.0);
                     var sim = SimulatePlayer(
                         player, posStr, curves[posStr], season,
-                        simByPlayerId, simByNamePos, eliteTier);
+                        simByPlayerId, simByNamePos, eliteTier,
+                        depthByPlayerId.TryGetValue(player.SleeperPlayerId, out var dt) ? dt : null);
                     results.Add(sim);
                 }
                 catch (Exception ex)
@@ -297,10 +372,54 @@ public class CareerSimulationService(
             .GroupBy(p => p.SleeperPlayerId)
             .Select(g => g.First())
             .ToList();
-        var eliteTierByPlayerId = BuildEliteTierMap(positionPlayers, posStr, simByPlayerId, simByNamePos);
+        // FAN-168: same depth-role resolution the bulk path uses, for the same
+        // reason the elite-tier map is rebuilt here — a single-player recompute
+        // that shrank toward a different prior than the nightly run would put
+        // two disagreeing numbers on the same player with nothing to say which
+        // ran last.
+        var depthByPlayerId = await LoadDepthRolesAsync(posStr, CurrentSeason, ct);
+
+        var eliteTierByPlayerId = BuildEliteTierMap(
+            positionPlayers, posStr, simByPlayerId, simByNamePos, depthByPlayerId);
         var eliteTier = eliteTierByPlayerId.GetValueOrDefault(sleeperPlayerId, 0.0);
 
-        return SimulatePlayer(player, posStr, curve, CurrentSeason, simByPlayerId, simByNamePos, eliteTier);
+        return SimulatePlayer(
+            player, posStr, curve, CurrentSeason, simByPlayerId, simByNamePos, eliteTier,
+            depthByPlayerId.TryGetValue(sleeperPlayerId, out var dt) ? dt : null);
+    }
+
+    /// <summary>
+    /// FAN-168. Most recent depth-chart row per player at a position, as
+    /// <c>SleeperPlayerId → DepthTeam</c>.
+    ///
+    /// <para>
+    /// Coverage is logged rather than assumed. This lookup decides which prior
+    /// every player at the position shrinks toward, so a season with no depth
+    /// chart synced would silently put the whole position on the unknown-role
+    /// weight — which is a coherent answer, but a different model from the one
+    /// intended, and it should be visible in the log rather than inferred later
+    /// from a calibration number that moved less than expected.
+    /// </para>
+    /// </summary>
+    private async Task<Dictionary<string, int>> LoadDepthRolesAsync(
+        string position, int season, CancellationToken ct)
+    {
+        var rows = await depthChartRepository.GetLatestByPositionAsync(position, season, ct);
+
+        var map = rows
+            .Where(r => !string.IsNullOrEmpty(r.SleeperPlayerId) && r.DepthTeam > 0)
+            .GroupBy(r => r.SleeperPlayerId)
+            .ToDictionary(g => g.Key, g => g.Min(r => r.DepthTeam));
+
+        logger.LogInformation(
+            "Depth roles for {Position} season {Season}: {Mapped} players mapped " +
+            "({Starters} at depth 1, {Backups} at depth 2, {Deep} at depth 3+)",
+            position, season, map.Count,
+            map.Values.Count(d => d == 1),
+            map.Values.Count(d => d == 2),
+            map.Values.Count(d => d >= 3));
+
+        return map;
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
@@ -312,7 +431,8 @@ public class CareerSimulationService(
         int season,
         Dictionary<string, SimulationResultDocument> simByPlayerId,
         Dictionary<string, SimulationResultDocument> simByNamePos,
-        double eliteTierFactor = 0.0)
+        double eliteTierFactor = 0.0,
+        int? depthTeam = null)
     {
         var currentAge = player.Age ?? (player.YearsExperience == 0 ? 21 : 22);
         var peakAgeForPosition = curve?.PeakAge ?? PeakAgeFor(position);
@@ -321,7 +441,7 @@ public class CareerSimulationService(
             player.SleeperPlayerId!, player.FullName, position,
             simByPlayerId, simByNamePos);
 
-        var baseFppg = ApplyShrinkage(position, rawBaseline, player);
+        var baseFppg = ApplyShrinkage(position, rawBaseline, player, depthTeam);
 
         if (baseFppg <= 0)
             baseFppg = GetDepthLevelFppg(position);
@@ -454,7 +574,8 @@ public class CareerSimulationService(
         List<FF.Domain.Entities.Player> players,
         string position,
         Dictionary<string, SimulationResultDocument> simByPlayerId,
-        Dictionary<string, SimulationResultDocument> simByNamePos)
+        Dictionary<string, SimulationResultDocument> simByNamePos,
+        Dictionary<string, int> depthByPlayerId)
     {
         var baselines = new List<(string Id, double BaseFppg)>();
         foreach (var player in players)
@@ -467,7 +588,9 @@ public class CareerSimulationService(
             var raw = GetBaselineFppg(
                 player.SleeperPlayerId, player.FullName, position,
                 simByPlayerId, simByNamePos);
-            var blended = ApplyShrinkage(position, raw, player);
+            var blended = ApplyShrinkage(
+                position, raw, player,
+                depthByPlayerId.TryGetValue(player.SleeperPlayerId, out var dt) ? dt : null);
             baselines.Add((player.SleeperPlayerId, blended));
         }
 
@@ -543,12 +666,17 @@ public class CareerSimulationService(
     private static double ApplyShrinkage(
         string position,
         double rawFppg,
-        FF.Domain.Entities.Player player)
+        FF.Domain.Entities.Player player,
+        int? depthTeam)
     {
-        var prior = PositionPriors.GetValueOrDefault(position, 9.0);
+        var starterPrior = PositionPriors.GetValueOrDefault(position, 9.0);
         var depthLevel = GetDepthLevelFppg(position);
         var clampedExp = Math.Min(player.YearsExperience ?? 0, 5);
         var credibility = clampedExp / (clampedExp + ShrinkageK);
+
+        // FAN-168. The prior is now the one for this player's ROLE, so nothing
+        // downstream has to undo an inflated starter prior. See DepthRoleWeight.
+        var prior = depthLevel + DepthRoleWeight(depthTeam) * (starterPrior - depthLevel);
 
         // ── 2026-09-07: two defects, one root ─────────────────────────────
         //
@@ -579,30 +707,35 @@ public class CareerSimulationService(
         // the prior is unchanged, so the FAN-95 calibration on the veteran
         // population — the part that was tuned against FantasyPros consensus —
         // sees no movement from this.
-        var hasStarterEvidence = rawFppg >= depthLevel;
-
         // A rookie's credibility is zero, which means the prior IS his
         // projection. Scale that prior by draft capital so an undrafted rookie
         // cannot inherit the median starter's season simply by existing in the
         // player table.
+        //
+        // FAN-168: this now composes with the role weight rather than replacing
+        // it — a 1st-round rookie buried at third string does not get a
+        // starter's prior on draft capital alone, and an undrafted rookie who is
+        // already the listed starter is not held at the floor by his draft slot.
         if ((player.YearsExperience ?? 0) == 0)
         {
             prior = depthLevel + (DraftPedigreeWeight(player.DraftRound) * (prior - depthLevel));
         }
 
-        if (!hasStarterEvidence)
-        {
-            // Experience with nothing to show for it is itself evidence: a
-            // career backup, not an unknown quantity.
-            if ((player.YearsExperience ?? 0) >= 1)
-                return depthLevel;
-
-            // Zero experience and no starter-level production — draft capital
-            // is the only signal there is, and it is already folded into prior.
-            return prior;
-        }
-
-        // Standard shrinkage blend — player has real sim data
+        // FAN-168: the two starter gates that used to sit here are gone.
+        //
+        // The first tested `rawFppg >= depthLevel` and returned the flat depth
+        // level for anyone below it. Read as a floor it looks protective; what
+        // it actually did was RAISE weak players to a constant — Jared Wiley
+        // produces 0.83 FPPG and was projected at 3.5 — which is half of how the
+        // tie block formed. The second tested the blend against
+        // StarterThreshold and returned the same constant, which is the other
+        // half and the larger one.
+        //
+        // Neither is needed once the prior matches the role: a third-string tight
+        // end now shrinks toward 4.05 instead of 9.0, so there is nothing
+        // inflated left to catch. What replaces both is the blend itself, which
+        // is continuous and monotone in production — the property a rank
+        // correlation actually rewards, and the one the gates destroyed.
         var blended = credibility * rawFppg + (1.0 - credibility) * prior;
 
         // Journeyman QB cap — Mayfield (31/exp8), Darnold (28/exp8), Goff tier.
@@ -614,18 +747,17 @@ public class CareerSimulationService(
             blended = Math.Min(blended, 21.0);
         }
 
-        // Starter threshold gate — experienced depth players pulled UP toward
-        // prior get floored to depth level instead.
-        // FAN-52: TE threshold is now 8.5 (was 6.0) — see StarterThreshold above.
-        if ((player.YearsExperience ?? 0) >= 1)
-        {
-            var threshold = StarterThreshold.GetValueOrDefault(position, 7.0);
-            if (blended < threshold)
-                return GetDepthLevelFppg(position);
-        }
-
         return blended;
     }
+
+    /// <summary>
+    /// FAN-168. Blend of the two most recent seasons, weighted toward the recent
+    /// one. Kept as one helper so the five fields cannot drift apart — Median
+    /// weighted differently from BaseProjection would be invisible until someone
+    /// compared two columns of the same row.
+    /// </summary>
+    private static decimal Weighted(decimal recent, decimal prior) =>
+        Math.Round(recent * RecentSeasonWeight + prior * (1m - RecentSeasonWeight), 2);
 
     private static double GetStarterAverageFppg(string position) => position switch
     {

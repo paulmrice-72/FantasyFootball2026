@@ -1,0 +1,612 @@
+[{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "7.92"
+  },
+  "Mean": {
+    "$numberDecimal": "7.92"
+  },
+  "Median": {
+    "$numberDecimal": "7.92"
+  },
+  "PlayerName": "Brenton Strange",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "5.08"
+  },
+  "Mean": {
+    "$numberDecimal": "5.08"
+  },
+  "Median": {
+    "$numberDecimal": "5.08"
+  },
+  "PlayerName": "Brenton Strange",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "0.85"
+  },
+  "Mean": {
+    "$numberDecimal": "0.85"
+  },
+  "Median": {
+    "$numberDecimal": "0.85"
+  },
+  "PlayerName": "Brevin Jordan",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "2.32"
+  },
+  "Mean": {
+    "$numberDecimal": "2.32"
+  },
+  "Median": {
+    "$numberDecimal": "2.32"
+  },
+  "PlayerName": "Cade Stover",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "1.91"
+  },
+  "Mean": {
+    "$numberDecimal": "1.91"
+  },
+  "Median": {
+    "$numberDecimal": "1.91"
+  },
+  "PlayerName": "Cade Stover",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "10.34"
+  },
+  "Mean": {
+    "$numberDecimal": "10.34"
+  },
+  "Median": {
+    "$numberDecimal": "10.34"
+  },
+  "PlayerName": "Dallas Goedert",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "8.26"
+  },
+  "Mean": {
+    "$numberDecimal": "8.26"
+  },
+  "Median": {
+    "$numberDecimal": "8.26"
+  },
+  "PlayerName": "Dallas Goedert",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "8.88"
+  },
+  "Mean": {
+    "$numberDecimal": "8.88"
+  },
+  "Median": {
+    "$numberDecimal": "8.88"
+  },
+  "PlayerName": "Dalton Kincaid",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "6.06"
+  },
+  "Mean": {
+    "$numberDecimal": "6.06"
+  },
+  "Median": {
+    "$numberDecimal": "6.06"
+  },
+  "PlayerName": "Dalton Kincaid",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "8.04"
+  },
+  "Mean": {
+    "$numberDecimal": "8.04"
+  },
+  "Median": {
+    "$numberDecimal": "8.04"
+  },
+  "PlayerName": "Dalton Schultz",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "5.39"
+  },
+  "Mean": {
+    "$numberDecimal": "5.39"
+  },
+  "Median": {
+    "$numberDecimal": "5.39"
+  },
+  "PlayerName": "Dalton Schultz",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "3.85"
+  },
+  "Mean": {
+    "$numberDecimal": "3.85"
+  },
+  "Median": {
+    "$numberDecimal": "3.85"
+  },
+  "PlayerName": "Daniel Bellinger",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "1.62"
+  },
+  "Mean": {
+    "$numberDecimal": "1.62"
+  },
+  "Median": {
+    "$numberDecimal": "1.62"
+  },
+  "PlayerName": "Daniel Bellinger",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "6.35"
+  },
+  "Mean": {
+    "$numberDecimal": "6.35"
+  },
+  "Median": {
+    "$numberDecimal": "6.35"
+  },
+  "PlayerName": "David Njoku",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "10.59"
+  },
+  "Mean": {
+    "$numberDecimal": "10.59"
+  },
+  "Median": {
+    "$numberDecimal": "10.59"
+  },
+  "PlayerName": "David Njoku",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "4.86"
+  },
+  "Mean": {
+    "$numberDecimal": "4.86"
+  },
+  "Median": {
+    "$numberDecimal": "4.86"
+  },
+  "PlayerName": "Evan Engram",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "7.33"
+  },
+  "Mean": {
+    "$numberDecimal": "7.33"
+  },
+  "Median": {
+    "$numberDecimal": "7.33"
+  },
+  "PlayerName": "Evan Engram",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "8.75"
+  },
+  "Mean": {
+    "$numberDecimal": "8.75"
+  },
+  "Median": {
+    "$numberDecimal": "8.75"
+  },
+  "PlayerName": "Hunter Henry",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "7.02"
+  },
+  "Mean": {
+    "$numberDecimal": "7.02"
+  },
+  "Median": {
+    "$numberDecimal": "7.02"
+  },
+  "PlayerName": "Hunter Henry",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "4.02"
+  },
+  "Mean": {
+    "$numberDecimal": "4.02"
+  },
+  "Median": {
+    "$numberDecimal": "4.02"
+  },
+  "PlayerName": "Isaiah Likely",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "6.85"
+  },
+  "Mean": {
+    "$numberDecimal": "6.85"
+  },
+  "Median": {
+    "$numberDecimal": "6.85"
+  },
+  "PlayerName": "Isaiah Likely",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "0.45"
+  },
+  "Mean": {
+    "$numberDecimal": "0.45"
+  },
+  "Median": {
+    "$numberDecimal": "0.45"
+  },
+  "PlayerName": "Jared Wiley",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "PlayerName": "Jared Wiley",
+  "Position": "TE",
+  "Season": 2025,
+  "Week": 18,
+  "BaseProjection": {
+    "$numberDecimal": "0.7"
+  },
+  "Median": {
+    "$numberDecimal": "0.7"
+  },
+  "Mean": {
+    "$numberDecimal": "0.7"
+  },
+  "PlayerRole": "Unknown",
+  "ScoringFormat": "HalfPpr"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "1.2"
+  },
+  "Mean": {
+    "$numberDecimal": "1.2"
+  },
+  "Median": {
+    "$numberDecimal": "1.2"
+  },
+  "PlayerName": "Jared Wiley",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "2.53"
+  },
+  "Mean": {
+    "$numberDecimal": "2.53"
+  },
+  "Median": {
+    "$numberDecimal": "2.53"
+  },
+  "PlayerName": "Jeremy Ruckert",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "1.39"
+  },
+  "Mean": {
+    "$numberDecimal": "1.39"
+  },
+  "Median": {
+    "$numberDecimal": "1.39"
+  },
+  "PlayerName": "Jeremy Ruckert",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "9.81"
+  },
+  "Mean": {
+    "$numberDecimal": "9.81"
+  },
+  "Median": {
+    "$numberDecimal": "9.81"
+  },
+  "PlayerName": "Kyle Pitts",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "6.34"
+  },
+  "Mean": {
+    "$numberDecimal": "6.34"
+  },
+  "Median": {
+    "$numberDecimal": "6.34"
+  },
+  "PlayerName": "Kyle Pitts",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "6.29"
+  },
+  "Mean": {
+    "$numberDecimal": "6.29"
+  },
+  "Median": {
+    "$numberDecimal": "6.29"
+  },
+  "PlayerName": "Mark Andrews",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "9.49"
+  },
+  "Mean": {
+    "$numberDecimal": "9.49"
+  },
+  "Median": {
+    "$numberDecimal": "9.49"
+  },
+  "PlayerName": "Mark Andrews",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "5.82"
+  },
+  "Mean": {
+    "$numberDecimal": "5.82"
+  },
+  "Median": {
+    "$numberDecimal": "5.82"
+  },
+  "PlayerName": "T.J. Hockenson",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "6.6"
+  },
+  "Mean": {
+    "$numberDecimal": "6.6"
+  },
+  "Median": {
+    "$numberDecimal": "6.6"
+  },
+  "PlayerName": "T.J. Hockenson",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "9.13"
+  },
+  "Mean": {
+    "$numberDecimal": "9.13"
+  },
+  "Median": {
+    "$numberDecimal": "9.13"
+  },
+  "PlayerName": "Travis Kelce",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "9.18"
+  },
+  "Mean": {
+    "$numberDecimal": "9.18"
+  },
+  "Median": {
+    "$numberDecimal": "9.18"
+  },
+  "PlayerName": "Travis Kelce",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2025,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "14.88"
+  },
+  "Mean": {
+    "$numberDecimal": "14.88"
+  },
+  "Median": {
+    "$numberDecimal": "14.88"
+  },
+  "PlayerName": "Trey McBride",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+},
+{
+  "Season": 2024,
+  "Week": 0,
+  "BaseProjection": {
+    "$numberDecimal": "11.77"
+  },
+  "Mean": {
+    "$numberDecimal": "11.77"
+  },
+  "Median": {
+    "$numberDecimal": "11.77"
+  },
+  "PlayerName": "Trey McBride",
+  "PlayerRole": "SeasonAverage",
+  "Position": "TE",
+  "ScoringFormat": "HalfPPR"
+}]

@@ -16,11 +16,27 @@ public class CareerSimulationServiceTests
     private readonly Mock<IAgingCurveRepository> _agingCurveRepo = new();
     private readonly Mock<ISimulationResultRepository> _simResultRepo = new();
 
-    private CareerSimulationService CreateSut() => new(
-        _playerRepo.Object,
-        _agingCurveRepo.Object,
-        _simResultRepo.Object,
-        NullLogger<CareerSimulationService>.Instance);
+    // FAN-168: the shrinkage prior is conditioned on depth-chart role. These
+    // fixtures declare no depth rows, so every player resolves to the
+    // unknown-role weight — the right default for a fixture that says nothing
+    // about who starts, and it keeps these assertions about projection shape
+    // rather than about a role they never set up.
+    private readonly Mock<IDepthChartRepository> _depthChartRepo = new();
+
+    private CareerSimulationService CreateSut()
+    {
+        _depthChartRepo
+            .Setup(r => r.GetLatestByPositionAsync(
+                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        return new(
+            _playerRepo.Object,
+            _agingCurveRepo.Object,
+            _simResultRepo.Object,
+            _depthChartRepo.Object,
+            NullLogger<CareerSimulationService>.Instance);
+    }
 
     private static Player MakePlayer(
         string sleeperId, string pos, int age, string first = "Test", string last = "Player")

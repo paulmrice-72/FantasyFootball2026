@@ -371,6 +371,25 @@ public class DfvCalculationService(
         // measures something the blend has not touched.
         var modelOnlyMap = new Dictionary<string, double>(rawDfvMap);
 
+        // ── FAN-166: fork again, one step earlier ────────────────────────
+        // Same snapshot, kept separately and never touched again. modelOnlyMap
+        // goes on to receive the positional guardrails; this does not.
+        //
+        // The reason is that FAN-159's provenance line ("the guardrails are
+        // ours, so they stay in") turned out to carry far more weight than the
+        // judgement behind it assumed. The cap tables were fitted against the
+        // blended distribution, where the FP blend had already corrected each
+        // player's positional rank before the caps landed. Applied to the
+        // model's own uncorrected rank order they bind somewhere else entirely,
+        // and because they partition by position they are the only stage in
+        // this pipeline that can reorder players across positions — which is
+        // exactly what they do. Measured 2026-09-08: raw DFV has A.J. Brown at
+        // 428 and Jeremy Ruckert at 195; ModelValue has Ruckert ahead.
+        //
+        // Keeping this snapshot costs one dictionary copy and turns "how much
+        // of rho is the cap tables" from an argument into a subtraction.
+        var rawValueMap = new Dictionary<string, double>(rawDfvMap);
+
         // ── FP dynasty consensus blend — POST-normalize ──────────────────
         // Blends every dynasty-ranked player's model value toward their FP
         // consensus anchor — in BOTH directions.
@@ -596,6 +615,44 @@ public class DfvCalculationService(
             valuation.ModelValue = modelOnlyMap.TryGetValue(valuation.SleeperPlayerId, out var modelOnly)
                 ? Math.Round(modelOnly, 2)
                 : 0.0;
+
+            // FAN-166. Stamped in the same pass for the same reason: three
+            // values read from three different runs would be measuring the gaps
+            // between three pipelines.
+            valuation.RawValue = rawValueMap.TryGetValue(valuation.SleeperPlayerId, out var rawOnly)
+                ? Math.Round(rawOnly, 2)
+                : 0.0;
+        }
+
+        // ── FAN-166: what the guardrails cost, per position, per run ─────
+        // Logged rather than inferred. If this line is quiet the caps are not
+        // binding; if it is loud, the number the harness reports on the Model
+        // basis is substantially this table rather than the model.
+        foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
+        {
+            var affected = valuations
+                .Where(v => v.Position == pos
+                            && v.RawValue > 0
+                            && v.ModelValue < v.RawValue - 0.01)
+                .ToList();
+
+            if (affected.Count == 0)
+            {
+                logger.LogInformation(
+                    "Guardrail impact {Position}: no player compressed", pos);
+                continue;
+            }
+
+            logger.LogInformation(
+                "Guardrail impact {Position}: {Count} compressed, mean drop {Mean:F1}, " +
+                "max drop {Max:F1} ({Worst} {Raw:F1} → {Model:F1})",
+                pos,
+                affected.Count,
+                affected.Average(v => v.RawValue - v.ModelValue),
+                affected.Max(v => v.RawValue - v.ModelValue),
+                affected.MaxBy(v => v.RawValue - v.ModelValue)!.PlayerName,
+                affected.MaxBy(v => v.RawValue - v.ModelValue)!.RawValue,
+                affected.MaxBy(v => v.RawValue - v.ModelValue)!.ModelValue);
         }
 
         // ── Log final top-30 for diagnostics ─────────────────────────────
