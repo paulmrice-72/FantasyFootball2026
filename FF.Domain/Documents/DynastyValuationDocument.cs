@@ -64,6 +64,41 @@ public class DynastyValuationDocument
     /// </summary>
     public double ModelValue { get; set; }
 
+    /// <summary>
+    /// FAN-166. The same pipeline one step earlier than <see cref="ModelValue"/>:
+    /// post-normalization, and before the positional guardrail caps.
+    ///
+    /// <para>
+    /// FAN-159 drew the line at provenance — the guardrails are ours, so they
+    /// stayed in the model track. Measurement on 2026-09-08 showed that decision
+    /// carries more weight than intended. The cap tables were fitted against the
+    /// blended distribution, where the FantasyPros blend had already corrected
+    /// each player's positional rank before the caps landed. Applied instead to
+    /// the model's own uncorrected rank order they bind in completely different
+    /// places: A.J. Brown is WR ~25 blended and WR 48 on the model track, which
+    /// puts him on opposite sides of the 45/46 cliff in
+    /// <c>GetWrGuardrailCap</c> — 65 against 35.
+    /// </para>
+    ///
+    /// <para>
+    /// The effect is not marginal. Sorted by raw DFV, A.J. Brown is 428 and
+    /// Jeremy Ruckert is 195; sorted by ModelValue, Ruckert is ahead. A single
+    /// global sort cannot invert an ordering, so the inversion is entirely
+    /// <c>ApplyPositionalGuardrails</c>, which is the only stage that partitions
+    /// by position. For everyone outside roughly a position's top 12-20 the
+    /// stamped value is <c>cap - rankFraction * bandWidth</c> and the model
+    /// contributes only the ordering inside a 4-point band.
+    /// </para>
+    ///
+    /// <para>
+    /// This field exists so that can be measured rather than argued about: run
+    /// the harness on Raw, Model and Blended from the same run and the
+    /// guardrails' contribution to rho is the difference between the first two.
+    /// Nothing on the site reads it.
+    /// </para>
+    /// </summary>
+    public double RawValue { get; set; }
+
     // ── Career Sim reference ─────────────────────────────────────────────
     public double CareerValueScore { get; set; }
     public int PeakYear { get; set; }

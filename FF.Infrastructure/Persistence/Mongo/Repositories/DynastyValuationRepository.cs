@@ -66,6 +66,33 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
             .ToListAsync(ct);
     }
 
+    public async Task<List<DynastyValuationDocument>> GetTopByRawValueAsync(
+        int count,
+        string? position = null,
+        CancellationToken ct = default)
+    {
+        // FAN-166. Same selection rule as ModelValue and for the same reason:
+        // rank on the basis you selected on. Selecting the top 250 by
+        // ModelValue and re-sorting by RawValue would drop every player the
+        // guardrail caps pushed out of the top 250 — which is precisely the
+        // population this basis exists to look at, since a capped player is by
+        // definition one the caps moved.
+        //
+        // RawValue is only written by DFV runs from 2026-09-08 onward. Older
+        // rows have no field, which Mongo sorts as null and therefore below
+        // every real value on a descending sort, so a stale collection produces
+        // an empty-looking comparison the harness's n < 10 guard turns into a
+        // readable error rather than a plausible wrong number.
+        var filter = position is null
+            ? Builders<DynastyValuationDocument>.Filter.Empty
+            : Builders<DynastyValuationDocument>.Filter.Eq(x => x.Position, position);
+
+        return await _collection.Find(filter)
+            .SortByDescending(x => x.RawValue)
+            .Limit(count)
+            .ToListAsync(ct);
+    }
+
     public async Task UpsertAsync(
         DynastyValuationDocument document,
         CancellationToken ct = default)
@@ -140,6 +167,10 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
             // shape as FAN-138/140/141: the pipeline logs success, the harness
             // reads nulls, and nothing anywhere reports a problem.
             Builders<DynastyValuationDocument>.Update.Set(x => x.ModelValue, document.ModelValue),
+            // FAN-166 — same reason as the line above it. A value that is
+            // computed and then dropped at the repository boundary is the
+            // failure mode this codebase keeps rediscovering.
+            Builders<DynastyValuationDocument>.Update.Set(x => x.RawValue, document.RawValue),
             Builders<DynastyValuationDocument>.Update.Set(x => x.TradeValueComputedAt, document.TradeValueComputedAt),
             Builders<DynastyValuationDocument>.Update.Set(x => x.CareerValueScore, document.CareerValueScore),
             Builders<DynastyValuationDocument>.Update.Set(x => x.PeakYear, document.PeakYear),

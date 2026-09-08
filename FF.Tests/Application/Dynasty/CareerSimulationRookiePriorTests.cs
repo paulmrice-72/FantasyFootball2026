@@ -32,12 +32,41 @@ public class CareerSimulationRookiePriorTests
     private readonly Mock<IPlayerRepository> _playerRepo = new();
     private readonly Mock<IAgingCurveRepository> _agingCurveRepo = new();
     private readonly Mock<ISimulationResultRepository> _simResultRepo = new();
+    private readonly Mock<IDepthChartRepository> _depthChartRepo = new();
 
-    private CareerSimulationService CreateSut() => new(
-        _playerRepo.Object,
-        _agingCurveRepo.Object,
-        _simResultRepo.Object,
-        NullLogger<CareerSimulationService>.Instance);
+    private CareerSimulationService CreateSut()
+    {
+        // FAN-168: default to no depth rows unless a test declares them, which
+        // resolves every player to the unknown-role weight. The Fagnano
+        // protections below are pinned under that default deliberately — if they
+        // only held when a depth chart happened to be synced, they would not be
+        // protections.
+        _depthChartRepo
+            .Setup(r => r.GetLatestByPositionAsync(
+                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        return new(
+            _playerRepo.Object,
+            _agingCurveRepo.Object,
+            _simResultRepo.Object,
+            _depthChartRepo.Object,
+            NullLogger<CareerSimulationService>.Instance);
+    }
+
+    /// <summary>FAN-168. Declares depth-chart rows for a position.</summary>
+    private void SetupDepth(string position, params (string SleeperId, int DepthTeam)[] rows) =>
+        _depthChartRepo
+            .Setup(r => r.GetLatestByPositionAsync(
+                position, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rows.Select(x => new DepthChartDocument
+            {
+                SleeperPlayerId = x.SleeperId,
+                Position = position,
+                DepthTeam = x.DepthTeam,
+                Season = 2026,
+                Week = 1
+            }).ToList());
 
     private static Player MakePlayer(
         string sleeperId, Position pos, int age, int yearsExperience,
@@ -324,5 +353,111 @@ public class CareerSimulationRookiePriorTests
         var s = result.Single(r => r.SleeperPlayerId == "f2");
 
         b.CareerValueScore.Should().BeLessThan(s.CareerValueScore);
+    }
+
+    // ── FAN-168: role-conditioned prior, and the cliff it replaced ──────────
+
+    /// <summary>
+    /// The regression tripwire for the defect FAN-168 was raised for.
+    ///
+    /// <para>
+    /// Two tight ends whose trailing production differs by 0.10 FPPG, straddling
+    /// what used to be <c>StarterThreshold["TE"] = 8.5</c> after shrinkage. The
+    /// old code returned 8.53 for one and the flat 3.5 depth level for the
+    /// other — a 2.4x gap on a tenth of a point of real production, which is how
+    /// Kyle Pitts (raw 8.08, blended 8.422, missed by 0.078) came to be valued
+    /// as a replacement-level player while David Njoku (raw 8.47, blended 8.669)
+    /// was a model TE1.
+    /// </para>
+    ///
+    /// <para>
+    /// The assertion is deliberately about the SIZE of the gap, not its
+    /// direction. Ordering was never the problem — the better player did rank
+    /// higher. The problem was that the function was a step, so a rank
+    /// correlation over the position collapsed (TE within-position ρ 0.213
+    /// against 0.66 at QB and WR). A future change that reintroduces any
+    /// discontinuity here will fail this whether or not it preserves order.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task TeProductionJustEitherSideOfTheOldThreshold_ProducesNearlyEqualValue()
+    {
+        var justUnder = MakePlayer("t1", Position.TE, 27, 5, draftRound: 2, "Just", "Under");
+        var justOver = MakePlayer("t2", Position.TE, 27, 5, draftRound: 2, "Just", "Over");
+
+        SetupPlayers(Position.TE, justUnder, justOver);
+        SetupNoCurve();
+        SetupDepth("TE", ("t1", 1), ("t2", 1));
+
+        // Single season each, so the two-season merge does not participate and
+        // this test measures the shrinkage path alone.
+        SetupSims(
+            Sim("t1", "Just Under", "TE", 2025, 8.15m),
+            Sim("t2", "Just Over", "TE", 2025, 8.25m));
+
+        var result = await CreateSut().SimulateAllPlayersAsync(2026);
+
+        var under = result.Single(r => r.SleeperPlayerId == "t1").CareerValueScore;
+        var over = result.Single(r => r.SleeperPlayerId == "t2").CareerValueScore;
+
+        under.Should().BeGreaterThan(0);
+        under.Should().BeApproximately(over, over * 0.10,
+            "a 0.10 FPPG difference in trailing production must not move career " +
+            "value by more than a few percent — under the StarterThreshold gate " +
+            "this pair differed by a factor of 2.4");
+    }
+
+    /// <summary>
+    /// FAN-168. The prior a player shrinks toward is his role's, not the
+    /// position's starter average. Two players identical in every respect the
+    /// simulation reads except their depth-chart row, and with no production to
+    /// separate them, must not come out equal.
+    /// </summary>
+    [Fact]
+    public async Task DepthChartRole_SetsThePrior_ForPlayersWithNoProduction()
+    {
+        var listedStarter = MakePlayer("g1", Position.TE, 26, 3, draftRound: 3, "Listed", "Starter");
+        var thirdString = MakePlayer("g2", Position.TE, 26, 3, draftRound: 3, "Third", "String");
+
+        SetupPlayers(Position.TE, listedStarter, thirdString);
+        SetupNoCurve();
+        SetupDepth("TE", ("g1", 1), ("g2", 3));
+        SetupSims();
+
+        var result = await CreateSut().SimulateAllPlayersAsync(2026);
+
+        var starter = result.Single(r => r.SleeperPlayerId == "g1").CareerValueScore;
+        var third = result.Single(r => r.SleeperPlayerId == "g2").CareerValueScore;
+
+        starter.Should().BeGreaterThan(third,
+            "with no production on either side the prior is the whole signal, and " +
+            "a third-string tight end must not inherit the starter prior");
+    }
+
+    /// <summary>
+    /// FAN-168. The counterpart: role must not overrule real production. A
+    /// third-string player who has actually produced still beats a listed
+    /// starter who has not, because credibility scales with evidence and the
+    /// prior only fills the gap that evidence leaves.
+    /// </summary>
+    [Fact]
+    public async Task RealProduction_OutweighsADepthChartRow()
+    {
+        var producingBackup = MakePlayer("h1", Position.TE, 26, 5, draftRound: 3, "Producing", "Backup");
+        var idleStarter = MakePlayer("h2", Position.TE, 26, 5, draftRound: 3, "Idle", "Starter");
+
+        SetupPlayers(Position.TE, producingBackup, idleStarter);
+        SetupNoCurve();
+        SetupDepth("TE", ("h1", 3), ("h2", 1));
+        SetupSims(Sim("h1", "Producing Backup", "TE", 2025, 11.0m));
+
+        var result = await CreateSut().SimulateAllPlayersAsync(2026);
+
+        var producing = result.Single(r => r.SleeperPlayerId == "h1").CareerValueScore;
+        var idle = result.Single(r => r.SleeperPlayerId == "h2").CareerValueScore;
+
+        producing.Should().BeGreaterThan(idle,
+            "a depth-chart row is a prior, not a verdict — it must not override " +
+            "five years of evidence pointing the other way");
     }
 }
