@@ -3,6 +3,7 @@ using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using FF.Domain.Enums;
+using FF.Domain.Services;
 using MathNet.Numerics.Distributions;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
@@ -43,7 +44,33 @@ public class CareerSimulationService(
     // and soften the post-peak decay proportionally for the top tier. Applied
     // in SimulatePlayer via eliteTierFactor. Tunable via the calibration
     // harness (FAN-95) like ShrinkageK and NormExponent elsewhere.
+    // FAN-157 / FAN-95, 2026-09-07 — READ BEFORE TUNING THIS.
+    //
+    // The justification above describes correcting "a single population-average
+    // polynomial fit across ALL players at a position." That fit did not exist
+    // when this constant was chosen: aging_curves had never been built, so
+    // GetAgingMultiplier fell through to the hardcoded fallback for every
+    // player, always. 0.6 was tuned to counteract a curve that never loaded.
+    //
+    // It is now operating on real curves — and, after FAN-157, on curves built
+    // by a longitudinal estimator rather than a cross-sectional one, which is a
+    // second change of input in as many weeks. Whatever this constant is doing
+    // today, nobody has measured it.
+    //
+    // To measure: set to 0.0, rebuild, re-run career sims → breakout → DFV, and
+    // run the calibration harness on the Model basis (FAN-159). Compare against
+    // the same run at 0.6. Do that BEFORE re-deriving it, or the dampening will
+    // absorb part of the aging correction and hide whether the new curves
+    // helped. A recompile toggle rather than a setting on purpose — the whole
+    // pipeline has to be re-run either way, so config plumbing buys nothing.
     private const double EliteDecayDampening = 0.6;
+
+    /// <summary>
+    /// A projected year counts as "prime" when its SeasonValue is at least this
+    /// fraction of the player's own peak projected year. See the note where
+    /// YearsOfPrimeRemaining is computed for why this is self-relative.
+    /// </summary>
+    private const double PrimeValueFraction = 0.70;
 
     // Position priors per scoring math reference doc (FAN-61).
     // These represent average STARTER FPPG by position in half-PPR.
@@ -86,13 +113,14 @@ public class CareerSimulationService(
         ["TE"] = 0.020
     };
 
-    private static readonly Dictionary<string, int> PeakAges = new()
-    {
-        ["QB"] = 29,
-        ["RB"] = 24,
-        ["WR"] = 26,
-        ["TE"] = 27
-    };
+    // FAN-157: PeakAges and PostPeakWindow lived here and, in slightly
+    // different form, in AgingCurveService — four dictionaries across two
+    // projects describing one thing. Both now come from
+    // AgingFallbackCurve.WindowFor(position), which carries the same values
+    // this file has always used (QB 29 / RB 24 / WR 26 / TE 27, decline windows
+    // 8 / 5 / 9 / 8, default peak 26). No shape change; one place to edit.
+    private static int PeakAgeFor(string position) =>
+        AgingFallbackCurve.WindowFor(position).PeakAge;
 
     // FAN-52: TE threshold raised from 6.0 → 8.5.
     // 6.0 allowed any TE whose blended FPPG cleared a backup RB's average
@@ -104,14 +132,6 @@ public class CareerSimulationService(
         ["RB"] = 7.0,
         ["WR"] = 7.5,
         ["TE"] = 8.5, // FAN-52: raised from 6.0
-    };
-
-    private static readonly Dictionary<string, double> PostPeakWindow = new()
-    {
-        ["QB"] = 8.0,
-        ["RB"] = 5.0,
-        ["WR"] = 9.0,
-        ["TE"] = 8.0,
     };
 
     public async Task<List<CareerSimulationDocument>> SimulateAllPlayersAsync(
@@ -295,7 +315,7 @@ public class CareerSimulationService(
         double eliteTierFactor = 0.0)
     {
         var currentAge = player.Age ?? (player.YearsExperience == 0 ? 21 : 22);
-        var peakAgeForPosition = curve?.PeakAge ?? PeakAges.GetValueOrDefault(position, 26);
+        var peakAgeForPosition = curve?.PeakAge ?? PeakAgeFor(position);
 
         var rawBaseline = GetBaselineFppg(
             player.SleeperPlayerId!, player.FullName, position,
@@ -378,8 +398,26 @@ public class CareerSimulationService(
             .Select((y, i) => y.SeasonValue / Math.Pow(1.15, i))
             .Sum();
 
+        // FAN-157: these two used to be computed from different quantities —
+        // PeakYear from SeasonValue, YearsOfPrimeRemaining from the aging
+        // multiplier alone — so they could and did contradict each other. Seven
+        // of the production top 25 carried "peak year 2030, prime years 0",
+        // which is incoherent on its face: the peak year is by definition a year
+        // worth having.
+        //
+        // Both now derive from SeasonValue, and prime is measured relative to
+        // the player's own peak: how many of the projected years he is within
+        // 30% of his own ceiling. The peak year scores 100% of itself, so it is
+        // always inside the prime count and the contradiction is structurally
+        // impossible rather than merely fixed.
+        //
+        // This changes what the PRIME YRS column means. It is no longer "years
+        // until he stops being good" (an absolute bar) but "years he holds near
+        // his own best" — so a 33-year-old reads 1 rather than 0, which is the
+        // honest answer to the question the column actually asks.
         var peakYear = yearProjections.MaxBy(y => y.SeasonValue)!;
-        var primeYears = yearProjections.Count(y => y.AgingMultiplier >= 0.70);
+        var primeThreshold = peakYear.SeasonValue * PrimeValueFraction;
+        var primeYears = yearProjections.Count(y => y.SeasonValue >= primeThreshold);
 
         return new CareerSimulationDocument
         {
@@ -696,7 +734,7 @@ public class CareerSimulationService(
     private static double GetInjuryRisk(string position, int age)
     {
         var baseRisk = BaseInjuryRisk.GetValueOrDefault(position, 0.15);
-        var peakAge = PeakAges.GetValueOrDefault(position, 26);
+        var peakAge = PeakAgeFor(position);
         var increment = AgeInjuryIncrement.GetValueOrDefault(position, 0.02);
         var yearsOver = Math.Max(0, age - peakAge);
         return Math.Min(0.65, baseRisk + yearsOver * increment);
@@ -704,7 +742,7 @@ public class CareerSimulationService(
 
     private static CareerPhase ClassifyPhase(string position, int age)
     {
-        var peak = PeakAges.GetValueOrDefault(position, 26);
+        var peak = PeakAgeFor(position);
         return age < peak - 2 ? CareerPhase.Ascending
             : age <= peak + 2 ? CareerPhase.Prime
             : age <= peak + 5 ? CareerPhase.Declining
@@ -720,13 +758,12 @@ public class CareerSimulationService(
         _ => 0.25
     };
 
+    // FAN-157: this used to be a second, subtly different copy of
+    // AgingCurveService.GetDefaultMultiplier — same intent, ascending from a
+    // hardcoded 18 instead of the position's window minimum, so the two
+    // services returned different multipliers for the same young player. One
+    // function now, in FF.Domain. The ascent base is the window minimum; see
+    // AgingFallbackCurve for why that side of the disagreement won.
     private static double GetFallbackMultiplier(string position, int age)
-    {
-        var peak = PeakAges.GetValueOrDefault(position, 26);
-        if (age <= peak)
-            return 0.6 + 0.4 * ((double)(age - 18) / (peak - 18));
-
-        var window = PostPeakWindow.GetValueOrDefault(position, 8.0);
-        return Math.Max(0.1, 1.0 - 0.9 * Math.Pow((double)(age - peak) / window, 2));
-    }
+        => AgingFallbackCurve.Multiplier(position, age);
 }

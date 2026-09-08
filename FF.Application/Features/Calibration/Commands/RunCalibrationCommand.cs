@@ -6,7 +6,35 @@ using MediatR;
 
 namespace FF.Application.Features.Calibration.Commands;
 
-public record RunCalibrationCommand(int Season, string ScoringFormat = "Superflex") : IRequest<RunCalibrationResult>;
+/// <summary>
+/// FAN-159. <paramref name="ValueBasis"/> selects which of our two values the run
+/// ranks players by:
+///
+/// <list type="bullet">
+/// <item><c>Model</c> (default) — <c>ModelValue</c>, the pipeline with every
+/// FantasyPros-derived step removed. This is the only basis on which ρ means
+/// what its name says.</item>
+/// <item><c>Blended</c> — <c>TradeValue</c>, what the site serves. Kept so the
+/// pre-FAN-159 numbers stay reproducible and the gap between the two is
+/// measurable, NOT as an alternative way to grade the model: TradeValue is 65%
+/// FantasyPros rank (85% for TEs) and is then scored against FantasyPros rank,
+/// so this basis is grading the anchor against itself.</item>
+/// </list>
+///
+/// Anything else is rejected rather than defaulted — a typo silently falling
+/// back to the flattering basis is exactly the failure this ticket exists to
+/// remove.
+/// </summary>
+public record RunCalibrationCommand(
+    int Season,
+    string ScoringFormat = "Superflex",
+    string ValueBasis = CalibrationValueBasis.Model) : IRequest<RunCalibrationResult>;
+
+public static class CalibrationValueBasis
+{
+    public const string Model = "Model";
+    public const string Blended = "Blended";
+}
 
 public record RunCalibrationResult(
     double SpearmanRho,
@@ -16,7 +44,8 @@ public record RunCalibrationResult(
     List<CalibrationPlayerSnapshot> Top20Snapshot,
     int UnmatchedCount = 0,
     List<string>? TopUnmatched = null,
-    List<CalibrationPlayerSnapshot>? Worst20Snapshot = null);
+    List<CalibrationPlayerSnapshot>? Worst20Snapshot = null,
+    string ValueBasis = CalibrationValueBasis.Model);
 
 public class RunCalibrationCommandHandler(
     IDynastyValuationRepository valuationRepo,
@@ -25,8 +54,49 @@ public class RunCalibrationCommandHandler(
 {
     public async Task<RunCalibrationResult> Handle(RunCalibrationCommand request, CancellationToken ct)
     {
-        // Load our dynasty valuations (all, sorted by TradeValue desc)
-        var ourValuations = await valuationRepo.GetTopByTradeValueAsync(250, position: null, ct);
+        // ── FAN-159: which of our two values is being graded ──────────────
+        //
+        // Until 2026-09-07 this was unconditionally TradeValue, and the metrics
+        // below were scored against FantasyPros rank. TradeValue is blended 65%
+        // toward an anchor that is a pure step function of FantasyPros rank
+        // (85% for tight ends), so the harness was grading FantasyPros against
+        // itself at 65% weight: a model producing noise would still have posted
+        // a substantial ρ, because the blend alone supplied most of the
+        // ordering. Every figure this harness has ever produced — including the
+        // 0.8572 that "cleared the target" on 2026-09-06 — was measuring the
+        // blend, not the model.
+        //
+        // ModelValue is the same pipeline with the FP-derived steps removed.
+        // Ranking on it is what makes ρ mean what its name says.
+        var basis = request.ValueBasis;
+        if (basis != CalibrationValueBasis.Model && basis != CalibrationValueBasis.Blended)
+            throw new ArgumentException(
+                $"Unknown calibration value basis '{basis}'. Expected " +
+                $"'{CalibrationValueBasis.Model}' or '{CalibrationValueBasis.Blended}'.",
+                nameof(request));
+
+        var useModelValue = basis == CalibrationValueBasis.Model;
+
+        // Select on the same basis we rank on. Taking the top 250 by TradeValue
+        // and then re-sorting them by ModelValue would drop every player the FP
+        // blend pushed out of the top 250 — precisely the players where model
+        // and consensus disagree most — biasing the sample toward agreement by
+        // the same mechanism this change exists to remove.
+        var ourValuations = useModelValue
+            ? await valuationRepo.GetTopByModelValueAsync(250, position: null, ct)
+            : await valuationRepo.GetTopByTradeValueAsync(250, position: null, ct);
+
+        double OurValue(DynastyValuationDocument v) => useModelValue ? v.ModelValue : v.TradeValue;
+
+        // A collection written before ModelValue existed reads as 0 for every
+        // row. Ranking on a constant would produce a real-looking ρ off nothing
+        // but insertion order, so say what happened instead.
+        if (useModelValue && ourValuations.TrueForAll(v => v.ModelValue <= 0))
+            throw new InvalidOperationException(
+                "No valuations carry a ModelValue. Re-run the DFV calculation " +
+                "(POST /api/v1/admin/jobs/run-dfv) — ModelValue is only written by " +
+                "runs from 2026-09-07 onward. To measure the previously-reported " +
+                "blended numbers instead, run with ValueBasis 'Blended'.");
 
         // Load FantasyPros dynasty rankings — we use the imported FP rookie+veteran rankings
         // FP overall dynasty rankings are stored in fantasyPros_rookie_rankings for the current season
@@ -53,25 +123,26 @@ public class RunCalibrationCommandHandler(
         // most valuable casualties, so the numbers can be read for what they are.
         var matched = ourValuations
             .Where(v => fpBySleeperIdRank.ContainsKey(v.SleeperPlayerId))
-            .OrderByDescending(v => v.TradeValue)
+            .OrderByDescending(OurValue)
             .Select((v, idx) => new
             {
                 OurRank = idx + 1,
                 v.PlayerName,
                 v.Position,
-                v.TradeValue,
+                OurValue = OurValue(v),
                 FpRank = fpBySleeperIdRank[v.SleeperPlayerId]
             })
             .ToList();
 
         var unmatched = ourValuations
             .Where(v => !fpBySleeperIdRank.ContainsKey(v.SleeperPlayerId))
-            .OrderByDescending(v => v.TradeValue)
+            .OrderByDescending(OurValue)
             .ToList();
 
+        var valueLabel = useModelValue ? "MV" : "TV";
         var topUnmatched = unmatched
             .Take(10)
-            .Select(v => $"{v.PlayerName} ({v.Position}, TV {Math.Round(v.TradeValue, 1)})")
+            .Select(v => $"{v.PlayerName} ({v.Position}, {valueLabel} {Math.Round(OurValue(v), 1)})")
             .ToList();
 
         int n = Math.Min(matched.Count, 200);
@@ -131,7 +202,7 @@ public class RunCalibrationCommandHandler(
         // runtime, and a typo here would surface as an exception during a
         // calibration run rather than a compile error.
         CalibrationPlayerSnapshot MakeSnapshot(
-            int ourRank, string playerName, string position, double tradeValue, int fpRank)
+            int ourRank, string playerName, string position, double ourValue, int fpRank)
         {
             var fpSubsetRank = fpDenseRankBySubsetPosition[fpRank];
             return new CalibrationPlayerSnapshot
@@ -139,7 +210,10 @@ public class RunCalibrationCommandHandler(
                 OurRank = ourRank,
                 PlayerName = playerName,
                 Position = position,
-                OurTradeValue = Math.Round(tradeValue, 1),
+                // Whichever value this run ranked on — ModelValue or TradeValue.
+                // The property keeps its name because it is persisted and read by
+                // the Admin page; ValueBasis on the parent document says which.
+                OurTradeValue = Math.Round(ourValue, 1),
                 FpRank = fpRank,
                 FpSubsetRank = Math.Round(fpSubsetRank, 1),
                 Delta = Math.Round(ourRank - fpSubsetRank, 1)
@@ -151,7 +225,7 @@ public class RunCalibrationCommandHandler(
         // raw FpRank while the headline used the subset rank, so the two disagreed
         // and the column could not be averaged to reach the number above it.
         var snapshot = subset.Take(20)
-            .Select(p => MakeSnapshot(p.OurRank, p.PlayerName, p.Position, p.TradeValue, p.FpRank))
+            .Select(p => MakeSnapshot(p.OurRank, p.PlayerName, p.Position, p.OurValue, p.FpRank))
             .ToList();
 
         // The twenty biggest disagreements anywhere in the population. This is the
@@ -162,7 +236,7 @@ public class RunCalibrationCommandHandler(
             .OrderByDescending(p => Math.Abs(p.OurRank - fpDenseRankBySubsetPosition[p.FpRank]))
             .ThenBy(p => p.OurRank)
             .Take(20)
-            .Select(p => MakeSnapshot(p.OurRank, p.PlayerName, p.Position, p.TradeValue, p.FpRank))
+            .Select(p => MakeSnapshot(p.OurRank, p.PlayerName, p.Position, p.OurValue, p.FpRank))
             .ToList();
 
         // Persist result
@@ -178,13 +252,14 @@ public class RunCalibrationCommandHandler(
             Top20Snapshot = snapshot,
             Worst20Snapshot = worstSnapshot,
             UnmatchedCount = unmatched.Count,
-            TopUnmatched = topUnmatched
+            TopUnmatched = topUnmatched,
+            ValueBasis = basis
         };
 
         await calibrationRepo.InsertAsync(doc, ct);
 
         return new RunCalibrationResult(
             doc.SpearmanRho, doc.AvgAbsDelta, top10Overlap, n, snapshot,
-            unmatched.Count, topUnmatched, worstSnapshot);
+            unmatched.Count, topUnmatched, worstSnapshot, basis);
     }
 }

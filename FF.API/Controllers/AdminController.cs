@@ -416,12 +416,27 @@ public class AdminController(
     [FromServices] IMediator mediator,
     CancellationToken ct)
     {
+        // FAN-159: the basis is part of what the run means, so it is logged with
+        // the trigger and echoed in the result. Default is Model — the value the
+        // FantasyPros blend has not touched. "Blended" reproduces the pre-FAN-159
+        // numbers and is grading the FP anchor against itself; it is here for
+        // comparison, not for judging the model.
+        var basis = string.IsNullOrWhiteSpace(request.ValueBasis)
+            ? CalibrationValueBasis.Model
+            : request.ValueBasis;
+
         logger.LogInformation(
-            "Admin triggered calibration harness — season {Season}, format {Format}",
-            request.Season, request.ScoringFormat);
+            "Admin triggered calibration harness — season {Season}, format {Format}, basis {Basis}",
+            request.Season, request.ScoringFormat, basis);
 
         var result = await mediator.Send(
-            new RunCalibrationCommand(request.Season, request.ScoringFormat ?? "Superflex"), ct);
+            new RunCalibrationCommand(request.Season, request.ScoringFormat ?? "Superflex", basis), ct);
+
+        logger.LogInformation(
+            "Calibration complete on {Basis} basis — rho {Rho:F4}, avg abs delta {Delta:F2}, " +
+            "top-10 overlap {Overlap}/10, {N} compared, {Unmatched} excluded",
+            result.ValueBasis, result.SpearmanRho, result.AvgAbsDelta,
+            result.Top10Overlap, result.PlayerCount, result.UnmatchedCount);
 
         // 2026-09-07: this hand-enumerated projection is why the unmatched-count
         // warning never appeared. UnmatchedCount and TopUnmatched were computed,
@@ -514,6 +529,12 @@ public class AdminController(
     public record RunDfvRequest(int Season, string? ScoringFormat = null);
 
     public record NflContextOverrideRequest(int? Season, int? Week);
-    public record RunCalibrationRequest(int Season, string? ScoringFormat);
+    /// <summary>
+    /// ValueBasis: "Model" (default — ModelValue, the FP blend removed) or
+    /// "Blended" (TradeValue, what the site serves). An unrecognised value is
+    /// rejected by the handler rather than defaulted, so a typo cannot silently
+    /// fall back to the flattering basis. See FAN-159.
+    /// </summary>
+    public record RunCalibrationRequest(int Season, string? ScoringFormat, string? ValueBasis = null);
     public record AdminImportFantasyProsRequest(string CsvContent, int Season);
 }

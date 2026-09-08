@@ -46,6 +46,26 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
             .ToListAsync(ct);
     }
 
+    public async Task<List<DynastyValuationDocument>> GetTopByModelValueAsync(
+        int count,
+        string? position = null,
+        CancellationToken ct = default)
+    {
+        // ModelValue is only written by DFV runs from 2026-09-07 onward. Rows
+        // written before that have no field at all, which Mongo sorts as null —
+        // below every real value on a descending sort, so a stale collection
+        // yields an empty-looking comparison rather than a plausible wrong one.
+        // The harness's own n < 10 guard turns that into a readable error.
+        var filter = position is null
+            ? Builders<DynastyValuationDocument>.Filter.Empty
+            : Builders<DynastyValuationDocument>.Filter.Eq(x => x.Position, position);
+
+        return await _collection.Find(filter)
+            .SortByDescending(x => x.ModelValue)
+            .Limit(count)
+            .ToListAsync(ct);
+    }
+
     public async Task UpsertAsync(
         DynastyValuationDocument document,
         CancellationToken ct = default)
@@ -115,6 +135,11 @@ public class DynastyValuationRepository(MongoDbContext context) : IDynastyValuat
             Builders<DynastyValuationDocument>.Update.Set(x => x.BreakoutScoredAt, document.BreakoutScoredAt),
             Builders<DynastyValuationDocument>.Update.Set(x => x.TradeValue, document.TradeValue),
             Builders<DynastyValuationDocument>.Update.Set(x => x.DiscountedFutureValue, document.DiscountedFutureValue),
+            // FAN-159 — without this the field is computed, held in memory, and
+            // dropped at the repository boundary. That is the same silent-no-op
+            // shape as FAN-138/140/141: the pipeline logs success, the harness
+            // reads nulls, and nothing anywhere reports a problem.
+            Builders<DynastyValuationDocument>.Update.Set(x => x.ModelValue, document.ModelValue),
             Builders<DynastyValuationDocument>.Update.Set(x => x.TradeValueComputedAt, document.TradeValueComputedAt),
             Builders<DynastyValuationDocument>.Update.Set(x => x.CareerValueScore, document.CareerValueScore),
             Builders<DynastyValuationDocument>.Update.Set(x => x.PeakYear, document.PeakYear),
