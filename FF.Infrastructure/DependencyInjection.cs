@@ -135,6 +135,10 @@ public static class DependencyInjection
             estimatorTrusted: false));
         services.AddScoped<ICareerSimulationRepository, CareerSimulationRepository>();
         services.AddScoped<ICareerSimulationService, CareerSimulationService>();
+        // FAN-153 phase 1: the positional value curves behind league-aware
+        // replacement level. Written by the admin build job; nothing reads them
+        // yet, so registering this changes no served value.
+        services.AddScoped<IPositionalValueCurveRepository, PositionalValueCurveRepository>();
         services.AddScoped<IDynastyValuationRepository, DynastyValuationRepository>();
         services.AddScoped<IBreakoutDetectionService, BreakoutDetectionService>();
         services.AddScoped<IDfvCalculationService, DfvCalculationService>();
