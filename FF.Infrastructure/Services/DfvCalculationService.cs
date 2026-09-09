@@ -1,6 +1,7 @@
 ﻿using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
+using FF.Application.Services;
 using FF.Domain.Documents;
 using FF.Domain.Enums;
 using Microsoft.Extensions.Logging;
@@ -11,6 +12,7 @@ public class DfvCalculationService(
     ICareerSimulationRepository careerSimRepository,
     IDynastyValuationRepository valuationRepository,
     IFantasyProsRookieRankingRepository fpRookieRepository,
+    IPositionalValueCurveRepository curveRepository,
     ILogger<DfvCalculationService> logger) : IDfvCalculationService
 {
     // Annual discount rates by position — RBs depreciate fastest
@@ -22,23 +24,39 @@ public class DfvCalculationService(
         ["TE"] = 0.13
     };
 
-    // Standard (1-QB) scarcity multipliers
-    private static readonly Dictionary<string, double> StandardMultipliers = new()
-    {
-        ["QB"] = 0.85,
-        ["RB"] = 1.10,
-        ["WR"] = 1.00,
-        ["TE"] = 1.05
-    };
+    // ── FAN-153 phase 2: the positional scarcity multipliers are gone ─────
+    // StandardMultipliers (QB 0.85 / RB 1.10 / WR 1.00 / TE 1.05),
+    // SuperflexMultipliers, and GetSuperflexScarcityMultiplier — a five-tier
+    // step function on CareerValueScore / 1.4 — were deleted here. They were
+    // one of the two crude stand-ins for a cross-position basis, and they
+    // pulled against the other: pre-cap they put Blake Bortles at RV 74.5 and
+    // seventeen quarterbacks in the raw top 20, while the cap tables then
+    // pushed real starters the other way (Dak Prescott Δ+154, Jared Goff
+    // Δ+130). Neither was calibrated against anything.
+    //
+    // Value over replacement replaces them. A multiplier scales a point total
+    // that was never comparable across positions in the first place; a
+    // subtraction makes it comparable. See ValueOverReplacementCalculator.
+    //
+    // The cap tables are still here, deliberately. Two changes, two numbers:
+    // this commit is measured with them in place on the Raw basis — which is
+    // snapshotted pre-guardrail and therefore measures VOR alone — and they
+    // come out in a commit of their own with its own measurement.
 
-    // Superflex scarcity multipliers — fallback for non-QB positions
-    private static readonly Dictionary<string, double> SuperflexMultipliers = new()
-    {
-        ["QB"] = 1.00, // overridden by tiered logic below
-        ["RB"] = 1.08,
-        ["WR"] = 1.00,
-        ["TE"] = 1.05
-    };
+    /// <summary>
+    /// What a free agent's surplus is discounted by. Unchanged in value, changed
+    /// in application: it is now applied only to a positive value.
+    ///
+    /// <para>
+    /// Under the old raw-point scale every value was positive and a 0.60
+    /// multiplier could only reduce. Under value over replacement a
+    /// sub-replacement player is negative, and multiplying a negative by 0.60
+    /// <i>raises</i> it — a free agent projected below replacement would be
+    /// promoted up the board for being a free agent, which is the opposite of
+    /// what this penalty exists to do.
+    /// </para>
+    /// </summary>
+    private const double FreeAgentPenalty = 0.60;
 
     // ── FP dynasty blend weight ─────────────────────────────────────────────
     // Fix 2026-08-27b: TE-scoped bump. Kraft/LaPorta/McBride/Bowers stayed
@@ -207,41 +225,11 @@ public class DfvCalculationService(
         _ => 10.0    // deep bench / effectively unranked — still correctable
     };
 
-    // ── Superflex QB scarcity ─────────────────────────────────────────────
-    private static double GetSuperflexScarcityMultiplier(
-        string position,
-        DynastyValuationDocument valuation)
-    {
-        if (position != "QB")
-        {
-            return position switch
-            {
-                "RB" => 1.08,
-                "WR" => 1.00,
-                "TE" => 1.05,
-                _ => 1.00
-            };
-        }
-
-        var adjustedCvs = valuation.CareerValueScore / 1.4;
-        return adjustedCvs switch
-        {
-            >= 850 => 1.15,
-            >= 700 => 1.00,
-            >= 650 => 0.92,
-            >= 550 => 0.84,
-            _ => 0.75
-        };
-    }
-
     public async Task<List<DynastyValuationDocument>> CalculateAllAsync(
         int season,
         ScoringFormat scoringFormat = ScoringFormat.HalfPpr,
         CancellationToken ct = default)
     {
-        var isSuperflexFormat = scoringFormat is ScoringFormat.Superflex or ScoringFormat.SuperflexFullPpr;
-        var scarcityMultipliers = isSuperflexFormat ? SuperflexMultipliers : StandardMultipliers;
-
         // ── Load all valuations ──────────────────────────────────────────
         var valuations = new List<DynastyValuationDocument>();
         foreach (var pos in new[] { "QB", "RB", "WR", "TE" })
@@ -287,8 +275,65 @@ public class DfvCalculationService(
             "Loaded {RookieCount} FP rookie ranks, {DynastyCount} FP dynasty ranks",
             fpRookieRankMap.Count, fpDynastyRankMap.Count);
 
+        // ── FAN-153 phase 2: the cross-position ladder ───────────────────
+        // Replacement level is a property of a league, so the curves are stored
+        // and the league-specific half is an index into them. The board is
+        // global and therefore has to commit to one shape: the canonical team
+        // count, and the roster configuration the scoring format implies. A
+        // league that differs resolves its own level from the same curves.
+        //
+        // The curve is read under the scoring half of the format only — see
+        // ValueOverReplacementCalculator.CurveScoringKey. A superflex league and a
+        // 1-QB league on the same scoring read the same stored documents and differ
+        // only in where they index into them, which is the design phase 1 chose.
+        var curveKey = ValueOverReplacementCalculator.CurveScoringKey(scoringFormat);
+        var curves = await curveRepository.GetAllBySeasonAndFormatAsync(season, curveKey, ct);
+
+        if (curves.Count == 0)
+            throw new InvalidOperationException(
+                $"No positional value curves found for season {season} under scoring key "
+                + $"'{curveKey}' (requested format {scoringFormat}). Run "
+                + $"POST /api/v1/admin/jobs/build-value-curves for season {season} first — "
+                + "without them there is no replacement level, and valuing players on raw "
+                + "point totals is the cross-position defect FAN-153 exists to remove.");
+
+        var leagueShape = ValueOverReplacementCalculator.LeagueShapeFor(scoringFormat);
+        var replacementLevels = ValueOverReplacementCalculator.ResolveLevels(
+            curves, leagueShape, ValueOverReplacementCalculator.CanonicalTeamCount);
+
+        foreach (var yearLevels in replacementLevels
+                     .GroupBy(kv => kv.Key.Year)
+                     .OrderBy(g => g.Key))
+        {
+            logger.LogInformation(
+                "FAN-153 replacement level {Year} at {Teams} teams ({Format}) — {Levels}",
+                yearLevels.Key,
+                ValueOverReplacementCalculator.CanonicalTeamCount,
+                scoringFormat,
+                string.Join(", ", yearLevels
+                    .OrderBy(kv => kv.Key.Position)
+                    .Select(kv => $"{kv.Key.Position} {kv.Value.Level:F1} at cutoff {kv.Value.Cutoff}"
+                                  + (kv.Value.PoolExhausted ? " (pool exhausted)" : ""))));
+        }
+
         // ── Build raw DFV for every player ───────────────────────────────
         var rawDfvMap = new Dictionary<string, double>();
+
+        // FAN-153 phase 2. Which players this run actually scored, kept apart
+        // from the values themselves.
+        //
+        // Until now "scored" and "positive" were the same thing, and every stage
+        // downstream filtered on raw > 0. Under value over replacement a player
+        // projected below replacement is negative — a real, informative rank,
+        // not an absence — so that filter would delete most of the board. It is
+        // FAN-170's defect at scale: a low projection read as a missing player.
+        //
+        // The two guards below (no NFL team, no career simulation) are genuine
+        // absences and are the only things that keep a player out of this set.
+        // Zeroed keeps meaning absent, and never means bad.
+        var scoredIds = new HashSet<string>(StringComparer.Ordinal);
+        var yearsWithoutCurve = 0;
+        var subReplacementCount = 0;
 
         // FAN-170: the cohort the deleted year 0-1 depth gate used to zero.
         // Logged rather than acted on — it is the attribution key for any
@@ -372,21 +417,58 @@ public class DfvCalculationService(
                 admittedByGateRemoval.Add(valuation);
             }
 
-            double scarcity = isSuperflexFormat
-                ? GetSuperflexScarcityMultiplier(valuation.Position, valuation)
-                : scarcityMultipliers.GetValueOrDefault(valuation.Position, 1.0);
+            // FAN-153 phase 2. The discounted sum of each projected season's
+            // surplus over that season's replacement level, in place of the
+            // discounted point total times a positional multiplier.
+            var vor = ValueOverReplacementCalculator.Compute(
+                careerSim,
+                valuation.Position,
+                DiscountRates.GetValueOrDefault(valuation.Position, 0.12),
+                replacementLevels);
 
-            var raw = CalculateRawDfvWithScarcity(careerSim, valuation.Position, scarcity);
+            yearsWithoutCurve += vor.YearsWithoutCurve;
+            if (vor.Total < 0) subReplacementCount++;
 
             // P3: Ascent bonus — additive, only for genuine breakout candidates.
             // Per scoring math reference (FAN-63): threshold 50, max +8 raw points.
+            //
+            // Note the scale it now sits on. It was +8 against a discounted career
+            // total in the high hundreds — well under one percent. Against a
+            // surplus over replacement it is a materially larger nudge, because
+            // the surplus is the small difference between two large numbers.
+            // Left at its calibrated value for this measurement rather than
+            // re-tuned in the same commit as the change that moved its scale.
             var ascentBonus = valuation.BreakoutScore >= 50
                 ? ((valuation.BreakoutScore - 50.0) / 50.0) * 8.0
                 : 0.0;
 
-            var faPenalty = isFaSkillPlayer ? 0.60 : 1.0;
-            rawDfvMap[valuation.SleeperPlayerId] = (raw + ascentBonus) * faPenalty;
+            var scored = vor.Total + ascentBonus;
+
+            // Applied only above replacement — see FreeAgentPenalty. A negative
+            // value multiplied by 0.60 rises.
+            if (isFaSkillPlayer && scored > 0) scored *= FreeAgentPenalty;
+
+            rawDfvMap[valuation.SleeperPlayerId] = scored;
+            scoredIds.Add(valuation.SleeperPlayerId);
         }
+
+        // A run where this is non-zero has curves that are stale relative to its
+        // simulations: some projected seasons had nothing to price against and
+        // were skipped, so those players scored low for a reason that has
+        // nothing to do with them.
+        if (yearsWithoutCurve > 0)
+        {
+            logger.LogWarning(
+                "FAN-153: {Count} projected seasons had no positional value curve and were "
+                + "skipped. Rebuild the curves for season {Season} / {Format} — the players "
+                + "affected are undervalued by however many seasons went unpriced.",
+                yearsWithoutCurve, season, scoringFormat);
+        }
+
+        logger.LogInformation(
+            "FAN-153: {Scored} players scored on value over replacement, {SubReplacement} of them "
+            + "below replacement. A negative here is a rank, not a deletion.",
+            scoredIds.Count, subReplacementCount);
 
         // FAN-170: who the deleted depth gate would have removed, and where
         // they actually landed. A large cohort carrying real values is the
@@ -415,20 +497,35 @@ public class DfvCalculationService(
                 string.Join(", ", admittedTop10));
         }
 
-        var top20Raw = rawDfvMap
+        var namesById = valuations
+            .Where(v => !string.IsNullOrEmpty(v.SleeperPlayerId))
+            .GroupBy(v => v.SleeperPlayerId)
+            .ToDictionary(g => g.Key, g => $"{g.First().PlayerName} ({g.First().Position})");
+
+        string Describe(string id, double value) =>
+            $"{namesById.GetValueOrDefault(id, id)} {value:F1}";
+
+        var scoredDescending = rawDfvMap
+            .Where(kvp => scoredIds.Contains(kvp.Key))
             .OrderByDescending(kvp => kvp.Value)
-            .Take(20)
-            .Select(kvp => $"{kvp.Key}: {kvp.Value:F1}")
             .ToList();
-        logger.LogInformation("Top 20 raw DFV before normalization: {Values}",
-            string.Join(", ", top20Raw));
+
+        logger.LogInformation("Top 20 value over replacement before normalization: {Values}",
+            string.Join(", ", scoredDescending.Take(20).Select(kvp => Describe(kvp.Key, kvp.Value))));
+
+        // The other end, which is the half this change is really about. Under the
+        // old scale the bottom of the board was a crowd of small positive numbers
+        // that said nothing; under VOR it is an ordering by how far below
+        // replacement a player projects.
+        logger.LogInformation("Bottom 20 value over replacement before normalization: {Values}",
+            string.Join(", ", scoredDescending.TakeLast(20).Select(kvp => Describe(kvp.Key, kvp.Value))));
 
         // ── P2: Rank-based power curve normalization ─────────────────────
         // Per scoring math reference (FAN-62): sort by raw DFV descending,
         // assign finalScore = ceiling * (1 - (rank-1)/(N-1))^exponent.
         // Top player always scores ~95. Stable — adding one player shifts
         // others by ≤1 rank.
-        NormalizeAcrossAllPositions(valuations, rawDfvMap, NormCeiling);
+        NormalizeAcrossAllPositions(valuations, rawDfvMap, scoredIds, NormCeiling);
 
         // ── FAN-159: fork the model's own answer here ────────────────────
         // Everything below this line that touches rawDfvMap is either a
@@ -746,26 +843,26 @@ public class DfvCalculationService(
         return valuations;
     }
 
-    private static double CalculateRawDfvWithScarcity(
-        CareerSimulationDocument careerSim,
-        string position,
-        double scarcity)
-    {
-        if (careerSim.YearProjections.Count == 0) return 0;
-
-        var discountRate = DiscountRates.GetValueOrDefault(position, 0.12);
-        double dfv = 0;
-
-        foreach (var year in careerSim.YearProjections)
-        {
-            var yearIndex = year.Year - careerSim.Season;
-            var discounted = year.SeasonValue / Math.Pow(1 + discountRate, yearIndex);
-            dfv += discounted;
-        }
-
-        return dfv * scarcity;
-    }
-
+    /// <summary>
+    /// One player's discounted career point total. Single-player, no league
+    /// context, and therefore <b>not</b> comparable across positions.
+    ///
+    /// <para>
+    /// FAN-153 phase 2: the positional scarcity multiplier came out of here with
+    /// the rest of them. It cannot be replaced by value over replacement in this
+    /// signature — VOR needs a league shape and a stored curve, and this method
+    /// is handed a single simulation and nothing else. The <c>scoringFormat</c>
+    /// parameter is kept for source compatibility and no longer changes the
+    /// answer; it was only ever selecting a multiplier table.
+    /// </para>
+    ///
+    /// <para>
+    /// Comparing two players at different positions with this number is the
+    /// defect FAN-166 measured. Anything that needs a cross-position comparison
+    /// wants <see cref="CalculateAllAsync"/>'s output or
+    /// <see cref="ValueOverReplacementCalculator"/> directly.
+    /// </para>
+    /// </summary>
     public double CalculateRawDfv(
         CareerSimulationDocument careerSim,
         string position,
@@ -773,38 +870,54 @@ public class DfvCalculationService(
     {
         if (careerSim.YearProjections.Count == 0) return 0;
 
-        var isSuperflexFormat = scoringFormat is ScoringFormat.Superflex or ScoringFormat.SuperflexFullPpr;
-        var multipliers = isSuperflexFormat ? SuperflexMultipliers : StandardMultipliers;
         var discountRate = DiscountRates.GetValueOrDefault(position, 0.12);
-        var scarcity = multipliers.GetValueOrDefault(position, 1.0);
 
         double dfv = 0;
         foreach (var year in careerSim.YearProjections)
         {
             var yearIndex = year.Year - careerSim.Season;
-            var discounted = year.SeasonValue / Math.Pow(1 + discountRate, yearIndex);
-            dfv += discounted;
+            dfv += year.SeasonValue / Math.Pow(1 + discountRate, yearIndex);
         }
 
-        return dfv * scarcity;
+        return dfv;
     }
 
     // ── Private ──────────────────────────────────────────────────────────────
 
     /// <summary>
     /// P2: Rank-based power curve normalization (FAN-62).
-    /// Sort all players with raw > 0 by raw DFV descending.
-    /// Top player scores ~ceiling; distribution controlled by NormExponent.
-    /// Stable: adding/removing one player shifts others by ≤1 rank.
+    /// Sorts every scored player by value descending; the top scores ~ceiling and
+    /// the distribution is controlled by NormExponent. Stable: adding or removing
+    /// one player shifts the others by ≤1 rank.
+    ///
+    /// <para>
+    /// FAN-153 phase 2: the population is now an explicit set of scored players
+    /// rather than everyone with a value above zero. Value over replacement is
+    /// signed — a player projected below replacement is negative — and a
+    /// <c>raw &gt; 0</c> filter would have dropped most of the board out of the
+    /// P2 population entirely, which is exactly what the year 0-1 depth gate did
+    /// to Elijah Arroyo before FAN-170 removed it, at a few hundred times the
+    /// scale.
+    /// </para>
+    ///
+    /// <para>
+    /// The rank is what survives this step, not the value, so the negative
+    /// numbers do not propagate: everything comes out in [0, ceiling]. Worth
+    /// knowing when reading a stamped value: the last-ranked player normalizes
+    /// to exactly 0, which is the same number an unscored player carries. A
+    /// "zeroed player" check has to exclude the final rank or it reports a
+    /// phantom every run.
+    /// </para>
     /// </summary>
     private static void NormalizeAcrossAllPositions(
         List<DynastyValuationDocument> valuations,
         Dictionary<string, double> rawDfvMap,
+        HashSet<string> scoredIds,
         double ceiling = 95.0)
     {
         var eligible = valuations
-            .Where(v => rawDfvMap.ContainsKey(v.SleeperPlayerId)
-                        && rawDfvMap[v.SleeperPlayerId] > 0)
+            .Where(v => scoredIds.Contains(v.SleeperPlayerId)
+                        && rawDfvMap.ContainsKey(v.SleeperPlayerId))
             .OrderByDescending(v => rawDfvMap[v.SleeperPlayerId])
             .ToList();
 

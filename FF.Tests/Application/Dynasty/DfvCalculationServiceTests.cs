@@ -14,6 +14,7 @@ public class DfvCalculationServiceTests
     private readonly Mock<ICareerSimulationRepository> _careerRepo = new();
     private readonly Mock<IDynastyValuationRepository> _valuationRepo = new();
     private readonly Mock<IFantasyProsRookieRankingRepository> _fpRookieRepo = new();
+    private readonly Mock<IPositionalValueCurveRepository> _curveRepo = new();
 
     private DfvCalculationService CreateSut()
     {
@@ -21,12 +22,100 @@ public class DfvCalculationServiceTests
             .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
+        // FAN-153 phase 2. Every fixture below now needs a curve to price
+        // against, and the default is a flat zero at every position and year.
+        //
+        // Deliberate rather than lazy: with a replacement level of zero, value
+        // over replacement reduces exactly to the discounted career total these
+        // fixtures were written against, so each test keeps measuring the stage
+        // it was written to measure — the FP blend, the guardrail caps, the
+        // removed FAN-170 gate — instead of quietly becoming a test of the new
+        // one. VOR itself is pinned by the tests that supply real curves.
+        _curveRepo
+            .Setup(r => r.GetAllBySeasonAndFormatAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FlatCurves(level: 0.0));
+
         return new(
             _careerRepo.Object,
             _valuationRepo.Object,
             _fpRookieRepo.Object,
+            _curveRepo.Object,
             NullLogger<DfvCalculationService>.Instance);
     }
+
+    /// <summary>
+    /// A curve set carrying the same replacement level at every position and
+    /// projected year.
+    /// </summary>
+    private static List<PositionalValueCurveDocument> FlatCurves(
+        double level, int season = 2026, int years = 5, int depth = 120)
+        => (from year in Enumerable.Range(season, years)
+            from position in new[] { "QB", "RB", "WR", "TE" }
+            select new PositionalValueCurveDocument
+            {
+                Id = $"{season}:HalfPpr:{year}:{position}",
+                Season = season,
+                ScoringFormat = "HalfPpr",
+                Year = year,
+                Position = position,
+                DescendingSeasonValues = [.. Enumerable.Repeat(level, depth)],
+                PoolSize = depth,
+                Depth = depth,
+                ComputedAt = DateTime.UtcNow
+            }).ToList();
+
+    /// <summary>
+    /// A curve stepping down by <paramref name="step"/> from
+    /// <paramref name="top"/>, so a cutoff at index i reads
+    /// <c>top - step * i</c> and a test's arithmetic can be checked by hand.
+    /// </summary>
+    private static PositionalValueCurveDocument MakeCurve(
+        string position, int year, double top, double step, int poolSize, int season = 2026)
+    {
+        var values = Enumerable.Range(0, poolSize).Select(i => top - step * i).ToList();
+        return new PositionalValueCurveDocument
+        {
+            Season = season,
+            ScoringFormat = "Superflex",
+            Year = year,
+            Position = position,
+            Id = $"{season}:Superflex:{year}:{position}",
+            DescendingSeasonValues = values,
+            PoolSize = poolSize,
+            Depth = values.Count,
+            ComputedAt = DateTime.UtcNow
+        };
+    }
+
+    /// <summary>
+    /// A career simulation whose every projected season carries the same value,
+    /// so the surplus over replacement is the same number every year and the
+    /// discounted sum is that number times a factor a reader can verify.
+    /// </summary>
+    private static CareerSimulationDocument MakeFlatCareerSim(
+        string sleeperPlayerId, string position, double seasonValue,
+        int season = 2026, int years = 5)
+        => new()
+        {
+            SleeperPlayerId = sleeperPlayerId,
+            PlayerName = sleeperPlayerId,
+            Position = position,
+            CurrentAge = 26,
+            Season = season,
+            Iterations = 1000,
+            YearProjections = [.. Enumerable.Range(0, years).Select(i => new CareerYearProjection
+            {
+                Year = season + i,
+                AgeAtYear = 26 + i,
+                SeasonValue = seasonValue,
+                MedianFppg = seasonValue / 17.0,
+                AgingMultiplier = 1.0,
+                InjuryRisk = 0.0,
+                ExpectedGamesPlayed = 17,
+                Phase = CareerPhase.Prime
+            })]
+        };
 
     private static CareerSimulationDocument MakeCareerSim(
         string sleeperPlayerId, string position, int currentAge, double yearOneValue = 150.0,
@@ -513,6 +602,15 @@ public class DfvCalculationServiceTests
     /// the deep cap tiers removed — this test should FAIL, and the correct
     /// response is to invert the ModelValue assertion, not to delete it.
     /// </para>
+    ///
+    /// <para>
+    /// FAN-153 phase 2 note: it still passes, and that is the fixture's doing
+    /// rather than a claim that nothing changed. The default curves are flat at
+    /// zero, so this run has no replacement level to subtract and the inversion
+    /// it pins survives untouched. What decides whether the real defect is gone
+    /// is the calibration run against real curves, not this test — and when the
+    /// cap tables come out in their own commit, this is the assertion to invert.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task CalculateAllAsync_GuardrailCaps_InvertTheModelsCrossPositionOrdering()
@@ -573,5 +671,200 @@ public class DfvCalculationServiceTests
         te.ModelValue.Should().BeGreaterThan(wr.ModelValue,
             "the guardrail cap tables currently invert the model's cross-position " +
             "ordering — when this is fixed, invert this assertion rather than removing it");
+    }
+
+    // ── FAN-153 phase 2: value over replacement ────────────────────────────
+
+    /// <summary>
+    /// The acceptance criterion this ticket was written around: <i>a 1-QB league
+    /// and a superflex league produce different QB orderings from the same
+    /// projections, with a test that asserts it.</i>
+    ///
+    /// <para>
+    /// Nothing about the players changes between the two runs — same simulations,
+    /// same curves, same everything. The only difference is that a SUPER_FLEX slot
+    /// makes quarterbacks eligible for a flex, so they win those slots on
+    /// projection and the QB cutoff moves a full round deeper. Read at index 12 the
+    /// QB baseline is 252; read at index 24 it is 204.
+    /// </para>
+    ///
+    /// <para>
+    /// The fixture is arithmetic a reader can check. Every projected season carries
+    /// the same value and every curve steps by a constant, so the quarterback's
+    /// surplus is 245 − 252 = −7 per season in a 1-QB league and 245 − 204 = +41 in
+    /// superflex, while the receiver's is 200 − 164 = +36 in both. Discounted over
+    /// five seasons at their position rates (QB 0.10, WR 0.12) that is −29 against
+    /// +145 one way and +171 against +145 the other — the order reverses, and it
+    /// reverses because of the league shape rather than because of anything the
+    /// model believes about either player.
+    /// </para>
+    ///
+    /// <para>
+    /// RawValue is the assertion target on purpose: it is snapshotted before the
+    /// positional guardrail caps, so this measures value over replacement alone.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_SameProjections_OneQbAndSuperflexLeaguesOrderQuarterbacksDifferently()
+    {
+        // 40 quarterbacks: 300 at the top, 4 apart. Index 12 → 252, index 24 → 204.
+        // 80 receivers: 200 at the top, 1 apart. Index 36 → 164.
+        var curves = Enumerable.Range(2026, 5)
+            .SelectMany(year => new[]
+            {
+                MakeCurve("QB", year, top: 300, step: 4, poolSize: 40),
+                MakeCurve("WR", year, top: 200, step: 1, poolSize: 80)
+            })
+            .ToList();
+
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("QB", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeValuation("qb-mid", "QB", 26)]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeValuation("wr-high", "WR", 26),
+                MakeValuation("wr-mid",  "WR", 26),
+                MakeValuation("wr-low",  "WR", 26),
+                MakeValuation("wr-tail", "WR", 26)
+            ]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p is "RB" or "TE"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeFlatCareerSim("qb-mid",  "QB", 245),
+                MakeFlatCareerSim("wr-high", "WR", 260),
+                MakeFlatCareerSim("wr-mid",  "WR", 200),
+                MakeFlatCareerSim("wr-low",  "WR", 170),
+                MakeFlatCareerSim("wr-tail", "WR", 100)
+            ]);
+
+        var sut = CreateSut();
+
+        // Registered after CreateSut so it wins over the flat-zero default, and
+        // keyed on "HalfPpr" exactly rather than any string. Both runs below have
+        // to find these — the superflex run included — or the roster shape is
+        // being used as a storage key for a distribution that does not vary with
+        // it, which is how the first phase 2 run failed: curves built under
+        // "Superflex", a DFV run defaulting to "HalfPpr", nothing found.
+        _curveRepo
+            .Setup(r => r.GetAllBySeasonAndFormatAsync(
+                It.IsAny<int>(), "HalfPpr", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(curves);
+
+        var oneQb = await sut.CalculateAllAsync(2026, ScoringFormat.HalfPpr);
+        var oneQbQuarterback = oneQb.First(v => v.SleeperPlayerId == "qb-mid").RawValue;
+        var oneQbReceiver = oneQb.First(v => v.SleeperPlayerId == "wr-mid").RawValue;
+
+        var superflex = await sut.CalculateAllAsync(2026, ScoringFormat.Superflex);
+        var superflexQuarterback = superflex.First(v => v.SleeperPlayerId == "qb-mid").RawValue;
+        var superflexReceiver = superflex.First(v => v.SleeperPlayerId == "wr-mid").RawValue;
+
+        oneQbReceiver.Should().BeGreaterThan(oneQbQuarterback,
+            "in a 1-QB league the quarterback projects below replacement and the " +
+            "receiver comfortably above it");
+
+        superflexQuarterback.Should().BeGreaterThan(superflexReceiver,
+            "the same quarterback clears a superflex baseline by 41 points a season — " +
+            "if this fails, the roster configuration is not reaching the replacement " +
+            "level and the board is priced for one league shape whatever format it is run in");
+    }
+
+    /// <summary>
+    /// The trap the phase 1 close-out flagged: <c>NormalizeAcrossAllPositions</c>
+    /// used to rank only players with a value above zero, and value over
+    /// replacement is signed. Shipping against that filter would have deleted most
+    /// of the board — FAN-170's defect (a low projection read as an absence) at a
+    /// few hundred times the scale.
+    ///
+    /// <para>
+    /// Both halves matter and they are asserted together. A player projected below
+    /// replacement is <i>bad</i> and must still hold a rank; a player with no
+    /// career simulation is <i>absent</i> and must still read zero. If those two
+    /// ever collapse into each other again, this is the test that notices.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_SubReplacementPlayer_IsRankedNotZeroed()
+    {
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeValuation("starter",         "WR", 25),
+                MakeValuation("sub-replacement", "WR", 27),
+                MakeValuation("deep",            "WR", 30),
+                MakeValuation("no-sim",          "WR", 24)
+            ]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        // "no-sim" is deliberately absent from the bulk result.
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeFlatCareerSim("starter",         "WR", 250),
+                MakeFlatCareerSim("sub-replacement", "WR", 100),
+                MakeFlatCareerSim("deep",            "WR", 50)
+            ]);
+
+        var sut = CreateSut();
+
+        // A flat baseline of 150 a season, registered after CreateSut so it wins
+        // over the flat-zero default — "below replacement" is then a plain
+        // arithmetic fact about the fixture rather than an emergent one.
+        _curveRepo
+            .Setup(r => r.GetAllBySeasonAndFormatAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FlatCurves(level: 150.0));
+
+        var result = await sut.CalculateAllAsync(2026);
+
+        var starter = result.First(v => v.SleeperPlayerId == "starter");
+        var subReplacement = result.First(v => v.SleeperPlayerId == "sub-replacement");
+        var noSim = result.First(v => v.SleeperPlayerId == "no-sim");
+
+        subReplacement.RawValue.Should().BeGreaterThan(0,
+            "a player projected below replacement is ranked low, not removed — the " +
+            "normalization population is the set of scored players, not the set of " +
+            "positive ones");
+        starter.RawValue.Should().BeGreaterThan(subReplacement.RawValue,
+            "and the ordering between them is still the model's");
+        noSim.RawValue.Should().Be(0,
+            "no career simulation is a genuine absence, which is the only thing that " +
+            "keeps a player out of the scored set");
+    }
+
+    /// <summary>
+    /// Without curves there is no replacement level, and valuing players on raw
+    /// point totals is the cross-position defect this ticket exists to remove. A
+    /// run in that state fails loudly rather than quietly reverting to the old
+    /// behaviour — a silent fallback would look like a model change on the next
+    /// calibration run and cost a session to find.
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_NoValueCurves_ThrowsRatherThanFallingBack()
+    {
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeValuation("s1", "WR", 25)]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var sut = CreateSut();
+
+        _curveRepo
+            .Setup(r => r.GetAllBySeasonAndFormatAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var act = () => sut.CalculateAllAsync(2026);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*build-value-curves*");
     }
 }

@@ -1,0 +1,270 @@
+[{
+  "RunAt": {
+    "$date": "2026-09-09T18:52:53.418Z"
+  },
+  "Position": null,
+  "SpearmanRho": 0.7415,
+  "PlayerCount": 200,
+  "UnmatchedCount": 31
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:52:37.533Z"
+  },
+  "Position": "TE",
+  "SpearmanRho": 0.6656,
+  "PlayerCount": 101,
+  "UnmatchedCount": 149
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:52:20.742Z"
+  },
+  "Position": "RB",
+  "SpearmanRho": 0.5014,
+  "PlayerCount": 124,
+  "UnmatchedCount": 126
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:52:04.924Z"
+  },
+  "Position": "WR",
+  "SpearmanRho": 0.679,
+  "PlayerCount": 181,
+  "UnmatchedCount": 69
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:51:45.369Z"
+  },
+  "Position": "QB",
+  "SpearmanRho": 0.6799,
+  "PlayerCount": 74,
+  "UnmatchedCount": 176
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:35:54.307Z"
+  },
+  "Position": "TE",
+  "SpearmanRho": 0.6656,
+  "PlayerCount": 101,
+  "UnmatchedCount": 149
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:35:23.394Z"
+  },
+  "Position": "WR",
+  "SpearmanRho": 0.679,
+  "PlayerCount": 181,
+  "UnmatchedCount": 69
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:34:58.662Z"
+  },
+  "Position": "RB",
+  "SpearmanRho": 0.5014,
+  "PlayerCount": 124,
+  "UnmatchedCount": 126
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:34:41.931Z"
+  },
+  "Position": "QB",
+  "SpearmanRho": 0.6799,
+  "PlayerCount": 74,
+  "UnmatchedCount": 176
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:34:13.875Z"
+  },
+  "Position": null,
+  "SpearmanRho": 0.7415,
+  "PlayerCount": 200,
+  "UnmatchedCount": 31
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:19:58.553Z"
+  },
+  "Position": null,
+  "SpearmanRho": 0.7415,
+  "PlayerCount": 200,
+  "UnmatchedCount": 31
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:19:52.234Z"
+  },
+  "Position": "TE",
+  "SpearmanRho": 0.6656,
+  "PlayerCount": 101,
+  "UnmatchedCount": 149
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:19:48.394Z"
+  },
+  "Position": "WR",
+  "SpearmanRho": 0.679,
+  "PlayerCount": 181,
+  "UnmatchedCount": 69
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:19:44.278Z"
+  },
+  "Position": "RB",
+  "SpearmanRho": 0.5014,
+  "PlayerCount": 124,
+  "UnmatchedCount": 126
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:19:41.389Z"
+  },
+  "Position": "QB",
+  "SpearmanRho": 0.6799,
+  "PlayerCount": 74,
+  "UnmatchedCount": 176
+},
+{
+  "RunAt": {
+    "$date": "2026-09-09T18:19:37.739Z"
+  },
+  "Position": null,
+  "SpearmanRho": 0.7415,
+  "PlayerCount": 200,
+  "UnmatchedCount": 31
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T20:03:48.820Z"
+  },
+  "Position": "TE",
+  "SpearmanRho": 0.6714,
+  "PlayerCount": 101,
+  "UnmatchedCount": 149
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T20:03:48.746Z"
+  },
+  "Position": "WR",
+  "SpearmanRho": 0.6972,
+  "PlayerCount": 180,
+  "UnmatchedCount": 70
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T20:03:48.677Z"
+  },
+  "Position": "RB",
+  "SpearmanRho": 0.5406,
+  "PlayerCount": 124,
+  "UnmatchedCount": 126
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T20:03:48.605Z"
+  },
+  "Position": "QB",
+  "SpearmanRho": 0.6799,
+  "PlayerCount": 74,
+  "UnmatchedCount": 176
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T20:03:48.501Z"
+  },
+  "Position": null,
+  "SpearmanRho": 0.7103,
+  "PlayerCount": 200,
+  "UnmatchedCount": 28
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T14:01:29.408Z"
+  },
+  "Position": null,
+  "SpearmanRho": 0.7033,
+  "PlayerCount": 200,
+  "UnmatchedCount": 28
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T14:00:52.577Z"
+  },
+  "Position": "WR",
+  "SpearmanRho": 0.7254,
+  "PlayerCount": 173,
+  "UnmatchedCount": 77
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T14:00:37.335Z"
+  },
+  "Position": "RB",
+  "SpearmanRho": 0.5655,
+  "PlayerCount": 111,
+  "UnmatchedCount": 139
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T14:00:20.988Z"
+  },
+  "Position": "QB",
+  "SpearmanRho": 0.6799,
+  "PlayerCount": 74,
+  "UnmatchedCount": 176
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T13:57:13.372Z"
+  },
+  "Position": "TE",
+  "SpearmanRho": 0.6226,
+  "PlayerCount": 92,
+  "UnmatchedCount": 158
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T12:37:33.340Z"
+  },
+  "Position": "TE",
+  "SpearmanRho": 0.213,
+  "PlayerCount": 92,
+  "UnmatchedCount": 158
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T12:36:46.799Z"
+  },
+  "Position": "TE",
+  "SpearmanRho": 0.213,
+  "PlayerCount": 92,
+  "UnmatchedCount": 158
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T12:36:09.438Z"
+  },
+  "Position": "WR",
+  "SpearmanRho": 0.6591,
+  "PlayerCount": 181,
+  "UnmatchedCount": 69
+},
+{
+  "RunAt": {
+    "$date": "2026-09-08T12:35:24.658Z"
+  },
+  "Position": "RB",
+  "SpearmanRho": 0.5839,
+  "PlayerCount": 115,
+  "UnmatchedCount": 135
+}]
