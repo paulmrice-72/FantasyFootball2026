@@ -44,16 +44,28 @@ public class DfvCalculationService(
     // come out in a commit of their own with its own measurement.
 
     /// <summary>
-    /// What a free agent's surplus is discounted by. Unchanged in value, changed
-    /// in application: it is now applied only to a positive value.
+    /// What a free agent's <b>projection</b> is discounted by — not his surplus.
+    /// Unchanged in value; the placement is the part that matters, and it is
+    /// passed into the VOR calculation rather than applied to its result.
     ///
     /// <para>
-    /// Under the old raw-point scale every value was positive and a 0.60
-    /// multiplier could only reduce. Under value over replacement a
-    /// sub-replacement player is negative, and multiplying a negative by 0.60
-    /// <i>raises</i> it — a free agent projected below replacement would be
-    /// promoted up the board for being a free agent, which is the opposite of
-    /// what this penalty exists to do.
+    /// Two separate reasons, both learned the expensive way on 2026-09-08.
+    /// Applied to the surplus, a 0.60 multiplier <i>raises</i> a sub-replacement
+    /// player, because his value is negative — a free agent would be promoted up
+    /// the board for being a free agent. Guarding that with "only when positive"
+    /// fixes the sign and leaves the real defect: 60% of a surplus is a far
+    /// smaller correction than 60% of gross production, so every free agent
+    /// gained <c>0.4 × K</c>, where K is the position's discounted replacement
+    /// constant. RB's K is 238.7, against an RB1 gross of ~581.
+    /// </para>
+    ///
+    /// <para>
+    /// This constant was calibrated as a fraction of a player's projected
+    /// production — "he has no team, so this projection is too high" — so that is
+    /// where it belongs. Inside the subtraction it reproduces its own calibrated
+    /// behaviour exactly: the crossover against a rostered player sits at
+    /// <c>G' &lt; 0.60G</c>, the same place it sat before value over replacement
+    /// existed.
     /// </para>
     /// </summary>
     private const double FreeAgentPenalty = 0.60;
@@ -244,6 +256,54 @@ public class DfvCalculationService(
             return [];
         }
 
+        // ── FAN-153 phase 2: the cross-position ladder ───────────────────
+        // Replacement level is a property of a league, so the curves are stored
+        // and the league-specific half is an index into them. The board is
+        // global and therefore has to commit to one shape: the canonical team
+        // count, and the roster configuration the scoring format implies. A
+        // league that differs resolves its own level from the same curves.
+        //
+        // Resolved here, before the career simulations are bulk-loaded, so a
+        // run with no curves fails on the thing that is actually missing rather
+        // than several thousand documents later. Nothing below this point can
+        // produce a usable board without it, and the sims are the expensive
+        // read in this method.
+        //
+        // The curve is read under the scoring half of the format only — see
+        // ValueOverReplacementCalculator.CurveScoringKey. A superflex league and
+        // a 1-QB league on the same scoring read the same stored documents and
+        // differ only in where they index into them, which is the design phase 1
+        // chose.
+        var curveKey = ValueOverReplacementCalculator.CurveScoringKey(scoringFormat);
+        var curves = await curveRepository.GetAllBySeasonAndFormatAsync(season, curveKey, ct);
+
+        if (curves.Count == 0)
+            throw new InvalidOperationException(
+                $"No positional value curves found for season {season} under scoring key "
+                + $"'{curveKey}' (requested format {scoringFormat}). Run "
+                + $"POST /api/v1/admin/jobs/build-value-curves for season {season} first — "
+                + "without them there is no replacement level, and valuing players on raw "
+                + "point totals is the cross-position defect FAN-153 exists to remove.");
+
+        var leagueShape = ValueOverReplacementCalculator.LeagueShapeFor(scoringFormat);
+        var replacementLevels = ValueOverReplacementCalculator.ResolveLevels(
+            curves, leagueShape, ValueOverReplacementCalculator.CanonicalTeamCount);
+
+        foreach (var yearLevels in replacementLevels
+                     .GroupBy(kv => kv.Key.Year)
+                     .OrderBy(g => g.Key))
+        {
+            logger.LogInformation(
+                "FAN-153 replacement level {Year} at {Teams} teams ({Format}) — {Levels}",
+                yearLevels.Key,
+                ValueOverReplacementCalculator.CanonicalTeamCount,
+                scoringFormat,
+                string.Join(", ", yearLevels
+                    .OrderBy(kv => kv.Key.Position)
+                    .Select(kv => $"{kv.Key.Position} {kv.Value.Level:F1} at cutoff {kv.Value.Cutoff}"
+                                  + (kv.Value.PoolExhausted ? " (pool exhausted)" : ""))));
+        }
+
         // ── Bulk-load career sims ────────────────────────────────────────
         var allSims = await careerSimRepository.GetAllBySeasonAsync(season, ct);
         var simMap = allSims
@@ -274,47 +334,6 @@ public class DfvCalculationService(
         logger.LogInformation(
             "Loaded {RookieCount} FP rookie ranks, {DynastyCount} FP dynasty ranks",
             fpRookieRankMap.Count, fpDynastyRankMap.Count);
-
-        // ── FAN-153 phase 2: the cross-position ladder ───────────────────
-        // Replacement level is a property of a league, so the curves are stored
-        // and the league-specific half is an index into them. The board is
-        // global and therefore has to commit to one shape: the canonical team
-        // count, and the roster configuration the scoring format implies. A
-        // league that differs resolves its own level from the same curves.
-        //
-        // The curve is read under the scoring half of the format only — see
-        // ValueOverReplacementCalculator.CurveScoringKey. A superflex league and a
-        // 1-QB league on the same scoring read the same stored documents and differ
-        // only in where they index into them, which is the design phase 1 chose.
-        var curveKey = ValueOverReplacementCalculator.CurveScoringKey(scoringFormat);
-        var curves = await curveRepository.GetAllBySeasonAndFormatAsync(season, curveKey, ct);
-
-        if (curves.Count == 0)
-            throw new InvalidOperationException(
-                $"No positional value curves found for season {season} under scoring key "
-                + $"'{curveKey}' (requested format {scoringFormat}). Run "
-                + $"POST /api/v1/admin/jobs/build-value-curves for season {season} first — "
-                + "without them there is no replacement level, and valuing players on raw "
-                + "point totals is the cross-position defect FAN-153 exists to remove.");
-
-        var leagueShape = ValueOverReplacementCalculator.LeagueShapeFor(scoringFormat);
-        var replacementLevels = ValueOverReplacementCalculator.ResolveLevels(
-            curves, leagueShape, ValueOverReplacementCalculator.CanonicalTeamCount);
-
-        foreach (var yearLevels in replacementLevels
-                     .GroupBy(kv => kv.Key.Year)
-                     .OrderBy(g => g.Key))
-        {
-            logger.LogInformation(
-                "FAN-153 replacement level {Year} at {Teams} teams ({Format}) — {Levels}",
-                yearLevels.Key,
-                ValueOverReplacementCalculator.CanonicalTeamCount,
-                scoringFormat,
-                string.Join(", ", yearLevels
-                    .OrderBy(kv => kv.Key.Position)
-                    .Select(kv => $"{kv.Key.Position} {kv.Value.Level:F1} at cutoff {kv.Value.Cutoff}"
-                                  + (kv.Value.PoolExhausted ? " (pool exhausted)" : ""))));
-        }
 
         // ── Build raw DFV for every player ───────────────────────────────
         var rawDfvMap = new Dictionary<string, double>();
@@ -424,7 +443,8 @@ public class DfvCalculationService(
                 careerSim,
                 valuation.Position,
                 DiscountRates.GetValueOrDefault(valuation.Position, 0.12),
-                replacementLevels);
+                replacementLevels,
+                projectionMultiplier: isFaSkillPlayer ? FreeAgentPenalty : 1.0);
 
             yearsWithoutCurve += vor.YearsWithoutCurve;
             if (vor.Total < 0) subReplacementCount++;
@@ -442,13 +462,16 @@ public class DfvCalculationService(
                 ? ((valuation.BreakoutScore - 50.0) / 50.0) * 8.0
                 : 0.0;
 
-            var scored = vor.Total + ascentBonus;
-
-            // Applied only above replacement — see FreeAgentPenalty. A negative
-            // value multiplied by 0.60 rises.
-            if (isFaSkillPlayer && scored > 0) scored *= FreeAgentPenalty;
-
-            rawDfvMap[valuation.SleeperPlayerId] = scored;
+            // The free-agent penalty is applied above, inside the subtraction —
+            // see FreeAgentPenalty and ValueOverReplacementCalculator.Compute.
+            //
+            // The ascent bonus stays additive and stays here. Additive is the one
+            // placement that is genuinely indifferent: the replacement level is a
+            // per-position constant, so adding 8 before subtracting it and adding
+            // 8 after are the same arithmetic. Which is also why the bonus cannot
+            // be behind any within-position movement on this run — worth writing
+            // down, because it was the other suspect.
+            rawDfvMap[valuation.SleeperPlayerId] = vor.Total + ascentBonus;
             scoredIds.Add(valuation.SleeperPlayerId);
         }
 

@@ -729,7 +729,7 @@ public class DfvCalculationServiceTests
                 MakeValuation("wr-tail", "WR", 26)
             ]);
         _valuationRepo
-            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p is "RB" or "TE"), It.IsAny<CancellationToken>()))
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p == "RB" || p == "TE"), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
 
         _careerRepo
@@ -844,6 +844,14 @@ public class DfvCalculationServiceTests
     /// run in that state fails loudly rather than quietly reverting to the old
     /// behaviour — a silent fallback would look like a model change on the next
     /// calibration run and cost a session to find.
+    ///
+    /// <para>
+    /// The curves are resolved before the career simulations are bulk-loaded, so
+    /// this throws on the thing that is actually missing rather than several
+    /// thousand documents later. The simulation stub below exists only to keep
+    /// that true if the ordering is ever changed back: without it the run would
+    /// fail on a null bulk-load and this test would report the wrong defect.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task CalculateAllAsync_NoValueCurves_ThrowsRatherThanFallingBack()
@@ -854,6 +862,10 @@ public class DfvCalculationServiceTests
         _valuationRepo
             .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeFlatCareerSim("s1", "WR", 200)]);
 
         var sut = CreateSut();
 
