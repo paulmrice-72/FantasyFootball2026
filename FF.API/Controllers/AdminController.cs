@@ -179,16 +179,32 @@ public class AdminController(
         return Ok("Simulation override cleared.");
     }
 
+    /// <summary>
+    /// Queues the full dynasty pipeline: career simulations → breakout detection → DFV.
+    ///
+    /// <para>
+    /// FAN-158: the scoring format is stated explicitly rather than inherited from a
+    /// default, and it matches both the weekly schedule in Program.cs and this
+    /// controller's <c>run-dfv</c> default. All three have to agree — they write the
+    /// same collection, and the last one to run is the board that gets served.
+    /// </para>
+    /// </summary>
     [HttpPost("jobs/run-career-sims")]
     public IActionResult RunCareerSims([FromBody] RunJobRequest request)
     {
-        logger.LogInformation("Admin enqueuing career sims — season {Season}", request.Season);
+        const ScoringFormat servedFormat = ScoringFormat.Superflex;
+
+        logger.LogInformation(
+            "Admin enqueuing career sims — season {Season}, format {Format}",
+            request.Season, servedFormat);
+
         var jobId = BackgroundJob.Enqueue<RecalculateDynastyValuationsJob>(
-            job => job.RunAsync(request.Season, CancellationToken.None));
+            job => job.RunAsync(request.Season, servedFormat, CancellationToken.None));
         return Accepted(new
         {
-            Message = $"Dynasty pipeline queued — job {jobId}. Monitor at /hangfire.",
-            JobId = jobId
+            Message = $"Dynasty pipeline queued — job {jobId}, format {servedFormat}. Monitor at /hangfire.",
+            JobId = jobId,
+            ScoringFormat = servedFormat.ToString()
         });
     }
 
