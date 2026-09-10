@@ -4,6 +4,7 @@ using FF.Application;
 using FF.Application.Common.Settings;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Stats.Queries.GetHistoricalStatsStatus;
+using FF.Domain.Enums;
 using FF.Infrastructure;
 using FF.Infrastructure.ExternalServices.OddsAPI;
 using FF.Infrastructure.Jobs;
@@ -343,9 +344,20 @@ try
         "0 12 * * *",   // Daily noon UTC — nflverse updates by morning after each draft day
         utcOptions);
 
+    // FAN-158. The format is stated here, at the schedule, because this job is what
+    // the served dynasty board actually comes from most weeks. It used to inherit
+    // CalculateDfvCommand's HalfPpr default while the admin run-dfv endpoint defaulted
+    // to Superflex, so a manual Superflex run was quietly overwritten by a HalfPpr one
+    // the following Wednesday — a different quarterback ladder, with nothing anywhere
+    // reporting the swap.
+    //
+    // Superflex is the format the board is priced for: it is the shape the FantasyPros
+    // dynasty consensus we calibrate against uses, and the shape RunCalibrationCommand
+    // defaults to, so the board and the harness now describe the same game. Change this
+    // line and the admin endpoint's default together, or they diverge again.
     RecurringJob.AddOrUpdate<RecalculateDynastyValuationsJob>(
         "dynasty-recalculate-weekly",
-        job => job.RunAsync(2026, CancellationToken.None),
+        job => job.RunAsync(2026, ScoringFormat.Superflex, CancellationToken.None),
         "0 7 * * 3",  // Wednesday 7:00 UTC — after simulation (6am) and Vegas sync (5am)
         utcOptions);
 

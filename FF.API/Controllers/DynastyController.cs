@@ -1,5 +1,6 @@
 ﻿using FF.Application.Features.Dynasty.Commands;
 using FF.Application.Features.Dynasty.Queries;
+using FF.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -66,16 +67,31 @@ public class DynastyController(IMediator mediator) : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Recalculates and overwrites the entire dynasty board.
+    ///
+    /// <para>
+    /// FAN-158: this is the third writer of <c>dynasty_valuations</c>, alongside the
+    /// weekly <c>RecalculateDynastyValuationsJob</c> and the admin <c>run-dfv</c>
+    /// endpoint. All three write the same collection with no format discriminator, so
+    /// the last one to run is the board that gets served — which is why the format is
+    /// stated here rather than inherited from a default, and why it has to match the
+    /// other two. Change one, change all three.
+    /// </para>
+    /// </summary>
     [HttpPost("dfv/calculate")]
     public async Task<IActionResult> CalculateDfv(
-    [FromQuery] int season, CancellationToken ct)
+    [FromQuery] int season,
+    [FromQuery] ScoringFormat scoringFormat = ScoringFormat.Superflex,
+    CancellationToken ct = default)
     {
         if (season <= 0) season = 2026;
-        var result = await mediator.Send(new CalculateDfvCommand(season), ct);
+        var result = await mediator.Send(new CalculateDfvCommand(season, scoringFormat), ct);
         return Ok(new
         {
             result.Calculated,
             result.MaxRawDfv,
+            ScoringFormat = scoringFormat.ToString(),
             ElapsedSeconds = result.Elapsed.TotalSeconds
         });
     }
