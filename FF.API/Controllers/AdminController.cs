@@ -245,7 +245,14 @@ public class AdminController(
 
         var curves = PositionalValueCurveBuilder.Build(sims, depth);
         var computedAt = DateTime.UtcNow;
-        var formatName = scoringFormat.ToString();
+
+        // FAN-153 phase 2. Stored under the scoring half of the format only, not
+        // the whole enum. ScoringFormat pairs a scoring rule with a roster shape,
+        // and only the scoring rule can change a distribution of projected points
+        // — Superflex IS Half-PPR scoring. Filing a curve under the paired name
+        // would store the same numbers twice and make a Half-PPR read miss a
+        // Superflex build, which is what it did on the first run of phase 2.
+        var formatName = ValueOverReplacementCalculator.CurveScoringKey(scoringFormat);
 
         var documents = curves.Select(c => new PositionalValueCurveDocument
         {
