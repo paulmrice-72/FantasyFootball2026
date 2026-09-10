@@ -879,4 +879,266 @@ public class DfvCalculationServiceTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*build-value-curves*");
     }
+
+    // ── FAN-153 control experiment (disableVor) ────────────────────────────
+
+    /// <summary>
+    /// A curve set carrying a different flat replacement level per position, so
+    /// the subtraction is a different constant at each one and the two runs
+    /// genuinely disagree about cross-position ordering. Without this the control
+    /// and the live path would agree everywhere and the test below would pass for
+    /// the wrong reason.
+    /// </summary>
+    private static List<PositionalValueCurveDocument> PerPositionFlatCurves(
+        IReadOnlyDictionary<string, double> levelsByPosition,
+        int season = 2026, int years = 5, int depth = 120)
+        => (from year in Enumerable.Range(season, years)
+            from position in new[] { "QB", "RB", "WR", "TE" }
+            select new PositionalValueCurveDocument
+            {
+                Id = $"{season}:HalfPpr:{year}:{position}",
+                Season = season,
+                ScoringFormat = "HalfPpr",
+                Year = year,
+                Position = position,
+                DescendingSeasonValues =
+                    [.. Enumerable.Repeat(levelsByPosition.GetValueOrDefault(position, 0.0), depth)],
+                PoolSize = depth,
+                Depth = depth,
+                ComputedAt = DateTime.UtcNow
+            }).ToList();
+
+    /// <summary>
+    /// The property the whole control experiment rests on, asserted rather than
+    /// argued: the replacement subtraction is a per-position constant and P2
+    /// normalization is rank-based, so turning the subtraction off can reorder
+    /// players <i>across</i> positions but never <i>within</i> one.
+    ///
+    /// <para>
+    /// If this ever fails, the control is not a control and no rho comparison
+    /// built on it means anything — which is the specific way FAN-175 could be
+    /// mis-diagnosed a second time.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_ControlRun_PreservesWithinPositionOrdering_ButNotCrossPosition()
+    {
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("QB", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeValuation("qb-elite", "QB", 25),
+                MakeValuation("qb-mid",   "QB", 27),
+                MakeValuation("qb-deep",  "QB", 30)
+            ]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeValuation("wr-elite", "WR", 24),
+                MakeValuation("wr-mid",   "WR", 26),
+                MakeValuation("wr-deep",  "WR", 29)
+            ]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(
+                It.Is<string>(p => p != "QB" && p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeFlatCareerSim("qb-elite", "QB", 400),
+                MakeFlatCareerSim("qb-mid",   "QB", 300),
+                MakeFlatCareerSim("qb-deep",  "QB", 220),
+                MakeFlatCareerSim("wr-elite", "WR", 380),
+                MakeFlatCareerSim("wr-mid",   "WR", 290),
+                MakeFlatCareerSim("wr-deep",  "WR", 210)
+            ]);
+
+        var sut = CreateSut();
+
+        // Registered after CreateSut so it wins over the flat-zero default.
+        // QB's replacement level is far above WR's, which is what makes the
+        // cross-position half of this assertion non-trivial.
+        _curveRepo
+            .Setup(r => r.GetAllBySeasonAndFormatAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(PerPositionFlatCurves(new Dictionary<string, double>
+            {
+                ["QB"] = 250.0,
+                ["WR"] = 40.0
+            }));
+
+        // Snapshotted immediately: both runs mutate the same valuation documents,
+        // so the second overwrites the first's stamped values.
+        static List<string> OrderWithin(List<DynastyValuationDocument> result, string position)
+            => result
+                .Where(v => v.Position == position)
+                .OrderByDescending(v => v.RawValue)
+                .Select(v => v.SleeperPlayerId)
+                .ToList();
+
+        static List<string> OrderOverall(List<DynastyValuationDocument> result)
+            => result
+                .OrderByDescending(v => v.RawValue)
+                .Select(v => v.SleeperPlayerId)
+                .ToList();
+
+        var vorResult = await sut.CalculateAllAsync(2026, ScoringFormat.HalfPpr);
+        var vorQb = OrderWithin(vorResult, "QB");
+        var vorWr = OrderWithin(vorResult, "WR");
+        var vorOverall = OrderOverall(vorResult);
+
+        var controlResult = await sut.CalculateAllAsync(2026, ScoringFormat.HalfPpr, disableVor: true);
+        var controlQb = OrderWithin(controlResult, "QB");
+        var controlWr = OrderWithin(controlResult, "WR");
+        var controlOverall = OrderOverall(controlResult);
+
+        controlQb.Should().Equal(vorQb,
+            "the replacement subtraction is a per-position constant, so it cannot " +
+            "reorder quarterbacks against each other");
+        controlWr.Should().Equal(vorWr,
+            "and the same holds at every other position");
+
+        controlOverall.Should().NotEqual(vorOverall,
+            "while the cross-position ladder is exactly what the subtraction exists " +
+            "to change — if this passes too, the fixture's replacement levels are not " +
+            "separated enough for the test above to have proved anything");
+    }
+
+    /// <summary>
+    /// The control path must not resolve curves at all. It scores today's
+    /// simulations without the subtraction, so a missing curve is not an error
+    /// on this path — and a control run that failed on the state it was written
+    /// to measure would be useless.
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_ControlRun_ScoresWithoutValueCurves()
+    {
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeValuation("s1", "WR", 25), MakeValuation("s2", "WR", 27)]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeFlatCareerSim("s1", "WR", 300),
+                MakeFlatCareerSim("s2", "WR", 120)
+            ]);
+
+        var sut = CreateSut();
+
+        _curveRepo
+            .Setup(r => r.GetAllBySeasonAndFormatAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var result = await sut.CalculateAllAsync(2026, ScoringFormat.HalfPpr, disableVor: true);
+
+        result.Should().HaveCount(2);
+        result.First(v => v.SleeperPlayerId == "s1").RawValue
+            .Should().BeGreaterThan(result.First(v => v.SleeperPlayerId == "s2").RawValue);
+
+        _curveRepo.Verify(
+            r => r.GetAllBySeasonAndFormatAsync(
+                It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never,
+            "the control path has no replacement level to resolve, so it should not " +
+            "read the curve repository at all");
+    }
+
+    // ── FAN-175 ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The reason <c>IsScored</c> is a flag and not <c>RawValue &gt; 0</c>.
+    ///
+    /// <para>
+    /// P2 normalization assigns the last-ranked scored player exactly <c>0.00</c> —
+    /// the same number an unscored player carries — so a magnitude test drops one
+    /// real player from every population it selects, silently, forever. This test
+    /// pins the distinction at the only place it is observable: a fixture whose
+    /// worst scored player and whose zeroed player both stamp 0.0, and where only
+    /// one of them is scored.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_LastRankedScoredPlayer_StampsZeroButIsScored()
+    {
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeValuation("best",   "WR", 25),
+                MakeValuation("middle", "WR", 27),
+                MakeValuation("worst",  "WR", 30),
+                MakeValuation("no-sim", "WR", 24)
+            ]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        // "no-sim" is absent from the bulk result — a genuine absence, and the only
+        // thing that should keep a player out of the scored set.
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                MakeFlatCareerSim("best",   "WR", 300),
+                MakeFlatCareerSim("middle", "WR", 200),
+                MakeFlatCareerSim("worst",  "WR", 100)
+            ]);
+
+        var sut = CreateSut();
+
+        var result = await sut.CalculateAllAsync(2026);
+
+        var worst = result.First(v => v.SleeperPlayerId == "worst");
+        var noSim = result.First(v => v.SleeperPlayerId == "no-sim");
+
+        worst.RawValue.Should().Be(0.0,
+            "the last-ranked scored player normalizes to exactly the ceiling times " +
+            "zero — this is the collision that makes a magnitude test unusable");
+        noSim.RawValue.Should().Be(0.0, "and an unscored player carries the same number");
+
+        worst.IsScored.Should().BeTrue(
+            "he was valued and ranked last, which is a result, not an absence");
+        noSim.IsScored.Should().BeFalse(
+            "he was never valued at all — which is what every selection query now " +
+            "filters on, instead of guessing from the value");
+
+        result.Where(v => v.IsScored).Should().HaveCount(3);
+    }
+
+    /// <summary>
+    /// A stale flag is the one value this field must never carry, because it is what
+    /// the selection queries trust. A player the run skips is stamped false rather
+    /// than left holding whatever a previous run wrote.
+    /// </summary>
+    [Fact]
+    public async Task CalculateAllAsync_PlayerZeroedThisRun_ClearsAStaleScoredFlag()
+    {
+        var previouslyScored = MakeValuation("was-scored", "WR", 28);
+        previouslyScored.IsScored = true;
+        previouslyScored.RawValue = 84.2;
+
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync("WR", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeValuation("still-scored", "WR", 25), previouslyScored]);
+        _valuationRepo
+            .Setup(r => r.GetByPositionAsync(It.Is<string>(p => p != "WR"), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        // This run has no simulation for him, so this run did not value him.
+        _careerRepo
+            .Setup(r => r.GetAllBySeasonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakeFlatCareerSim("still-scored", "WR", 300)]);
+
+        var sut = CreateSut();
+
+        var result = await sut.CalculateAllAsync(2026);
+
+        result.First(v => v.SleeperPlayerId == "was-scored").IsScored
+            .Should().BeFalse("the flag describes this run, not the last one");
+        result.First(v => v.SleeperPlayerId == "still-scored").IsScored
+            .Should().BeTrue();
+    }
 }

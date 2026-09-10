@@ -240,6 +240,7 @@ public class DfvCalculationService(
     public async Task<List<DynastyValuationDocument>> CalculateAllAsync(
         int season,
         ScoringFormat scoringFormat = ScoringFormat.HalfPpr,
+        bool disableVor = false,
         CancellationToken ct = default)
     {
         // ── Load all valuations ──────────────────────────────────────────
@@ -274,34 +275,56 @@ public class DfvCalculationService(
         // a 1-QB league on the same scoring read the same stored documents and
         // differ only in where they index into them, which is the design phase 1
         // chose.
-        var curveKey = ValueOverReplacementCalculator.CurveScoringKey(scoringFormat);
-        var curves = await curveRepository.GetAllBySeasonAndFormatAsync(season, curveKey, ct);
+        //
+        // The control experiment skips this whole block. It does not need the
+        // curves, and it must not fail on their absence — the point of the run
+        // is to score today's simulations without the subtraction, so a missing
+        // curve is not an error on this path.
+        IReadOnlyDictionary<(int Year, string Position), PositionalReplacementLevel> replacementLevels =
+            new Dictionary<(int Year, string Position), PositionalReplacementLevel>();
 
-        if (curves.Count == 0)
-            throw new InvalidOperationException(
-                $"No positional value curves found for season {season} under scoring key "
-                + $"'{curveKey}' (requested format {scoringFormat}). Run "
-                + $"POST /api/v1/admin/jobs/build-value-curves for season {season} first — "
-                + "without them there is no replacement level, and valuing players on raw "
-                + "point totals is the cross-position defect FAN-153 exists to remove.");
-
-        var leagueShape = ValueOverReplacementCalculator.LeagueShapeFor(scoringFormat);
-        var replacementLevels = ValueOverReplacementCalculator.ResolveLevels(
-            curves, leagueShape, ValueOverReplacementCalculator.CanonicalTeamCount);
-
-        foreach (var yearLevels in replacementLevels
-                     .GroupBy(kv => kv.Key.Year)
-                     .OrderBy(g => g.Key))
+        if (disableVor)
         {
-            logger.LogInformation(
-                "FAN-153 replacement level {Year} at {Teams} teams ({Format}) — {Levels}",
-                yearLevels.Key,
-                ValueOverReplacementCalculator.CanonicalTeamCount,
-                scoringFormat,
-                string.Join(", ", yearLevels
-                    .OrderBy(kv => kv.Key.Position)
-                    .Select(kv => $"{kv.Key.Position} {kv.Value.Level:F1} at cutoff {kv.Value.Cutoff}"
-                                  + (kv.Value.PoolExhausted ? " (pool exhausted)" : ""))));
+            logger.LogWarning(
+                "FAN-153 CONTROL RUN — value over replacement is DISABLED. Raw value is the "
+                + "plain discounted career total: no replacement subtraction, and no positional "
+                + "scarcity multiplier (deleted in phase 2, deliberately not resurrected). "
+                + "Within-position ordering is identical to both the 09-08 and phase 2 "
+                + "pipelines by construction, so any within-position rho difference belongs to "
+                + "the calibration population or to upstream drift. This board is a "
+                + "measurement, not a serving state — re-run without the flag afterwards.");
+        }
+        else
+        {
+            var curveKey = ValueOverReplacementCalculator.CurveScoringKey(scoringFormat);
+            var curves = await curveRepository.GetAllBySeasonAndFormatAsync(season, curveKey, ct);
+
+            if (curves.Count == 0)
+                throw new InvalidOperationException(
+                    $"No positional value curves found for season {season} under scoring key "
+                    + $"'{curveKey}' (requested format {scoringFormat}). Run "
+                    + $"POST /api/v1/admin/jobs/build-value-curves for season {season} first — "
+                    + "without them there is no replacement level, and valuing players on raw "
+                    + "point totals is the cross-position defect FAN-153 exists to remove.");
+
+            var leagueShape = ValueOverReplacementCalculator.LeagueShapeFor(scoringFormat);
+            replacementLevels = ValueOverReplacementCalculator.ResolveLevels(
+                curves, leagueShape, ValueOverReplacementCalculator.CanonicalTeamCount);
+
+            foreach (var yearLevels in replacementLevels
+                         .GroupBy(kv => kv.Key.Year)
+                         .OrderBy(g => g.Key))
+            {
+                logger.LogInformation(
+                    "FAN-153 replacement level {Year} at {Teams} teams ({Format}) — {Levels}",
+                    yearLevels.Key,
+                    ValueOverReplacementCalculator.CanonicalTeamCount,
+                    scoringFormat,
+                    string.Join(", ", yearLevels
+                        .OrderBy(kv => kv.Key.Position)
+                        .Select(kv => $"{kv.Key.Position} {kv.Value.Level:F1} at cutoff {kv.Value.Cutoff}"
+                                      + (kv.Value.PoolExhausted ? " (pool exhausted)" : ""))));
+            }
         }
 
         // ── Bulk-load career sims ────────────────────────────────────────
@@ -439,15 +462,33 @@ public class DfvCalculationService(
             // FAN-153 phase 2. The discounted sum of each projected season's
             // surplus over that season's replacement level, in place of the
             // discounted point total times a positional multiplier.
-            var vor = ValueOverReplacementCalculator.Compute(
-                careerSim,
-                valuation.Position,
-                DiscountRates.GetValueOrDefault(valuation.Position, 0.12),
-                replacementLevels,
-                projectionMultiplier: isFaSkillPlayer ? FreeAgentPenalty : 1.0);
+            //
+            // Under the control flag the subtraction is skipped and the value is
+            // the plain discounted career total, with the free-agent penalty
+            // applied to the projection exactly as it was before value over
+            // replacement existed — 0.60 x G, the scale the constant was
+            // calibrated on. Nothing else on this path differs.
+            double baseValue;
 
-            yearsWithoutCurve += vor.YearsWithoutCurve;
-            if (vor.Total < 0) subReplacementCount++;
+            if (disableVor)
+            {
+                baseValue = CalculateRawDfv(careerSim, valuation.Position, scoringFormat);
+                if (isFaSkillPlayer) baseValue *= FreeAgentPenalty;
+            }
+            else
+            {
+                var vor = ValueOverReplacementCalculator.Compute(
+                    careerSim,
+                    valuation.Position,
+                    DiscountRates.GetValueOrDefault(valuation.Position, 0.12),
+                    replacementLevels,
+                    projectionMultiplier: isFaSkillPlayer ? FreeAgentPenalty : 1.0);
+
+                yearsWithoutCurve += vor.YearsWithoutCurve;
+                baseValue = vor.Total;
+            }
+
+            if (baseValue < 0) subReplacementCount++;
 
             // P3: Ascent bonus — additive, only for genuine breakout candidates.
             // Per scoring math reference (FAN-63): threshold 50, max +8 raw points.
@@ -471,7 +512,7 @@ public class DfvCalculationService(
             // 8 after are the same arithmetic. Which is also why the bonus cannot
             // be behind any within-position movement on this run — worth writing
             // down, because it was the other suspect.
-            rawDfvMap[valuation.SleeperPlayerId] = vor.Total + ascentBonus;
+            rawDfvMap[valuation.SleeperPlayerId] = baseValue + ascentBonus;
             scoredIds.Add(valuation.SleeperPlayerId);
         }
 
@@ -488,10 +529,33 @@ public class DfvCalculationService(
                 yearsWithoutCurve, season, scoringFormat);
         }
 
-        logger.LogInformation(
-            "FAN-153: {Scored} players scored on value over replacement, {SubReplacement} of them "
-            + "below replacement. A negative here is a rank, not a deletion.",
-            scoredIds.Count, subReplacementCount);
+        // On the control path a negative is not possible — a discounted sum of
+        // non-negative season values cannot go below zero — so a non-zero count
+        // here would mean a projected SeasonValue is itself negative, which is a
+        // defect upstream rather than a ranking. Logged as a warning for that
+        // reason rather than folded into the same sentence.
+        if (disableVor)
+        {
+            logger.LogInformation(
+                "FAN-153 CONTROL: {Scored} players scored on the plain discounted career total.",
+                scoredIds.Count);
+
+            if (subReplacementCount > 0)
+            {
+                logger.LogWarning(
+                    "FAN-153 CONTROL: {Count} players scored below zero without a replacement "
+                    + "subtraction in play. That requires a negative projected SeasonValue and "
+                    + "is an upstream defect, not a ranking.",
+                    subReplacementCount);
+            }
+        }
+        else
+        {
+            logger.LogInformation(
+                "FAN-153: {Scored} players scored on value over replacement, {SubReplacement} of them "
+                + "below replacement. A negative here is a rank, not a deletion.",
+                scoredIds.Count, subReplacementCount);
+        }
 
         // FAN-170: who the deleted depth gate would have removed, and where
         // they actually landed. A large cohort carrying real values is the
@@ -796,6 +860,13 @@ public class DfvCalculationService(
         // ── Final stamp ──────────────────────────────────────────────────
         foreach (var valuation in valuations)
         {
+            // FAN-175. Stamped before the guard below, not after it. A player this
+            // run skipped entirely would otherwise keep whatever flag a previous
+            // run left on him, and a stale true is the one value this field must
+            // never carry — it is the thing every selection query now trusts.
+            valuation.IsScored = !string.IsNullOrEmpty(valuation.SleeperPlayerId)
+                                 && scoredIds.Contains(valuation.SleeperPlayerId);
+
             if (!rawDfvMap.TryGetValue(valuation.SleeperPlayerId, out var final)) continue;
             valuation.DiscountedFutureValue = Math.Round(final, 2);
             valuation.TradeValue = Math.Round(final, 2);
@@ -817,6 +888,23 @@ public class DfvCalculationService(
             valuation.RawValue = rawValueMap.TryGetValue(valuation.SleeperPlayerId, out var rawOnly)
                 ? Math.Round(rawOnly, 2)
                 : 0.0;
+        }
+
+        // ── FAN-175: the population any selection is entitled to draw from ────
+        // Logged per run so a harness result can be read against the number of
+        // players that actually existed to grade. A position whose scored count is
+        // below the harness's request is one where the top-N selection used to run
+        // off the end of the real data into the zeroed tail: measured 2026-09-10,
+        // QB 115, RB 189 and TE 201 against a request for 250, which padded the
+        // graded population with 135, 61 and 49 players nobody had valued.
+        foreach (var position in new[] { "QB", "RB", "WR", "TE" })
+        {
+            var total = valuations.Count(v => v.Position == position);
+            if (total == 0) continue;
+
+            logger.LogInformation(
+                "FAN-175 scored population {Position}: {Scored} of {Total}",
+                position, valuations.Count(v => v.Position == position && v.IsScored), total);
         }
 
         // ── FAN-166: what the guardrails cost, per position, per run ─────

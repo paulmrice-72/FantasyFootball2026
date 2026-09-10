@@ -7,7 +7,8 @@ namespace FF.Application.Features.Dynasty.Commands;
 
 public record CalculateDfvCommand(
     int Season,
-    ScoringFormat ScoringFormat = ScoringFormat.HalfPpr)
+    ScoringFormat ScoringFormat = ScoringFormat.HalfPpr,
+    bool DisableVor = false)
     : IRequest<CalculateDfvResult>;
 
 public record CalculateDfvResult(int Calculated, double MaxRawDfv, TimeSpan Elapsed);
@@ -26,6 +27,7 @@ public class CalculateDfvCommandHandler(
         var valuations = await dfvService.CalculateAllAsync(
             request.Season,
             request.ScoringFormat,
+            request.DisableVor,
             ct);
 
         await valuationRepository.UpsertBatchAsync(valuations, ct);

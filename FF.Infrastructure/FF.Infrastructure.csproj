@@ -43,4 +43,13 @@
 	  <Folder Include="Persistence\Mongo\Documents\" />
 	  <Folder Include="Stats\" />
 	</ItemGroup>
+	<ItemGroup>
+		<!--
+			FAN-175. So DynastyValuationRepository.BuildUpdate can be rendered and
+			asserted against the document's property list. Three fields have been
+			computed correctly and then dropped at that method because it sets fields
+			one by one and says nothing about the ones it omits.
+		-->
+		<InternalsVisibleTo Include="FF.Tests" />
+	</ItemGroup>
 </Project>

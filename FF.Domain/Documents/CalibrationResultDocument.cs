@@ -98,6 +98,41 @@ public class CalibrationResultDocument
     /// ones whose absence distorts the comparison most.
     /// </summary>
     public List<string> TopUnmatched { get; set; } = [];
+
+    /// <summary>
+    /// FAN-175. How many valuations the selection returned, against
+    /// <see cref="RequestedCount"/>.
+    ///
+    /// <para>
+    /// These were assumed equal and were not. The three <c>GetTopBy*ValueAsync</c>
+    /// selections took the top N by value with no scored filter, so a position with
+    /// fewer than N scored players had its graded population padded out of the
+    /// zeroed tail — measured 2026-09-10, 115 scored QBs, 189 RBs, 201 TEs and 323
+    /// WRs against a request for 250. Those padding rows all held exactly
+    /// <c>0.0</c> and the sort carried no secondary key, so which of several hundred
+    /// tied documents came back was arbitrary and differed between runs over
+    /// identical data. That is the moving population, and this pair of numbers is
+    /// what makes it visible on the face of a result instead of two days later.
+    /// </para>
+    /// </summary>
+    public int SelectedCount { get; set; }
+
+    /// <summary>FAN-175. The top-N the selection asked for.</summary>
+    public int RequestedCount { get; set; }
+
+    /// <summary>
+    /// FAN-175. The Sleeper ids this run actually graded, in ranked order.
+    ///
+    /// <para>
+    /// Two runs' rho are comparable only if this list is. Nothing recorded it until
+    /// now, so every within-position comparison the project has published — FAN-168's
+    /// and FAN-170's tables among them — rested on an assumption that could not be
+    /// checked and turned out to be false. With this stored the check is a set
+    /// difference against a previous run rather than an argument about whether the
+    /// population could have moved.
+    /// </para>
+    /// </summary>
+    public List<string> MatchedPlayerIds { get; set; } = [];
 }
 
 public class CalibrationPlayerSnapshot
