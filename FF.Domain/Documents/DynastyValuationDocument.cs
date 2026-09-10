@@ -99,6 +99,43 @@ public class DynastyValuationDocument
     /// </summary>
     public double RawValue { get; set; }
 
+    /// <summary>
+    /// FAN-175. Whether the last DFV run actually valued this player, as opposed
+    /// to zeroing him for an absence — no NFL team, or no career simulation.
+    ///
+    /// <para>
+    /// <b>Why a flag and not a magnitude test.</b> Every consumer of these values
+    /// used to ask <c>value &gt; 0</c>, and every time that has been wrong it has
+    /// been wrong expensively: FAN-170's depth gate deleted players it should have
+    /// ranked low, and FAN-153 phase 2 had to give
+    /// <c>NormalizeAcrossAllPositions</c> an explicit scored set because value over
+    /// replacement is signed. Two properties of the pipeline make the test
+    /// unsalvageable rather than merely awkward — P2 normalization assigns the
+    /// last-ranked scored player exactly <c>0.00</c>, which is the same number an
+    /// unscored player carries, so <c>&gt; 0</c> silently drops one real player per
+    /// run; and a zeroed player is not a low-valued player at all, so no threshold
+    /// separates the two.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>What it fixes.</b> The three <c>GetTopBy*ValueAsync</c> selections take
+    /// the top N by value with no filter, and only 115 QBs, 189 RBs, 201 TEs and
+    /// 323 WRs were scored on the 2026-09-10 run. Asking for 250 therefore returned
+    /// 135 / 61 / 49 / 0 players who had been zeroed — drawn from several hundred
+    /// documents all tied at <c>0.0</c>, by a sort with no secondary key, so the
+    /// selection was arbitrary and differed between runs at an identical count.
+    /// That is what moved the calibration population underneath every within-position
+    /// comparison this project has made.
+    /// </para>
+    ///
+    /// <para>
+    /// Stamped in the same pass as the three values, for the reason recorded on
+    /// <see cref="ModelValue"/>: a flag written by one run against values written by
+    /// another describes neither.
+    /// </para>
+    /// </summary>
+    public bool IsScored { get; set; }
+
     // ── Career Sim reference ─────────────────────────────────────────────
     public double CareerValueScore { get; set; }
     public int PeakYear { get; set; }

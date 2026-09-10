@@ -78,6 +78,21 @@ public static class CalibrationValueBasis
         All.Contains(basis, StringComparer.Ordinal);
 }
 
+/// <param name="SelectedCount">
+/// FAN-175. How many valuations the selection actually returned, against the
+/// <c>requested</c> top-N. These were assumed equal and were not: the selection
+/// queries took the top 250 with no scored filter, so a position with fewer than
+/// 250 scored players had its population padded out of the zeroed tail. Reported
+/// so the gap can never be invisible again.
+/// </param>
+/// <param name="RequestedCount">The top-N the selection asked for.</param>
+/// <param name="MatchedPlayerIds">
+/// FAN-175. The exact players this run graded, in ranked order. Two runs' rho are
+/// comparable only if this list is, and until now nothing recorded it — so every
+/// within-position comparison this project has made rested on an assumption that
+/// was never checkable, and turned out to be false. Persisted with the result so
+/// the check is a set difference rather than an argument.
+/// </param>
 public record RunCalibrationResult(
     double SpearmanRho,
     double AvgAbsDelta,
@@ -88,7 +103,10 @@ public record RunCalibrationResult(
     List<string>? TopUnmatched = null,
     List<CalibrationPlayerSnapshot>? Worst20Snapshot = null,
     string ValueBasis = CalibrationValueBasis.Model,
-    string? Position = null);
+    string? Position = null,
+    int SelectedCount = 0,
+    int RequestedCount = 0,
+    List<string>? MatchedPlayerIds = null);
 
 public class RunCalibrationCommandHandler(
     IDynastyValuationRepository valuationRepo,
@@ -145,11 +163,20 @@ public class RunCalibrationCommandHandler(
                 $"{string.Join(", ", ModelledPositions.Select(p => $"'{p}'"))}, or none for the whole board.",
                 nameof(request));
 
+        // FAN-175. Named rather than inlined, because the gap between what this
+        // asks for and what it gets is the defect: the selection returned 250 rows
+        // for every position while only 115 QBs, 189 RBs and 201 TEs had been
+        // scored, and the difference was zeroed players graded as if they were
+        // ranked last. The queries now filter on IsScored, so this can legitimately
+        // come back short — and when it does, that is the real population and it is
+        // reported rather than topped up.
+        const int RequestedCount = 250;
+
         var ourValuations = basis switch
         {
-            CalibrationValueBasis.Raw => await valuationRepo.GetTopByRawValueAsync(250, position, ct),
-            CalibrationValueBasis.Model => await valuationRepo.GetTopByModelValueAsync(250, position, ct),
-            _ => await valuationRepo.GetTopByTradeValueAsync(250, position, ct)
+            CalibrationValueBasis.Raw => await valuationRepo.GetTopByRawValueAsync(RequestedCount, position, ct),
+            CalibrationValueBasis.Model => await valuationRepo.GetTopByModelValueAsync(RequestedCount, position, ct),
+            _ => await valuationRepo.GetTopByTradeValueAsync(RequestedCount, position, ct)
         };
 
         double OurValue(DynastyValuationDocument v) => basis switch
@@ -158,6 +185,22 @@ public class RunCalibrationCommandHandler(
             CalibrationValueBasis.Model => v.ModelValue,
             _ => v.TradeValue
         };
+
+        // FAN-175. IsScored is written by DFV runs from 2026-09-10 onward, and a
+        // row without the field never matches the filter — so a collection last
+        // written by an older run selects nothing at all. That is the intended
+        // failure: the alternative, which is what shipped before, was to return a
+        // population padded with players nobody had valued and report a number for
+        // it. Named separately from the all-zero guard below because the remedy is
+        // the same command but the cause is not.
+        if (ourValuations.Count == 0)
+            throw new InvalidOperationException(
+                "No scored valuations were selected"
+                + (position is null ? "" : $" for position {position}")
+                + ". Re-run the DFV calculation (POST /api/v1/admin/jobs/run-dfv) — the "
+                + "IsScored flag this selection filters on is only written by runs from "
+                + "2026-09-10 onward, and before it existed this query silently padded "
+                + "its population with zeroed players (FAN-175).");
 
         // A collection written before the selected field existed reads as 0 for
         // every row. Ranking on a constant would produce a real-looking ρ off
@@ -201,6 +244,7 @@ public class RunCalibrationCommandHandler(
             .Select((v, idx) => new
             {
                 OurRank = idx + 1,
+                v.SleeperPlayerId,
                 v.PlayerName,
                 v.Position,
                 OurValue = OurValue(v),
@@ -334,13 +378,22 @@ public class RunCalibrationCommandHandler(
             UnmatchedCount = unmatched.Count,
             TopUnmatched = topUnmatched,
             ValueBasis = basis,
-            Position = position
+            Position = position,
+
+            // FAN-175. The three fields that make a result comparable to another
+            // result. SelectedCount against RequestedCount says whether the
+            // selection ran out of real players, and MatchedPlayerIds says exactly
+            // who was graded — the record whose absence is the whole ticket.
+            SelectedCount = ourValuations.Count,
+            RequestedCount = RequestedCount,
+            MatchedPlayerIds = [.. subset.Select(p => p.SleeperPlayerId)]
         };
 
         await calibrationRepo.InsertAsync(doc, ct);
 
         return new RunCalibrationResult(
             doc.SpearmanRho, doc.AvgAbsDelta, top10Overlap, n, snapshot,
-            unmatched.Count, topUnmatched, worstSnapshot, basis, position);
+            unmatched.Count, topUnmatched, worstSnapshot, basis, position,
+            doc.SelectedCount, doc.RequestedCount, doc.MatchedPlayerIds);
     }
 }

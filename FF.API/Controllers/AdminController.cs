@@ -363,17 +363,22 @@ public class AdminController(
         }
 
         logger.LogInformation(
-            "Admin triggered DFV calculation — season {Season}, format {Format}",
-            request.Season, scoringFormat);
+            "Admin triggered DFV calculation — season {Season}, format {Format}, disableVor {DisableVor}",
+            request.Season, scoringFormat, request.DisableVor);
 
-        var results = await dfvService.CalculateAllAsync(request.Season, scoringFormat, ct);
+        var results = await dfvService.CalculateAllAsync(
+            request.Season, scoringFormat, request.DisableVor, ct);
         await valuationRepository.UpsertBatchAsync(results, ct);
 
         return Ok(new
         {
-            Message = "DFV calculation complete.",
+            Message = request.DisableVor
+                ? "DFV calculation complete — CONTROL RUN, value over replacement disabled. "
+                  + "The served board is now a measurement state; re-run without disableVor to restore it."
+                : "DFV calculation complete.",
             Count = results.Count,
-            ScoringFormat = scoringFormat.ToString()
+            ScoringFormat = scoringFormat.ToString(),
+            DisableVor = request.DisableVor
         });
     }
 
@@ -681,7 +686,15 @@ public class AdminController(
     /// DFV-specific request — extends RunJobRequest with optional ScoringFormat.
     /// ScoringFormat string is parsed to the enum server-side; invalid values default to Superflex.
     /// </summary>
-    public record RunDfvRequest(int Season, string? ScoringFormat = null);
+    /// <param name="DisableVor">
+    /// FAN-153 control experiment. Scores on the plain discounted career total —
+    /// no replacement subtraction. A measurement run, not a serving state: it
+    /// overwrites the live board, so re-run without the flag afterwards.
+    /// </param>
+    public record RunDfvRequest(
+        int Season,
+        string? ScoringFormat = null,
+        bool DisableVor = false);
 
     /// <summary>
     /// FAN-153 phase 1. <c>Depth</c> and <c>TeamCount</c> both default rather than
