@@ -1,4 +1,4 @@
-@page "/my-matchup"
+﻿@page "/my-matchup"
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using System.Net.Http.Json
@@ -6,6 +6,7 @@
 @inject ISnackbar Snackbar
 @inject LeagueStateService LeagueState
 @inject NflContextClientService NflContext
+@inject IDialogService DialogService
 @implements IDisposable
 
 <PageTitle>My Matchup — FantasyCombine.AI</PageTitle>
@@ -237,12 +238,27 @@ else
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd>
-                            <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                @context.NflTeam
-                                @if (!string.IsNullOrEmpty(context.OpponentTeam))
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                @if (!HasPlayerCard(context))
                                 {
-                                    <span> vs @context.OpponentTeam</span>
+                                    @context.PlayerName
+                                }
+                                else
+                                {
+                                    <MudLink Underline="Underline.None" Color="Color.Inherit"
+                                             OnClick="@(() => OpenPlayerCardAsync(context))"
+                                             Style="cursor:pointer;">@context.PlayerName</MudLink>
+                                }
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @* FAN-178. Built as one string rather than
+                                   markup: Razor trims leading whitespace inside
+                                   an element, which swallowed the separator's
+                                   space and rendered "NYGvs DAL". *@
+                                @MatchupLabel(context)
+                                @if (context.IsGameFinal)
+                                {
+                                    <span class="mud-text-disabled"> · Final</span>
                                 }
                             </MudText>
                         </MudTd>
@@ -335,12 +351,27 @@ else
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd>
-                            <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlayerName</MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                @context.NflTeam
-                                @if (!string.IsNullOrEmpty(context.OpponentTeam))
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                @if (!HasPlayerCard(context))
                                 {
-                                    <span> vs @context.OpponentTeam</span>
+                                    @context.PlayerName
+                                }
+                                else
+                                {
+                                    <MudLink Underline="Underline.None" Color="Color.Inherit"
+                                             OnClick="@(() => OpenPlayerCardAsync(context))"
+                                             Style="cursor:pointer;">@context.PlayerName</MudLink>
+                                }
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                @* FAN-178. Built as one string rather than
+                                   markup: Razor trims leading whitespace inside
+                                   an element, which swallowed the separator's
+                                   space and rendered "NYGvs DAL". *@
+                                @MatchupLabel(context)
+                                @if (context.IsGameFinal)
+                                {
+                                    <span class="mud-text-disabled"> · Final</span>
                                 }
                             </MudText>
                         </MudTd>
@@ -784,6 +815,68 @@ else
     };
 
     // ── Local DTOs ─────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Opens the standard player card. FAN-178.
+    ///
+    /// The dialog, not /players/{id}: eight pages use PlayerCardDialog — MyTeam
+    /// above all, which is this page's direct sibling — against three that
+    /// navigate to PlayerDetail. Consolidating the two surfaces is its own piece
+    /// of work; this just stops My Matchup being the odd one out.
+    /// </summary>
+    private async Task OpenPlayerCardAsync(MyMatchupPlayerDto p)
+    {
+        if (!HasPlayerCard(p)) return;
+
+        var data = new PlayerCardDialog.PlayerCardData(
+            SleeperPlayerId: p.SleeperPlayerId,
+            FullName:        p.PlayerName,
+            Position:        p.Position,
+            NflTeam:         p.NflTeam,
+            Age: null,
+            DraftRound: null, DraftPick: null, CollegeTeam: null,
+            HeadshotUrl: $"https://sleepercdn.com/content/nfl/players/thumb/{p.SleeperPlayerId}.jpg",
+            FantasyProsRank: null, FantasyProsTier: null,
+            PffGrade: null, PffRank: null, ConsensusAdp: null,
+            DynastyScore: 0, DraftCapitalScore: 0, PositionalScore: 0,
+            ValuationBlendScore: 0, FantasyProsScore: 0, PffGradeScore: 0,
+            ConsensusAdpScore: 0, AgeMultiplier: 0, AthleticismSignalScore: 0,
+            AthleticismScore: null, SpeedScore: null, FortyYard: null);
+
+        var parameters = new DialogParameters<PlayerCardDialog>
+        {
+            { x => x.Player, data },
+            { x => x.DefaultTab, PlayerCardDialog.PlayerCardTab.Stats }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        await DialogService.ShowAsync<PlayerCardDialog>(p.PlayerName, parameters, options);
+    }
+
+    /// <summary>
+    /// "NYG vs DAL", "NO @ DET", or "KC · BYE". FAN-178.
+    /// </summary>
+    private static string MatchupLabel(MyMatchupPlayerDto p) =>
+        string.IsNullOrEmpty(p.OpponentTeam)
+            ? $"{p.NflTeam} · BYE"
+            : $"{p.NflTeam} {(p.IsHomeGame == false ? "@" : "vs")} {p.OpponentTeam}";
+
+    /// <summary>
+    /// Team defences carry a team abbreviation as their id, so they have no
+    /// player card to link to — /players/SEA would 404.
+    /// </summary>
+    private static bool IsTeamDefence(MyMatchupPlayerDto p) =>
+        string.Equals(p.Position, "DEF", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Team defences have no player card — their id is a team abbreviation.
+    ///
+    /// Everyone else gets a link. An earlier version also required a GSIS id and
+    /// silently un-linked the entire roster when that field came back empty —
+    /// a guard meant to avoid one broken link removed all of them. The card
+    /// degrades far better than the page does: it loads and says so.
+    /// </summary>
+    private static bool HasPlayerCard(MyMatchupPlayerDto p) => !IsTeamDefence(p);
+
     private record UserContextResponse(
         bool IsSleeperLinked,
         string? ActiveLeagueId,
@@ -813,6 +906,7 @@ else
 
     private record MyMatchupPlayerDto(
         string SleeperPlayerId,
+        string? GsisId,
         string PlayerName,
         string Position,
         string NflTeam,
@@ -826,6 +920,8 @@ else
         double? BustProbability,
         string? GameScript,
         string? OpponentTeam,
+        bool? IsHomeGame,
+        bool IsGameFinal,
         double? ActualPoints,
         string? InjuryDesignation,
         string? LeagueId,

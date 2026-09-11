@@ -31,6 +31,10 @@ public record MyMatchupSideDto(
 
 public record MyMatchupPlayerDto(
     string SleeperPlayerId,
+    // FAN-178. The player card resolves its simulation/projection/usage calls
+    // by GSIS id (PlayerDetail: ApiPlayerId => GsisId ?? PlayerId), so a link
+    // built from the Sleeper id alone loads the page and finds nothing.
+    string? GsisId,
     string PlayerName,
     string Position,
     string NflTeam,
@@ -48,6 +52,13 @@ public record MyMatchupPlayerDto(
     double? BustProbability,      // NEW — MATCHUP-003
     string? GameScript,           // NEW — MATCHUP-003
     string? OpponentTeam,         // NEW — MATCHUP-003
+    // FAN-178. Null when the player has no game this week (bye, or a schedule
+    // that has not been imported) — which is why this is bool? and not bool:
+    // "away" and "no game at all" must not render the same.
+    bool? IsHomeGame,
+    // FAN-178. True once the player's game is final, which is what lets the
+    // side total use banked actuals the way Sleeper does.
+    bool IsGameFinal,
     double? ActualPoints,   // NEW — non-null for past weeks
     string? InjuryDesignation,
     Guid? LeagueId,

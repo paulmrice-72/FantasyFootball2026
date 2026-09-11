@@ -367,6 +367,17 @@ try
         "0 8 * * 3",  // Wednesday 8:00 UTC — after dynasty pipeline
         utcOptions);
 
+    // FAN-178. Daily, and early: the week resolution in NflContextService, the
+    // opponent on every projection and the game-script spread all read this.
+    // Season is resolved inside the job from INflContextService rather than
+    // hardcoded here — the depth-chart entry above bakes in 2026 and will
+    // quietly sync the wrong year next September.
+    RecurringJob.AddOrUpdate<SyncNflScheduleJob>(
+        "nfl-schedule-sync-daily",
+        job => job.RunAsync(CancellationToken.None),
+        "0 6 * * *",   // 06:00 UTC daily
+        utcOptions);
+
     RecurringJob.AddOrUpdate<SyncRedraftAdpJob>(
         "redraft adp sync",
         job => job.RunAsync(CancellationToken.None),

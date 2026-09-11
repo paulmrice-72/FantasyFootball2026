@@ -2,8 +2,10 @@
 using FF.Application.Common.Settings;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
+using FF.Domain.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Globalization;
 
 namespace FF.Infrastructure.ExternalApis.Nflverse;
 
@@ -310,4 +312,189 @@ public class NflverseDownloadService(
 
     private static string SafeGet(string[] cols, int idx) =>
         idx >= 0 && idx < cols.Length ? cols[idx].Trim('"', ' ') : string.Empty;
+
+    // ── Schedule (FAN-178) ────────────────────────────────────────────────
+
+    /// <summary>
+    /// One file, every season since 1999. Not a per-season release asset like
+    /// the other nflverse feeds, so it is fetched whole and filtered in memory.
+    /// </summary>
+    private const string ScheduleUrl =
+        "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv";
+
+    public async Task<IReadOnlyList<NflScheduleDocument>> DownloadScheduleAsync(
+        int season, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(
+            "Downloading nflverse schedule for season {Season} from {Url}", season, ScheduleUrl);
+
+        try
+        {
+            var response = await _httpClient.GetAsync(ScheduleUrl, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError(
+                    "games.csv returned {Status} — schedule unavailable for season {Season}",
+                    response.StatusCode, season);
+                return [];
+            }
+
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            var games = ParseScheduleCsv(content, season);
+
+            if (games.Count == 0)
+            {
+                // Deliberately not a fallback to season-1. A schedule for the
+                // wrong season is worse than none: it would look valid, join
+                // cleanly, and put every player against the wrong opponent —
+                // which is the exact defect FAN-178 exists to fix.
+                _logger.LogError(
+                    "games.csv parsed 0 REG games for season {Season}. nflverse has not " +
+                    "published it yet, or the column layout changed.", season);
+                return [];
+            }
+
+            // A full regular season is 272 games (17 weeks x 16). Anything short
+            // is a partial publish, which is survivable but must not pass silently.
+            if (games.Count < 272)
+            {
+                _logger.LogWarning(
+                    "Schedule for {Season} parsed only {Count} of the expected 272 REG games — " +
+                    "treating as a partial publish. Weeks present: {Weeks}",
+                    season, games.Count,
+                    string.Join(",", games.Select(g => g.Week).Distinct().Order()));
+            }
+
+            // Every team must appear, or a join against it silently yields no
+            // game and the player renders as though on a bye all season.
+            var seen = games
+                .SelectMany(g => new[] { g.HomeTeam, g.AwayTeam })
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var missing = NflTeamNormalizer.CanonicalTeams
+                .Where(t => !seen.Contains(t))
+                .ToList();
+
+            if (missing.Count > 0)
+            {
+                _logger.LogError(
+                    "Schedule for {Season} is missing {Count} team(s): {Missing}. This is an " +
+                    "abbreviation mismatch, not a real absence — every team plays every season.",
+                    season, missing.Count, string.Join(", ", missing));
+            }
+
+            _logger.LogInformation(
+                "Parsed {Count} REG games for season {Season} across weeks {Min}-{Max}",
+                games.Count, season, games.Min(g => g.Week), games.Max(g => g.Week));
+
+            return games;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to download schedule for season {Season}", season);
+            return [];
+        }
+    }
+
+    private List<NflScheduleDocument> ParseScheduleCsv(string csv, int season)
+    {
+        var results = new List<NflScheduleDocument>();
+        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length < 2) return results;
+
+        var headers = SplitCsvLine(lines[0].Trim());
+
+        int idxGameId = Array.IndexOf(headers, "game_id");
+        int idxSeason = Array.IndexOf(headers, "season");
+        int idxGameType = Array.IndexOf(headers, "game_type");
+        int idxWeek = Array.IndexOf(headers, "week");
+        int idxGameday = Array.IndexOf(headers, "gameday");
+        int idxWeekday = Array.IndexOf(headers, "weekday");
+        int idxGametime = Array.IndexOf(headers, "gametime");
+        int idxAway = Array.IndexOf(headers, "away_team");
+        int idxHome = Array.IndexOf(headers, "home_team");
+        int idxAwayScore = Array.IndexOf(headers, "away_score");
+        int idxHomeScore = Array.IndexOf(headers, "home_score");
+        int idxLocation = Array.IndexOf(headers, "location");
+
+        // spread_line is the closing line from the HOME team's perspective and
+        // total_line the closing over/under. Note the neighbouring "total" and
+        // "result" columns are the ACTUAL combined score and home margin — using
+        // those as a line would silently feed the game-script classifier the
+        // outcome instead of the expectation.
+        int idxSpreadLine = Array.IndexOf(headers, "spread_line");
+        int idxTotalLine = Array.IndexOf(headers, "total_line");
+
+        // If the feed's layout ever changes, fail loudly here rather than
+        // producing rows with empty teams that join to nothing.
+        if (idxGameId < 0 || idxSeason < 0 || idxWeek < 0 || idxHome < 0 || idxAway < 0)
+        {
+            _logger.LogError(
+                "games.csv is missing a required column — game_id:{G} season:{S} week:{W} " +
+                "home_team:{H} away_team:{A}. Refusing to parse.",
+                idxGameId, idxSeason, idxWeek, idxHome, idxAway);
+            return results;
+        }
+
+        foreach (var line in lines.Skip(1))
+        {
+            var cols = SplitCsvLine(line.Trim());
+            if (cols.Length < 10) continue;
+
+            if (!int.TryParse(SafeGet(cols, idxSeason), out var rowSeason) || rowSeason != season)
+                continue;
+
+            var gameType = SafeGet(cols, idxGameType);
+            if (!gameType.Equals("REG", StringComparison.OrdinalIgnoreCase)) continue;
+
+            if (!int.TryParse(SafeGet(cols, idxWeek), out var week)) continue;
+
+            var gamedayRaw = SafeGet(cols, idxGameday);
+            if (!DateTime.TryParseExact(
+                    gamedayRaw, "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out var gameday))
+            {
+                _logger.LogWarning(
+                    "Skipping {GameId} — unparseable gameday '{Raw}'",
+                    SafeGet(cols, idxGameId), gamedayRaw);
+                continue;
+            }
+
+            results.Add(new NflScheduleDocument
+            {
+                GameId = SafeGet(cols, idxGameId),
+                Season = rowSeason,
+                Week = week,
+                GameType = "REG",
+                Gameday = DateTime.SpecifyKind(gameday.Date, DateTimeKind.Utc),
+                GametimeEt = SafeGet(cols, idxGametime),
+                Weekday = SafeGet(cols, idxWeekday),
+
+                // Normalised at the boundary — the feed writes LA, every roster
+                // join in this system uses LAR.
+                HomeTeam = NflTeamNormalizer.Normalize(SafeGet(cols, idxHome)),
+                AwayTeam = NflTeamNormalizer.Normalize(SafeGet(cols, idxAway)),
+
+                HomeScore = ParseNullableInt(SafeGet(cols, idxHomeScore)),
+                AwayScore = ParseNullableInt(SafeGet(cols, idxAwayScore)),
+                SpreadLine = ParseNullableDecimal(SafeGet(cols, idxSpreadLine)),
+                TotalLine = ParseNullableDecimal(SafeGet(cols, idxTotalLine)),
+
+                Location = SafeGet(cols, idxLocation) is { Length: > 0 } loc ? loc : "Home",
+                SyncedAt = DateTime.UtcNow
+            });
+        }
+
+        return results;
+    }
+
+    private static int? ParseNullableInt(string raw) =>
+        int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
+            ? v
+            : null;
+
+    private static decimal? ParseNullableDecimal(string raw) =>
+        decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
+            ? v
+            : null;
 }
