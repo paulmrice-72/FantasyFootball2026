@@ -1,6 +1,7 @@
 ﻿using FF.Application.Features.Team.Queries;
 using FF.Application.Interfaces.External;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Domain.Documents;
 using FF.Domain.Entities;
@@ -101,7 +102,8 @@ public class GetMyMatchupQueryHandlerTests
         IInjuryAlertRepository? injuryRepo = null,
         ILeagueRepository? leagueRepo = null,
         ILeagueContextResolverService? leagueCtxResolver = null,
-        IPlayerProjectionRepository? projectionRepo = null)
+        IPlayerProjectionRepository? projectionRepo = null,
+        INflScheduleRepository? scheduleRepo = null)
     {
         matchupService ??= Substitute.For<ISleeperMatchupService>();
         rosterRepo ??= Substitute.For<IRosterPlayerRepository>();
@@ -110,6 +112,21 @@ public class GetMyMatchupQueryHandlerTests
         injuryRepo ??= Substitute.For<IInjuryAlertRepository>();
         leagueRepo ??= Substitute.For<ILeagueRepository>();
         leagueCtxResolver ??= Substitute.For<ILeagueContextResolverService>();
+
+        // FAN-178. Defaults to an empty week, which is the no-schedule case:
+        // no opponent resolves, IsGameFinal stays false, and the side total
+        // therefore falls through to projections exactly as it did before.
+        // Configured explicitly rather than left to NSubstitute's auto-value —
+        // a null IReadOnlyList here would throw inside the handler's loop.
+        var scheduleWasSupplied = scheduleRepo is not null;
+        scheduleRepo ??= Substitute.For<INflScheduleRepository>();
+
+        if (!scheduleWasSupplied)
+        {
+            scheduleRepo.GetByWeekAsync(
+                    Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                .Returns([]);
+        }
 
         // Only set up default empty return if caller didn't supply a pre-configured substitute
         var projRepoWasSupplied = projectionRepo is not null;
@@ -137,6 +154,7 @@ public class GetMyMatchupQueryHandlerTests
             leagueRepo,
             leagueCtxResolver,
             projectionRepo,
+            scheduleRepo,
             NullLogger<GetMyMatchupQueryHandler>.Instance);
     }
 

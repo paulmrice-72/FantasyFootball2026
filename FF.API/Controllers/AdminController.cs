@@ -4,6 +4,7 @@ using FF.Application.Features.Admin.Queries.GetPlatformSettings;
 using FF.Application.Features.Calibration.Commands;
 using FF.Application.Features.DraftTools.Commands.ImportFantasyProsDynastyRankings;
 using FF.Application.Features.DraftTools.Commands.SyncCombineData;
+using FF.Application.Features.Schedule.Commands;
 using FF.Application.Features.Simulations.Commands.SeedSeasonAverageSims;
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
@@ -126,14 +127,46 @@ public class AdminController(
         return Ok($"Admin role removed from {email}.");
     }
 
+    /// <summary>
+    /// Diagnostic view of the season/week resolution.
+    ///
+    /// <para>
+    /// FAN-139/178. This endpoint used to compute <c>override ?? calendar</c>
+    /// inline, as did <c>nfl-context/public</c> and the admin page, so the same
+    /// rule existed in four places and only one of them learned about the
+    /// schedule. The effective values now come from
+    /// <see cref="INflContextService"/> — the single owner of that rule — and the
+    /// calendar and schedule figures are reported alongside as what they are:
+    /// inputs, not answers.
+    /// </para>
+    /// </summary>
     [HttpGet("nfl-context")]
-    public async Task<IActionResult> GetNflContext()
+    public async Task<IActionResult> GetNflContext(
+        [FromServices] INflContextService nflContext,
+        [FromServices] INflScheduleRepository scheduleRepository,
+        CancellationToken ct)
     {
         var settings = await appSettingsRepo.GetAsync();
+
         var calendarSeason = NflContextService.CalcSeason(DateTime.UtcNow);
         var calendarWeek = NflContextService.CalcWeek(DateTime.UtcNow, calendarSeason);
+
+        var (activeSeason, activeWeek) = await nflContext.GetContextAsync();
+
+        var scheduleWeek = await scheduleRepository.GetCurrentWeekAsync(
+            activeSeason, DateTime.UtcNow, ct);
+
+        var weekSource =
+            settings.SimulationWeekOverride.HasValue ? "override"
+            : scheduleWeek.HasValue ? "schedule"
+            : "calendar";
+
         return Ok(new
         {
+            ActiveSeason = activeSeason,
+            ActiveWeek = activeWeek,
+            WeekSource = weekSource,
+            ScheduleWeek = scheduleWeek,
             CalendarSeason = calendarSeason,
             CalendarWeek = calendarWeek,
             OverrideSeason = settings.SimulationSeasonOverride,
@@ -421,15 +454,20 @@ public class AdminController(
         return result.IsSuccess ? Ok(result.Value) : BadRequest(result.Error.Message);
     }
 
+    /// <summary>
+    /// The season/week the front end runs on — NflContextClientService and every
+    /// page that asks it, including My Matchup, read this.
+    ///
+    /// FAN-139/178: it resolved <c>override ?? calendar</c> inline, so clearing
+    /// the override handed the whole site the calendar heuristic and the imported
+    /// schedule was never consulted. It now delegates.
+    /// </summary>
     [HttpGet("nfl-context/public")]
     [AllowAnonymous]
-    public async Task<IActionResult> GetNflContextPublic()
+    public async Task<IActionResult> GetNflContextPublic(
+        [FromServices] INflContextService nflContext)
     {
-        var settings = await appSettingsRepo.GetAsync();
-        var calendarSeason = NflContextService.CalcSeason(DateTime.UtcNow);
-        var calendarWeek = NflContextService.CalcWeek(DateTime.UtcNow, calendarSeason);
-        var activeSeason = settings.SimulationSeasonOverride ?? calendarSeason;
-        var activeWeek = settings.SimulationWeekOverride ?? calendarWeek;
+        var (activeSeason, activeWeek) = await nflContext.GetContextAsync();
         return Ok(new { ActiveSeason = activeSeason, ActiveWeek = activeWeek });
     }
 
@@ -536,6 +574,89 @@ public class AdminController(
     {
         BackgroundJob.Enqueue<SyncRedraftAdpJob>(job => job.RunAsync(CancellationToken.None));
         return Ok(new { message = "FFC ADP sync job enqueued." });
+    }
+
+    // ── NFL schedule (FAN-178) ────────────────────────────────────────────
+
+    /// <summary>
+    /// Imports the regular-season schedule from nflverse. Runs inline rather
+    /// than enqueued so the caller gets the counts back — a schedule import
+    /// that silently half-worked is the failure worth catching immediately.
+    /// </summary>
+    [HttpPost("sync-nfl-schedule")]
+    public async Task<IActionResult> SyncNflSchedule(
+        [FromQuery] int? season,
+        [FromServices] IMediator mediator,
+        [FromServices] INflContextService nflContext,
+        CancellationToken ct)
+    {
+        var targetSeason = season ?? await nflContext.GetSeasonAsync();
+
+        logger.LogInformation(
+            "Admin triggered NFL schedule sync — season {Season}", targetSeason);
+
+        var result = await mediator.Send(new SyncNflScheduleCommand(targetSeason), ct);
+
+        if (!result.Succeeded)
+        {
+            return BadRequest(new
+            {
+                result.Season,
+                result.Message,
+                Hint = "nflverse publishes games.csv for the upcoming season well before "
+                     + "Week 1. A zero-row parse usually means the column layout changed — "
+                     + "check the logs for the required-column error."
+            });
+        }
+
+        return Ok(new
+        {
+            result.Season,
+            result.GamesImported,
+            result.WeeksCovered,
+            result.GamesFinal,
+            result.GamesWithSpread,
+            ElapsedSeconds = Math.Round(result.Elapsed.TotalSeconds, 1)
+        });
+    }
+
+    /// <summary>
+    /// Reads back one week of the stored schedule. Exists so the import can be
+    /// verified against what the site actually shows without opening Compass.
+    /// </summary>
+    [HttpGet("nfl-schedule")]
+    public async Task<IActionResult> GetNflSchedule(
+        [FromQuery] int? season,
+        [FromQuery] int? week,
+        [FromServices] INflScheduleRepository scheduleRepository,
+        [FromServices] INflContextService nflContext,
+        CancellationToken ct)
+    {
+        var (contextSeason, contextWeek) = await nflContext.GetContextAsync();
+        var targetSeason = season ?? contextSeason;
+        var targetWeek = week ?? contextWeek;
+
+        var games = await scheduleRepository.GetByWeekAsync(targetSeason, targetWeek, ct);
+        var seasonCount = await scheduleRepository.CountBySeasonAsync(targetSeason, ct);
+
+        return Ok(new
+        {
+            Season = targetSeason,
+            Week = targetWeek,
+            GamesInSeason = seasonCount,
+            GamesInWeek = games.Count,
+            Games = games.Select(g => new
+            {
+                g.GameId,
+                Matchup = $"{g.AwayTeam} @ {g.HomeTeam}",
+                g.Weekday,
+                Gameday = g.Gameday.ToString("yyyy-MM-dd"),
+                g.GametimeEt,
+                g.SpreadLine,
+                g.TotalLine,
+                Score = g.IsFinal() ? $"{g.AwayScore}-{g.HomeScore}" : null
+            })
+        });
     }
 
     [HttpPost("jobs/seed-season-averages")]
