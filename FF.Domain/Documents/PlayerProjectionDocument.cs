@@ -21,7 +21,20 @@ public class PlayerProjectionDocument
     public string PlayerName { get; set; } = string.Empty;
     public string Position { get; set; } = string.Empty;
     public string NflTeam { get; set; } = string.Empty;
+    /// <summary>
+    /// Opponent for the week being projected, resolved from <c>nfl_schedule</c>
+    /// (FAN-178). Empty means no game — a bye, or a schedule that has not been
+    /// imported. It previously carried the opponent of the player's most recent
+    /// game log, which on a carryover run is the prior season's final opponent.
+    /// </summary>
     public string OpponentTeam { get; set; } = string.Empty;
+
+    /// <summary>
+    /// True when the player's team is the home team in that game. Drives the
+    /// "vs" / "@" on every surface that renders a matchup. FAN-178.
+    /// </summary>
+    public bool IsHomeGame { get; set; }
+
     public int Season { get; set; }
     public int Week { get; set; }
 

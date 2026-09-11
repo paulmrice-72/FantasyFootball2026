@@ -1,7 +1,9 @@
 ﻿// FF.Application/Features/Team/Queries/GetMyMatchupQueryHandler.cs
 using FF.Application.Interfaces.External;
 using FF.Application.Interfaces.Persistence;
+using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
+using FF.Domain.Services;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -16,6 +18,7 @@ public class GetMyMatchupQueryHandler(
     ILeagueRepository leagueRepository,
     ILeagueContextResolverService leagueContextResolver,
     IPlayerProjectionRepository projectionRepository,
+    INflScheduleRepository scheduleRepository,
     ILogger<GetMyMatchupQueryHandler> logger)
     : IRequestHandler<GetMyMatchupQuery, MyMatchupDto?>
 {
@@ -114,6 +117,34 @@ public class GetMyMatchupQueryHandler(
             .GroupBy(p => p.SleeperPlayerId)
             .ToDictionary(g => g.Key, g => g.First());
 
+        // 8b — Schedule (FAN-178). Resolved here rather than read off the sim
+        // document on purpose. The sim carries whatever opponent the projection
+        // stamped, so a stale sim shows a stale matchup; reading the schedule at
+        // query time means the label is correct as soon as the schedule is
+        // imported, with no pipeline re-run, and there is exactly one source of
+        // it rather than a value copied through three collections.
+        var schedule = await scheduleRepository.GetByWeekAsync(
+            request.Season, request.Week, cancellationToken);
+
+        var gameByTeam = new Dictionary<string, (string Opponent, bool IsHome, bool IsFinal)>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var game in schedule)
+        {
+            if (game.HomeTeam.Length == 0 || game.AwayTeam.Length == 0) continue;
+            var final = game.IsFinal();
+            gameByTeam[game.HomeTeam] = (game.AwayTeam, true, final);
+            gameByTeam[game.AwayTeam] = (game.HomeTeam, false, final);
+        }
+
+        if (gameByTeam.Count == 0)
+        {
+            logger.LogWarning(
+                "No schedule for Season {Season} Week {Week} — matchup labels will be blank. " +
+                "Run POST /api/v1/admin/sync-nfl-schedule.",
+                request.Season, request.Week);
+        }
+
         // 9 — Starter sets
         var myStarterSet = (myMatchupEntry.Starters ?? []).Where(s => s != "0").ToHashSet();
         var oppStarterSet = (opponentEntry.Starters ?? []).Where(s => s != "0").ToHashSet();
@@ -123,7 +154,7 @@ public class GetMyMatchupQueryHandler(
             myRosterDoc.TeamName, myRosterDoc.OwnerName, myRosterDoc.SleeperRosterId,
             myPlayerIds,
             myStarterSet,
-            playerLookup, simLookup, injuryLookup, projLookup,
+            playerLookup, simLookup, injuryLookup, projLookup, gameByTeam,
             league?.Id, scoringFormatLabel,
             myPlayersPointsLookup);
 
@@ -131,7 +162,7 @@ public class GetMyMatchupQueryHandler(
             opponentTeamName, opponentOwnerName, opponentRosterDoc?.SleeperRosterId,
             opponentPlayerIds,
             oppStarterSet,
-            playerLookup, simLookup, injuryLookup, projLookup,
+            playerLookup, simLookup, injuryLookup, projLookup, gameByTeam,
             league?.Id, scoringFormatLabel, oppPlayersPointsLookup);
 
         // 11 — Win probability
@@ -162,6 +193,7 @@ public class GetMyMatchupQueryHandler(
         Dictionary<string, FF.Domain.Documents.SimulationResultDocument> simLookup,
         Dictionary<string, FF.Domain.Documents.InjuryAlertDocument> injuryLookup,
         Dictionary<string, FF.Domain.Documents.PlayerProjectionDocument> projLookup,
+        Dictionary<string, (string Opponent, bool IsHome, bool IsFinal)> gameByTeam,
         Guid? leagueId,
         string scoringFormat, Dictionary<string, decimal> playersPointsLookup)
     {
@@ -187,6 +219,12 @@ public class GetMyMatchupQueryHandler(
             var nflTeam = player?.NflTeam
                 ?? (isDefId ? sleeperPlayerId : "—");
 
+            // FAN-178. Keyed on the player's current team, normalised, against
+            // nfl_schedule — not read off the sim, whose OpponentTeam is whatever
+            // the last projection run stamped. Absent = bye week.
+            var canonicalTeam = NflTeamNormalizer.Normalize(nflTeam);
+            var hasGame = gameByTeam.TryGetValue(canonicalTeam, out var game);
+
             // Build projection breakdown if available
             ProjectionBreakdownDto? breakdown = proj is null ? null : new ProjectionBreakdownDto(
                 ProjectedPoints: (double)(scoringFormat == "Ppr"
@@ -206,6 +244,14 @@ public class GetMyMatchupQueryHandler(
 
             return new MyMatchupPlayerDto(
                 SleeperPlayerId: sleeperPlayerId,
+                // Postgres is the preferred source, but Player.GsisId is nullable
+                // and is empty for a good part of the table. The projection and
+                // simulation documents are keyed by GSIS id (PlayerId), so they
+                // are a reliable second and third source — Projections.razor
+                // builds its own card links from exactly that value.
+                GsisId: !string.IsNullOrEmpty(player?.GsisId) ? player!.GsisId
+                      : !string.IsNullOrEmpty(proj?.PlayerId) ? proj!.PlayerId
+                      : sim?.PlayerId,
                 PlayerName: playerName,
                 Position: position,
                 NflTeam: nflTeam,
@@ -220,7 +266,9 @@ public class GetMyMatchupQueryHandler(
                 BoomProbability: sim is not null ? (double)sim.BoomProbability : null,   // NEW
                 BustProbability: sim is not null ? (double)sim.BustProbability : null,   // NEW
                 GameScript: sim?.GameScript,                                              // NEW
-                OpponentTeam: sim?.OpponentTeam,                                          // NEW
+                OpponentTeam: hasGame ? game.Opponent : null,                             // FAN-178
+                IsHomeGame: hasGame ? game.IsHome : (bool?)null,                                 // FAN-178
+                IsGameFinal: hasGame && game.IsFinal,                                     // FAN-178
                 InjuryDesignation: injury?.Designation,
                 LeagueId: leagueId,
                 ScoringFormat: scoringFormat,
@@ -236,9 +284,24 @@ public class GetMyMatchupQueryHandler(
 
         // Expectations add; medians do not. Summing MedianProjectedPoints here
         // understated every team total on this page by roughly 6-11% per position.
-        var totalExpected = starters.Sum(p => p.MeanProjectedPoints ?? 0);
+        //
+        // FAN-178: and the sum now follows Sleeper's convention — actual points
+        // once a player's game is final, the projection until then. Previously
+        // this summed projections only, so every banked result was excluded from
+        // the headline number while being displayed right next to it, and any
+        // player without a sim row (every K and DEF, FAN-124) silently
+        // contributed zero via the null coalesce.
+        var totalExpected = starters.Sum(p =>
+            p.IsGameFinal && p.ActualPoints.HasValue
+                ? p.ActualPoints.Value
+                : p.MeanProjectedPoints ?? 0);
         var pooledVariance = starters.Sum(p =>
         {
+            // A final score carries no remaining uncertainty, so it must not
+            // widen the band. Leaving it in kept the floor-ceiling spread at
+            // full width for games that had already been decided.
+            if (p.IsGameFinal && p.ActualPoints.HasValue) return 0.0;
+
             var spread = (p.CeilingProjectedPoints ?? 0) - (p.FloorProjectedPoints ?? 0);
             var stdDev = spread / 4.0;
             return stdDev * stdDev;

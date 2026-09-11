@@ -89,6 +89,8 @@ public static class DependencyInjection
         services.AddScoped<ISimulationResultRepository, SimulationResultRepository>();
         // Vegas Line
         services.AddScoped<IVegasLineRepository, VegasLineRepository>();
+        // NFL schedule (FAN-178) — the only full-season source of who plays whom.
+        services.AddScoped<INflScheduleRepository, NflScheduleRepository>();
         services.AddScoped<IRosterPlayerRepository, RosterPlayerRepository>();
         services.AddScoped<IWarRoomBriefRepository, WarRoomBriefRepository>();
         services.AddScoped<VegasLineSyncJob>();
@@ -266,6 +268,7 @@ public static class DependencyInjection
         // After: services.AddScoped<NflverseDraftPickSyncJob>();
         services.AddScoped<RecalculateDynastyValuationsJob>();
         services.AddScoped<SyncDepthChartsJob>();
+        services.AddScoped<SyncNflScheduleJob>();
         services.AddScoped<SyncRedraftAdpJob>();
         services.AddHttpClient<IFantasyFootballCalculatorService, FantasyFootballCalculatorService>(client =>
         {
@@ -355,6 +358,31 @@ public static class DependencyInjection
                     cm.MapIdMember(c => c.Id)
                       .SetIdGenerator(StringObjectIdGenerator.Instance)
                       .SetSerializer(new StringSerializer(BsonType.ObjectId));
+                });
+            }
+
+            if (!BsonClassMap.IsClassMapRegistered(typeof(NflScheduleDocument)))
+            {
+                BsonClassMap.RegisterClassMap<NflScheduleDocument>(cm =>
+                {
+                    cm.AutoMap();
+                    cm.SetIgnoreExtraElements(true);
+                    cm.MapIdMember(c => c.Id)
+                      .SetIdGenerator(StringObjectIdGenerator.Instance)
+                      .SetSerializer(new StringSerializer(BsonType.ObjectId));
+
+                    // Explicit Decimal128 on the two nullable decimals. The
+                    // driver's default persists decimal as a BSON *string*, which
+                    // is FAN-127/129 — and TolerantDecimalSerializer.Register(),
+                    // which exists to fix that globally, is currently never
+                    // called from anywhere. This collection is new, so it is
+                    // written correctly from the first document rather than
+                    // inheriting a defect that has to be migrated later.
+                    var nullableDecimal = new NullableSerializer<decimal>(
+                        new DecimalSerializer(BsonType.Decimal128));
+
+                    cm.MapMember(c => c.SpreadLine).SetSerializer(nullableDecimal);
+                    cm.MapMember(c => c.TotalLine).SetSerializer(nullableDecimal);
                 });
             }
 

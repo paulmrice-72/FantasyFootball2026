@@ -58,26 +58,33 @@
     {
         <MudGrid Spacing="2" Class="mb-3">
             <MudItem xs="12" sm="6">
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">Calendar (actual)</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Inputs</MudText>
                 <MudText Typo="Typo.body1">
-                    Season <strong>@_context.CalendarSeason</strong> — Week <strong>@_context.CalendarWeek</strong>
+                    Schedule — Week
+                    <strong>@(_context.ScheduleWeek?.ToString() ?? "none imported")</strong>
+                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Calendar heuristic — Season @_context.CalendarSeason, Week @_context.CalendarWeek
                 </MudText>
             </MudItem>
             <MudItem xs="12" sm="6">
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">Active context</MudText>
-                @if (_context.IsOverrideActive)
+                <MudChip T="string" Size="Size.Small" Class="mr-1"
+                         Color="@(_context.WeekSource switch {
+                             "override" => Color.Warning,
+                             "schedule" => Color.Success,
+                             _ => Color.Error })">
+                    @_context.WeekSource.ToUpperInvariant()
+                </MudChip>
+                <MudText Typo="Typo.body1" Style="display:inline">
+                    Season <strong>@_context.ActiveSeason</strong> —
+                    Week <strong>@_context.ActiveWeek</strong>
+                </MudText>
+                @if (_context.WeekSource == "calendar")
                 {
-                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Class="mr-1">OVERRIDE</MudChip>
-                    <MudText Typo="Typo.body1" Style="display:inline">
-                        Season <strong>@(_context.OverrideSeason ?? _context.CalendarSeason)</strong> —
-                        Week <strong>@(_context.OverrideWeek ?? _context.CalendarWeek)</strong>
-                    </MudText>
-                }
-                else
-                {
-                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Class="mr-1">CALENDAR</MudChip>
-                    <MudText Typo="Typo.body1" Style="display:inline">
-                        Season <strong>@_context.CalendarSeason</strong> — Week <strong>@_context.CalendarWeek</strong>
+                    <MudText Typo="Typo.caption" Color="Color.Error">
+                        No schedule imported — falling back to a heuristic that is
+                        wrong in some seasons (FAN-139). Run Sync NFL Schedule.
                     </MudText>
                 }
             </MudItem>
@@ -390,7 +397,13 @@
     }
 
     // ── DTOs ───────────────────────────────────────────────────────────────────
+    // ActiveSeason/ActiveWeek/WeekSource/ScheduleWeek added FAN-139/178. The page
+    // used to recompute "override ?? calendar" itself, which was a fourth copy of
+    // a rule that now has a schedule in it. Display the resolved value; the
+    // calendar and schedule figures are shown only as inputs.
     private record NflContextDto(
+        int ActiveSeason, int ActiveWeek,
+        string WeekSource, int? ScheduleWeek,
         int CalendarSeason, int CalendarWeek,
         int? OverrideSeason, int? OverrideWeek,
         bool IsOverrideActive, DateTime UpdatedAt, string UpdatedBy);

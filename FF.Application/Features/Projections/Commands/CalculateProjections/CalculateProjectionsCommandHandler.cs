@@ -1,10 +1,11 @@
-// FF.Application/Features/Projections/Commands/CalculateProjections/CalculateProjectionsCommandHandler.cs
+﻿// FF.Application/Features/Projections/Commands/CalculateProjections/CalculateProjectionsCommandHandler.cs
 using FF.Application.Interfaces.Persistence;
 using FF.Application.Interfaces.Repositories;
 using FF.Application.Interfaces.Services;
 using FF.Application.Services;
 using FF.Domain.Documents;
 using FF.Domain.Enums;
+using FF.Domain.Services;
 using FF.Domain.ValueObjects;
 using FF.SharedKernel;
 using FF.SharedKernel.Common;
@@ -40,6 +41,7 @@ public class CalculateProjectionsCommandHandler(
     IPlayerProjectionRepository projectionRepository,
     ProjectionInputBuilder inputBuilder,
     IVegasLineRepository vegasLineRepository,
+    INflScheduleRepository scheduleRepository,
     IPlayerRepository playerRepository,
     IDepthChartRepository depthChartRepository,
     IFantasyProsRookieRankingRepository rookieRankingRepository,
@@ -91,14 +93,85 @@ public class CalculateProjectionsCommandHandler(
         var vegasLines = await vegasLineRepository.GetByWeekAsync(
             request.Season, request.Week, cancellationToken);
 
+        // Keys normalised: vegas_lines is written through TeamNameResolver, which
+        // produces the nflverse LA, while every team string this loop compares
+        // against comes from Sleeper or a game log. FAN-178.
         var spreadByTeam = vegasLines
             .SelectMany(v => new[]
             {
-                (Team: v.HomeTeam, Spread: v.HomeSpread),
-                (Team: v.AwayTeam, Spread: v.AwaySpread)
+                (Team: NflTeamNormalizer.Normalize(v.HomeTeam), Spread: v.HomeSpread),
+                (Team: NflTeamNormalizer.Normalize(v.AwayTeam), Spread: v.AwaySpread)
             })
+            .Where(x => x.Team.Length > 0)
             .GroupBy(x => x.Team, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Spread, StringComparer.OrdinalIgnoreCase);
+
+        // ── Schedule (FAN-178) ────────────────────────────────────────────
+        // Who each team actually plays this week, and the closing line if one is
+        // posted. Before this existed the opponent came off the player's most
+        // recent game log, which in a carryover run is his LAST GAME OF THE
+        // PRIOR SEASON — so Week 1 was conditioned on a January opponent.
+        var schedule = await scheduleRepository.GetByWeekAsync(
+            request.Season, request.Week, cancellationToken);
+
+        // team → (opponent, isHome). A team absent from this map is on bye.
+        var gameByTeam = new Dictionary<string, (string Opponent, bool IsHome)>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var game in schedule)
+        {
+            if (game.HomeTeam.Length > 0 && game.AwayTeam.Length > 0)
+            {
+                gameByTeam[game.HomeTeam] = (game.AwayTeam, true);
+                gameByTeam[game.AwayTeam] = (game.HomeTeam, false);
+            }
+
+            // Fall back to the schedule's closing line only where The Odds API
+            // has nothing. Live odds are closer to kickoff and win where both
+            // exist; the schedule covers roughly seven weeks out and is the only
+            // source at all in dev, where the Hangfire odds job never runs.
+            if (!game.SpreadLine.HasValue) continue;
+
+            if (game.HomeTeam.Length > 0 && !spreadByTeam.ContainsKey(game.HomeTeam))
+                spreadByTeam[game.HomeTeam] = game.SpreadLine.Value;
+
+            if (game.AwayTeam.Length > 0 && !spreadByTeam.ContainsKey(game.AwayTeam))
+                spreadByTeam[game.AwayTeam] = -game.SpreadLine.Value;
+        }
+
+        if (gameByTeam.Count == 0)
+        {
+            // Loud, because the failure is invisible otherwise: with no schedule
+            // every player resolves to "no game", the matchup lookup degrades to
+            // a neutral 50 for the whole board, and the run still reports success.
+            logger.LogWarning(
+                "No schedule rows for Season {Season} Week {Week} — every projection in this " +
+                "run will be matchup-neutral and carry no opponent. Run " +
+                "POST /api/v1/admin/sync-nfl-schedule first.",
+                request.Season, request.Week);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Schedule loaded for Season {Season} Week {Week}: {Teams} teams playing, " +
+                "{Spreads} with a spread ({Vegas} from vegas_lines).",
+                request.Season, request.Week, gameByTeam.Count,
+                spreadByTeam.Count, vegasLines.Count * 2);
+        }
+
+        // Current team per player, from Sleeper — the roster system of record.
+        // The game log's NflTeam is last season's, so a player who changed teams
+        // would otherwise be scheduled against his OLD team's opponent.
+        var allPlayers = await playerRepository.GetAllAsync(cancellationToken);
+
+        var currentTeamBySleeperId = allPlayers
+            .Where(p => !string.IsNullOrEmpty(p.SleeperPlayerId)
+                     && !string.IsNullOrEmpty(p.NflTeam))
+            .GroupBy(p => p.SleeperPlayerId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => NflTeamNormalizer.Normalize(g.First().NflTeam),
+                StringComparer.OrdinalIgnoreCase);
 
         var countByPosition = new Dictionary<string, int>
         {
@@ -151,6 +224,11 @@ public class CalculateProjectionsCommandHandler(
 
         var roleGated = 0;
 
+        // Players whose current team has no game this week — a real bye, or a
+        // schedule that was never imported. Counted rather than inferred: the
+        // two look identical per player and very different in aggregate.
+        var byeOrNoGame = 0;
+
         // ── Pass 1 — players with game logs ───────────────────────────────
         if (basis != ProjectionBasis.None)
         {
@@ -185,14 +263,33 @@ public class CalculateProjectionsCommandHandler(
 
                     var position = recentLog.Position;
 
+                    // The team he plays for NOW. The game log's NflTeam is the
+                    // basis season's, so for anyone who moved in the offseason it
+                    // names the wrong franchise — and would schedule him against
+                    // his old team's opponent.
+                    var currentTeam = !string.IsNullOrEmpty(recentLog.SleeperPlayerId)
+                        && currentTeamBySleeperId.TryGetValue(
+                               recentLog.SleeperPlayerId, out var rosteredTeam)
+                        ? rosteredTeam
+                        : NflTeamNormalizer.Normalize(recentLog.NflTeam);
+
+                    // Opponent comes from the schedule for the week being
+                    // projected. Absent = bye week (or an un-imported schedule),
+                    // which resolves to no matchup and therefore a neutral 50 —
+                    // the same treatment as a missing defensive ranking.
+                    var hasGame = gameByTeam.TryGetValue(currentTeam, out var game);
+                    var opponentTeam = hasGame ? game.Opponent : string.Empty;
+
+                    if (!hasGame) byeOrNoGame++;
+
                     // No line posted (or preseason) → spread 0 → neutral Competitive script.
-                    var spread = spreadByTeam.TryGetValue(recentLog.NflTeam, out var s) ? s : 0m;
+                    var spread = spreadByTeam.TryGetValue(currentTeam, out var s) ? s : 0m;
                     var correlation = GameScriptClassifier.Classify(spread);
 
                     var input = await inputBuilder.BuildStatLineInputAsync(
                         playerId,
                         position,
-                        recentLog.OpponentTeam ?? "UNK",
+                        opponentTeam.Length > 0 ? opponentTeam : "UNK",
                         request.Season,
                         request.Week,
                         basis,
@@ -227,7 +324,8 @@ public class CalculateProjectionsCommandHandler(
                     }
 
                     var doc = MapToDocument(
-                        projection, recentLog, request.Season, request.Week, correlation, depthTeam);
+                        projection, recentLog, request.Season, request.Week, correlation, depthTeam,
+                        currentTeam, opponentTeam, hasGame && game.IsHome);
 
                     if (doc.RoleMultiplier < 1m)
                     {
@@ -256,16 +354,17 @@ public class CalculateProjectionsCommandHandler(
 
         // ── Pass 2 — rookies ──────────────────────────────────────────────
         var (rookiesProjected, rookiesSkipped) = await ProjectRookiesAsync(
-            request, spreadByTeam, projectedSleeperIds, cancellationToken);
+            request, spreadByTeam, gameByTeam, projectedSleeperIds, cancellationToken);
 
         sw.Stop();
 
         logger.LogInformation(
             "Projections complete — {Calculated} from history, {Rookies} rookie priors, " +
             "{Skipped} skipped, {RookiesSkipped} rookies with no signal, " +
-            "{RoleGated} suppressed by the depth role gate, in {Elapsed}ms " +
+            "{RoleGated} suppressed by the depth role gate, {ByeOrNoGame} with no game " +
+            "this week, in {Elapsed}ms " +
             "(basis {Basis}/{BasisSeason}). QB:{QB} RB:{RB} WR:{WR} TE:{TE}",
-            calculated, rookiesProjected, skipped, rookiesSkipped, roleGated,
+            calculated, rookiesProjected, skipped, rookiesSkipped, roleGated, byeOrNoGame,
             sw.ElapsedMilliseconds, basis, basisSeason,
             countByPosition["QB"], countByPosition["RB"],
             countByPosition["WR"], countByPosition["TE"]);
@@ -282,6 +381,7 @@ public class CalculateProjectionsCommandHandler(
     private async Task<(int Projected, int Skipped)> ProjectRookiesAsync(
         CalculateProjectionsCommand request,
         Dictionary<string, decimal> spreadByTeam,
+        Dictionary<string, (string Opponent, bool IsHome)> gameByTeam,
         HashSet<string> alreadyProjected,
         CancellationToken ct)
     {
@@ -365,7 +465,15 @@ public class CalculateProjectionsCommandHandler(
                     continue;
                 }
 
-                var team = player.NflTeam ?? depth?.NflTeam ?? "FA";
+                var team = NflTeamNormalizer.Normalize(
+                    player.NflTeam ?? depth?.NflTeam ?? "FA");
+
+                // Same schedule resolution as pass 1 — rookies were stamping a
+                // literal "UNK" opponent, so every rookie on the board rendered
+                // with no game regardless of what the schedule said.
+                var rookieHasGame = gameByTeam.TryGetValue(team, out var rookieGame);
+                var rookieOpponent = rookieHasGame ? rookieGame.Opponent : string.Empty;
+
                 var spread = spreadByTeam.TryGetValue(team, out var s) ? s : 0m;
                 var correlation = GameScriptClassifier.Classify(spread);
 
@@ -375,7 +483,8 @@ public class CalculateProjectionsCommandHandler(
                 // store the same explanatory fields.
                 var doc = MapRookieToDocument(
                     player.GsisId, sleeperId, player.FullName, position, team,
-                    result, request.Season, request.Week, correlation, depth?.DepthTeam);
+                    result, request.Season, request.Week, correlation, depth?.DepthTeam,
+                    rookieOpponent, rookieHasGame && rookieGame.IsHome);
 
                 await projectionRepository.UpsertAsync(doc, ct);
                 projected++;
@@ -416,7 +525,10 @@ public class CalculateProjectionsCommandHandler(
         int season,
         int week,
         CorrelationMetadata correlation,
-        int? depthTeam = null)
+        int? depthTeam,
+        string nflTeam,
+        string opponentTeam,
+        bool isHomeGame)
     {
         var position = recentLog.Position;
 
@@ -439,8 +551,13 @@ public class CalculateProjectionsCommandHandler(
             SleeperPlayerId = recentLog.SleeperPlayerId ?? string.Empty,
             PlayerName = recentLog.PlayerName,
             Position = position,
-            NflTeam = recentLog.NflTeam,
-            OpponentTeam = recentLog.OpponentTeam ?? "UNK",
+            // Both resolved by the caller from Sleeper and the schedule — NOT
+            // from recentLog, whose NflTeam and OpponentTeam are both basis-season
+            // values. That was FAN-178: a Week 1 projection carrying the player's
+            // old team and his final opponent of the previous January.
+            NflTeam = nflTeam,
+            OpponentTeam = opponentTeam,
+            IsHomeGame = isHomeGame,
             Season = season,
             Week = week,
 
@@ -492,7 +609,9 @@ public class CalculateProjectionsCommandHandler(
         int season,
         int week,
         CorrelationMetadata correlation,
-        int? depthTeam = null)
+        int? depthTeam,
+        string opponentTeam,
+        bool isHomeGame)
     {
         var statLine = result.StatLine;
         var (standard, halfPpr, fullPpr) = ScoreAllFormats(statLine, position);
@@ -512,7 +631,8 @@ public class CalculateProjectionsCommandHandler(
             PlayerName = playerName,
             Position = position,
             NflTeam = nflTeam,
-            OpponentTeam = "UNK",
+            OpponentTeam = opponentTeam,
+            IsHomeGame = isHomeGame,
             Season = season,
             Week = week,
 

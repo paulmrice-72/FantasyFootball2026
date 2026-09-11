@@ -44,6 +44,7 @@ public class PlayerProjectionRepository(
             .Set(x => x.Position, doc.Position)
             .Set(x => x.NflTeam, doc.NflTeam)
             .Set(x => x.OpponentTeam, doc.OpponentTeam)
+            .Set(x => x.IsHomeGame, doc.IsHomeGame)
 
             // ── L0 canonical output ───────────────────────────────────────
             .Set(x => x.StatLine, doc.StatLine)
