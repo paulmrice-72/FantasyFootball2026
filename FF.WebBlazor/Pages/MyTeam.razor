@@ -321,23 +321,38 @@
         }
         else
         {
-            @* ── Build lookup sets once ──────────────────────────────────────────
-               lockedPlayerIds : SleeperPlayerIds of all locked starters — used to
-                                 remove those players from decision option lists so
-                                 they don't appear in both sections.
+            @* ── Build lookup sets once ──────────────────────────────────
+               lockedSlotByPlayerId : SleeperPlayerId -> the slot that player is
+                                 locked into. An option is hidden only when the
+                                 player is locked into a DIFFERENT slot, e.g. a WR
+                                 already locked at WR1 must not reappear as a FLEX
+                                 option.
+
+                                 FAN-182: this was a HashSet of every locked
+                                 starter, so an option was hidden from its OWN
+                                 slot's decision too. The top-ranked option IS the
+                                 locked starter for that slot — RankAndScore stamps
+                                 index 0 as Start/LeanStart — so the card rendered
+                                 only the players being benched and the one being
+                                 recommended appeared nowhere on the page. It was
+                                 also absent from Locked Slots, because
+                                 decisionSlotLabels below removes that slot on the
+                                 grounds that the decision card covers it. Two
+                                 filters, each deferring the player to the other.
                decisionSlotLabels : slot labels that have a genuine contest — used
                                     to hide those slots from the Locked Slots section
                                     (the decision card already covers them). *@
-            var lockedPlayerIds = _lineupCard?.Starters
-                .Select(s => s.SleeperPlayerId)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase)
-                ?? new HashSet<string>();
+            var lockedSlotByPlayerId = _lineupCard?.Starters
+                .GroupBy(s => s.SleeperPlayerId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().SlotLabel, StringComparer.OrdinalIgnoreCase)
+                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             var decisionsToShow = (_startSitData?.Decisions ?? [])
                 .Select(d => (
                     Decision: d,
                     FilteredOptions: d.Options
-                        .Where(o => !lockedPlayerIds.Contains(o.SleeperPlayerId))
+                        .Where(o => !lockedSlotByPlayerId.TryGetValue(o.SleeperPlayerId, out var lockedSlot)
+                                    || string.Equals(lockedSlot, d.SlotLabel, StringComparison.OrdinalIgnoreCase))
                         .ToList()
                 ))
                 .Where(x => x.FilteredOptions.Count >= 2)
@@ -1109,6 +1124,7 @@ else if (_roster is null)
         _ = InvokeAsync(async () =>
         {
             await LoadRosterAsync();
+            await LoadActiveTabAsync();   // FAN-183
             StateHasChanged();
         });
     }
@@ -1180,13 +1196,25 @@ else if (_roster is null)
     private async Task OnTabChanged(int index)
     {
         _activeTab = index;
-        if (index == 1 && _startSitData is null)
+        await LoadActiveTabAsync();
+    }
+
+    // FAN-183: these loads used to sit inline in OnTabChanged, which was the only
+    // caller. OnLeagueChangedHandler nulls every tab's data but reloads only the
+    // roster, and changing the league does not move MudTabs' ActivePanelIndex, so
+    // OnTabChanged never fired and whichever panel you were on stayed empty until
+    // you navigated away and back. Both callers go through here now. Must be
+    // awaited AFTER LoadRosterAsync: _isDynastyLeague is set there and gates the
+    // dynasty branch below.
+    private async Task LoadActiveTabAsync()
+    {
+        if (_activeTab == 1 && _startSitData is null)
             await LoadStartSitAsync();
-        if (index == 2 && _depthGrades is null)
+        if (_activeTab == 2 && _depthGrades is null)
             await LoadDepthGradesAsync();
-        if (_isDynastyLeague && index == DynastyGradeTabIndex && _dynastyGrade is null)
+        if (_isDynastyLeague && _activeTab == DynastyGradeTabIndex && _dynastyGrade is null)
             await LoadDynastyGradeAsync();
-        if (index == DraftPrepTabIndex && !_draftPrepQueried)
+        if (_activeTab == DraftPrepTabIndex && !_draftPrepQueried)
             await LoadDraftPrepAsync();
     }
 

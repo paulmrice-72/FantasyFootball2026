@@ -124,15 +124,30 @@ public class GetStartSitRecommendationsQueryHandler(
 
             if (posPlayers.Count <= slots) continue;
 
-            var ranked = RankAndScore(posPlayers);
-
             for (var slotIndex = slots - 1; slotIndex < posPlayers.Count - 1; slotIndex++)
             {
                 var slotLabel = slots == 1 ? pos : $"{pos}{slotIndex + 1}";
-                var contenders = ranked
-                    .Skip(Math.Max(0, slotIndex - 1))
-                    .Take(3)
-                    .ToList();
+
+                // FAN-184: rank the CONTEST, not the whole position group.
+                //
+                // RankAndScore stamps the verdict from the absolute index it is
+                // handed - 0 => Start/LeanStart, 1 => LeanSit, 2+ => Sit. Ranking
+                // every player at the position and THEN slicing a window out of
+                // that list meant the window only contained a Start when it
+                // contained index 0, which is true only when slots == 1. QB and TE
+                // looked fine; WR with three slots sliced ranks 1-3 and the WR3
+                // card rendered two SITs with nothing to start.
+                //
+                // Slicing first also fixes two things that rode along: the i == 0
+                // confidence branch now compares against the real challenger
+                // rather than the position's best player, and BuildRationale
+                // describes this contest instead of the whole position group.
+                //
+                // Skip(slotIndex) rather than Skip(slotIndex - 1): the window used
+                // to start one slot early and drag in the previous slot's locked
+                // starter, who the UI then filtered straight back out (FAN-182).
+                var contenders = RankAndScore(
+                    posPlayers.Skip(slotIndex).Take(3).ToList());
 
                 if (contenders.Count < 2) continue;
 
